@@ -22,7 +22,7 @@ import {
   FEATURE_GROUP_OF,
   PLANS,
 } from "./feature-map.generated";
-import { featureDecision, useEntitlements } from "./hooks/useEntitlements";
+import { featureDecision, hiddenInTrial, useEntitlements } from "./hooks/useEntitlements";
 
 const KNOWN_KEYS = new Set(ENTITLEMENTS.map((e) => e.key));
 
@@ -134,7 +134,10 @@ export function EntitlementGate({
   // Strategy Lab runs its backtests in the browser, so the backend can't stop
   // it once the screen is open: if the plan couldn't be loaded it stays
   // locked (fail closed) instead of opening (every other screen fails open).
-  const failClosed = key === "strategyLab" && !state.data && state.error;
+  // Alpha Signals is computed in the browser from shared feeds, so it fails
+  // closed the same way.
+  const failClosed = (key === "strategyLab" || key === "alphaSignals") && !state.data && state.error;
+  if (key && hiddenInTrial(state.data, key)) return <TrialHidden variant={variant} />;
   const d = failClosed
     ? ({ kind: "locked", requiredPlan: "elite" } as const)
     : featureDecision(state, key);
@@ -147,5 +150,27 @@ export function EntitlementGate({
       requiredPlan={d.requiredPlan}
       variant={variant}
     />
+  );
+}
+
+/**
+ * A feature the free trial doesn't reveal (Alpha Signals), reached by its URL:
+ * no feature details, only that it isn't part of the trial.
+ */
+function TrialHidden({ variant }: { variant: "screen" | "widget" }) {
+  if (variant === "widget") return null;
+  return (
+    <div data-testid="trial-hidden" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 20px", gap: 14, textAlign: "center", margin: "0 auto", maxWidth: 520 }}>
+      <h2 style={{ margin: 0, fontSize: "1.25rem", color: "var(--text-hi)" }}>Not part of the free trial</h2>
+      <p style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".88rem", lineHeight: 1.5 }}>
+        This screen opens once your plan&apos;s first payment goes through.
+      </p>
+      <Link
+        href="/dashboard"
+        style={{ padding: "11px 26px", borderRadius: 99, background: "var(--brand, #4ADE80)", color: "var(--on-brand, #07080A)", fontWeight: 700, fontSize: ".92rem", textDecoration: "none" }}
+      >
+        Back to the dashboard
+      </Link>
+    </div>
   );
 }

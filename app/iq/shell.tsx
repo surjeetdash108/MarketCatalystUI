@@ -1455,6 +1455,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const isSlPage = pathname === "/sl" || pathname?.startsWith("/sl/");
   // Money Flow is a full-screen module like SI (its own header, no MC chrome).
   const isMfPage = pathname === "/money-flow" || pathname?.startsWith("/money-flow/");
+  // Alpha Signals is a full-screen module like Strategy Lab (its own header, no MC chrome).
+  const isAsPage = pathname === "/alpha-signals" || pathname?.startsWith("/alpha-signals/");
 
   return (
     <AuthGuard>
@@ -1464,7 +1466,14 @@ export function IQShell({ children }: { children: React.ReactNode }) {
          <SIProvider>
           <div className="iq-root" data-theme={theme} data-font={font}>
             <SISweepOverlay />
-            {isSlPage ? (
+            {isAsPage ? (
+              <main
+                style={{ height: "100vh", overflowY: "auto", overflowX: "hidden", background: "var(--bg)", width: "100%" }}
+                className="as-main-scroll"
+              >
+                {children}
+              </main>
+            ) : isSlPage ? (
               <main
                 style={{ height: "100vh", overflowY: "auto", overflowX: "hidden", background: "var(--th-08090a, #08090a)", width: "100%" }}
                 className="sl-main-scroll"

@@ -11,6 +11,7 @@ describe("SCREEN_FEATURES", () => {
       ...menuItems.map((m) => m.slug),
       "money-flow",
       "sl",
+      "alpha-signals",
       "stock",
       "si",
       "options",

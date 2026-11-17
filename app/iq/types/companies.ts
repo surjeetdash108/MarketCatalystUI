@@ -143,6 +143,14 @@ export interface CompanyDoc {
   // AMZN, GOOGL, NVDA…) — algorithmic peers, not just same-sector.
   peers: string[] | null;
   source: string | null;
+  /** When the quote fields were last written (company-quotes job), ISO. */
+  quoteUpdatedAt?: string | null;
+  /** When the technical indicators were last written (technical-indicators job), ISO. */
+  technicalsUpdatedAt?: string | null;
+  /** Vendor security metadata, when present (read by isCommonEquity). */
+  type?: string | null;
+  isEtf?: boolean | null;
+  isFund?: boolean | null;
 }
 
 /**

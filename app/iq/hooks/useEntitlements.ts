@@ -31,6 +31,8 @@ export interface Entitlements {
   entitlements: Record<string, boolean>;
   requiredPlan: Record<string, string | null>;
   hidden: string[];
+  /** Plan features the free trial doesn't open yet (they open on the first payment). */
+  trialWithheld?: string[];
   limits: { watchlistTickers: number | null };
 }
 
@@ -90,6 +92,22 @@ export function effectivePlanId(e: Entitlements | null | undefined): string {
   if (!e) return "none";
   if (e.subscriptionPlanId && e.subscriptionPlanId !== "none") return e.subscriptionPlanId;
   return e.planId ?? "none";
+}
+
+/**
+ * Features not revealed at all during the free trial or the new-account intro
+ * (Elite's Alpha Signals): no menu entry, no toggle segment, no teaser. Mirrors
+ * the backend's TRIAL_WITHHELD (plans.registry.ts); the backend also sends the
+ * list for a trialing account as `trialWithheld`.
+ */
+export const TRIAL_HIDDEN = new Set(["alphaSignals"]);
+
+/** True while `key` must stay out of sight: a trial or intro account that hasn't been given it. */
+export function hiddenInTrial(e: Entitlements | null | undefined, key: string): boolean {
+  if (!e || e.staff || !e.subscriptionsEnabled) return false;
+  if (e.entitlements[key] === true) return false;
+  if (e.trialWithheld?.includes(key)) return true;
+  return TRIAL_HIDDEN.has(key) && (e.status === "TRIALING" || e.status === "INTRO");
 }
 
 /** Pure decision used by the gate (tested without React). */

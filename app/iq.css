@@ -14129,3 +14129,61 @@ h6.sd-sec {
     max-height: 340px;
   }
 }
+
+/* ── Alpha Signals module: Intraday / Swing, Bullish / Bearish, rulebook, dashboard rows ── */
+.iq-root .alp, .iq-root .alp-scrim, .iq-root .alp-toast, .iq-root .alpha-bar {
+  --alp-v-dim: color-mix(in srgb, var(--alp-v) 14%, transparent);
+  --alp-v-line: color-mix(in srgb, var(--alp-v) 45%, transparent);
+}
+.iq-root .alp-card-foot { gap: 5px; }
+.iq-root .alp-card-foot .alp-mode { margin-left: auto; flex: none; padding: 1px 5px; font-size: .54rem; letter-spacing: .04em; }
+.iq-root .alp-card-foot span:not(.alp-mode) { min-width: 0; }
+.iq-root .alp-act .plan b small, .iq-root .alp-act .fn { color: var(--text-dim-solid); font-size: .69rem; }
+.iq-root .alp-modes { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-1); }
+.iq-root .alp-modes button { border: 0; background: none; color: var(--text-dim-solid); font-size: .76rem; font-weight: 600; padding: 4px 12px; border-radius: 7px; cursor: pointer; }
+.iq-root .alp-modes button:hover { color: var(--text-hi); }
+.iq-root .alp-modes button.on { background: var(--brand-dim); color: var(--brand); font-weight: 700; }
+.iq-root .alp-modes.dir button.on.bull { background: var(--up-dim); color: var(--up); }
+.iq-root .alp-modes.dir button.on.bear { background: var(--down-dim); color: var(--down); }
+.iq-root .alp-mode { font-size: .58rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border-strong); color: var(--text-dim-solid); white-space: nowrap; }
+.iq-root .alp-mode.swing { color: var(--alp-vl); border-color: var(--alp-v-dim); background: var(--alp-v-dim); }
+.iq-root .alp-mode.intraday { color: var(--warn); border-color: var(--warn-dim); background: var(--warn-dim); }
+.iq-root .alp-ring.bear { border-color: var(--down); color: var(--down); }
+.iq-root .alp-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.iq-root .alp-tags i { font-style: normal; font-size: .62rem; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--surface-3); color: var(--text-dim-solid); }
+.iq-root .alp-tags i.w { background: var(--warn-dim); color: var(--warn); }
+.iq-root .alp-closed { font-size: .75rem; color: var(--text-dim-solid); padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.iq-root .alp-act .plan.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.iq-root .alp-hist .stats.lv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 8px; }
+@media (max-width: 760px) {
+  .iq-root .alp-act .plan.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.iq-root .alp-ex { display: block; margin-top: 4px; font-size: .68rem; color: var(--text-dim-solid); }
+.iq-root .alp-ex i { font: 700 .66rem var(--f-mono); color: var(--text-hi); background: var(--surface-3); border-radius: 5px; padding: 1px 6px; margin-left: 4px; }
+.iq-root .alp-ex.none { font-style: italic; opacity: .75; }
+.iq-root .alp-rulebook { display: flex; flex-direction: column; gap: 4px; }
+.iq-root .alp-rb-h { font-family: var(--f-display); font-size: .92rem; font-weight: 700; color: var(--text-hi); margin-top: 10px; }
+.iq-root .alp-rb-h small { font: 400 .72rem var(--f-body, inherit); color: var(--text-dim-solid); }
+.iq-root .alp-rb-sub { font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim-solid); margin-top: 8px; }
+.iq-root .alp-rule { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 12px; align-items: start; padding: 7px 9px; border-radius: 8px; font-size: .75rem; line-height: 1.45; color: var(--text); }
+.iq-root .alp-rule .k { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.iq-root .alp-rule .k em { font: normal .62rem var(--f-mono); color: var(--text-dim-solid); min-width: 10px; }
+.iq-root .alp-rule.now { background: var(--brand-dim); box-shadow: inset 2px 0 0 var(--brand); }
+.iq-root .alpha-rows { display: flex; flex-direction: column; gap: 6px; }
+.iq-root .alpha-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.iq-root .alpha-row .alp-mode { width: 62px; text-align: center; flex: none; font-style: normal; }
+.iq-root .alpha-chip { display: inline-flex; align-items: center; gap: 6px; }
+.iq-root .alpha-chip b { color: var(--text-hi); font-weight: 800; margin: 0 2px; }
+.iq-root .alpha-chip .up { color: var(--up); }
+.iq-root .alpha-chip .down { color: var(--down); }
+.iq-root .alpha-none { font-size: .72rem; color: var(--text-dim-solid); }
+.iq-root .alpha-grp { display: inline-flex; align-items: center; gap: 6px; }
+.iq-root .alpha-grp + .alpha-grp { border-left: 1px solid var(--border); padding-left: 14px; margin-left: 14px; }
+.iq-root .alpha-grp i { font-style: normal; font-size: .62rem; width: 12px; text-align: center; }
+.iq-root .alpha-grp.bull i { color: var(--up); }
+.iq-root .alpha-grp.bear i { color: var(--down); }
+.iq-root .alpha-grp.bear .alpha-chip { border-color: var(--down-line, var(--border)); }
+.iq-root .alpha-chip.st-setup-active { font-weight: 700; }
+.iq-root .alpha-grp.bull .alpha-chip.st-setup-active { border-color: var(--up); }
+.iq-root .alpha-grp.bear .alpha-chip.st-setup-active { border-color: var(--down); }
+.iq-root .alpha-chip.st-watch { opacity: .6; border-style: dashed; }

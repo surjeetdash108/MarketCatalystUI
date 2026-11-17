@@ -46,6 +46,7 @@ export const ENTITLEMENTS: EntitlementDef[] = [
   { key: "optionsChain", label: "Options Chain", group: "Money Flow", featureGroup: "moneyFlow", description: "View the options chain with strikes, expirations and traded prices.", note: "some data simulated" },
   { key: "strategyLab", label: "Strategy Lab", group: "Strategy Lab", featureGroup: "strategyLab", description: "Build strategies from presets or plain English and get entry, stop and target levels." },
   { key: "backtesting", label: "Backtesting", group: "Strategy Lab", featureGroup: "strategyLab", description: "Backtest any strategy against historical prices before you trade." },
+  { key: "alphaSignals", label: "Alpha Signals", group: "Alpha Signals", featureGroup: "alphaSignals", description: "See intraday and swing setups, bullish and bearish, with entry, stop and target levels.", note: "not during the free trial" },
   { key: "alerts", label: "Price Alerts", group: "Unbuilt", description: "Create alerts that fire when a price or signal condition is met.", unbuilt: true },
   { key: "exportData", label: "Data Export", group: "Unbuilt", description: "Download screens and recaps as PDF or CSV.", unbuilt: true },
   { key: "apiAccess", label: "API Access", group: "Unbuilt", description: "Call the market-data API from your own scripts with a key.", unbuilt: true },

@@ -18,7 +18,7 @@ test("profile menu says 'Manage Plan'; Settings says 'Manage Plan' and 'Purchase
 });
 
 test("Strategy Lab stays locked if the plan can't be loaded (it runs in the browser)", () => {
-  assert.match(read("app/iq/entitlement-gate.tsx"), /const failClosed = key === "strategyLab" && !state\.data && state\.error;/);
+  assert.match(read("app/iq/entitlement-gate.tsx"), /const failClosed = \(key === "strategyLab" \|\| key === "alphaSignals"\) && !state\.data && state\.error;/);
 });
 
 test("the trial banner also shows on Stock Intelligence and Money Flow", () => {

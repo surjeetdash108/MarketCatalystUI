@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useSI, type AppModule } from "./si/si-context";
-import { useEntitlements, gateDecisionFor, type Entitlements } from "./hooks/useEntitlements";
+import { useEntitlements, gateDecisionFor, hiddenInTrial, type Entitlements } from "./hooks/useEntitlements";
 import { plansHref } from "./entitlement-gate";
 
 /** Pill colours per module (active segment background / label). */
@@ -13,23 +13,48 @@ const ACTIVE: Record<AppModule, { bg: string; fg: string; glow: string; hover: s
   SI: { bg: "#5980a6", fg: "#ffffff", glow: "0 0 18px rgba(127,168,208,0.45)", hover: "rgba(89,128,166,0.25)" },
   SL: { bg: "#c9a24a", fg: "#08090a", glow: "0 0 18px rgba(201,162,74,0.40)", hover: "rgba(201,162,74,0.22)" },
   MF: { bg: "#e0bb5e", fg: "#08090a", glow: "0 0 18px rgba(224,187,94,0.40)", hover: "rgba(224,187,94,0.22)" },
+  AS: { bg: "#8b7cf6", fg: "#ffffff", glow: "0 0 18px rgba(139,124,246,0.45)", hover: "rgba(139,124,246,0.22)" },
 };
 
 /**
  * Module order:
  * Starter — MC, SI
  * Pro     — MC, SI, MF
- * Elite   — MC, SI, MF, SL
+ * Elite   — MC, SI, MF, SL, Alpha Signals (Alpha Signals is not shown during
+ *           the free trial or the new-account intro)
  */
 const SEGMENTS: Array<[AppModule, string]> = [
   ["MC", "Market Catalyst"],
   ["SI", "Stock Intelligence"],
   ["MF", "Money Flow"],
   ["SL", "Strategy Lab"],
+  ["AS", "Alpha Signals"],
 ];
 
 /** Entitlement key behind each paid module (Market Catalyst and Stock Intelligence are always open). */
-const MODULE_KEY: Partial<Record<AppModule, string>> = { MF: "moneyFlow", SL: "strategyLab" };
+const MODULE_KEY: Partial<Record<AppModule, string>> = { MF: "moneyFlow", SL: "strategyLab", AS: "alphaSignals" };
+
+/** Paid modules with their upgrade pop-up copy. */
+type PaidModule = "MF" | "SL" | "AS";
+const UPGRADE: Record<PaidModule, { badge: string; name: string; color: string; tint: string; line: string; text: string; plan: string }> = {
+  MF: { badge: "Pro or Elite Feature", name: "Money Flow", color: "#e0bb5e", tint: "rgba(224,187,94,0.18)", line: "rgba(224,187,94,0.35)", plan: "pro",
+    text: "See where institutional money is moving, by sector, with the biggest institutional gainers and losers." },
+  SL: { badge: "Elite Feature", name: "Strategy Lab", color: "#c9a24a", tint: "rgba(201,162,74,0.18)", line: "rgba(201,162,74,0.35)", plan: "elite",
+    text: "Build or pick a strategy, backtest it, and get entry, stop and target levels." },
+  AS: { badge: "Elite Feature", name: "Alpha Signals", color: "#8b7cf6", tint: "rgba(139,124,246,0.18)", line: "rgba(139,124,246,0.35)", plan: "elite",
+    text: "Intraday and swing setups, bullish and bearish, each with an entry, stop and target." },
+};
+
+/**
+ * Whether a module's segment is on the toggle at all. Alpha Signals is left
+ * out while entitlements load and for a trial or intro account (it isn't
+ * revealed during the trial); every other module is always listed.
+ */
+export function showsModule(module: AppModule, ent: Entitlements | null | undefined): boolean {
+  if (module !== "AS") return true;
+  if (!ent) return false;
+  return !hiddenInTrial(ent, "alphaSignals");
+}
 
 /**
  * Whether the signed-in user may open a module. Decided by the backend's
@@ -44,24 +69,26 @@ export function canAccessModule(module: AppModule, ent: Entitlements | null | un
   return gateDecisionFor(ent, key).kind === "allow";
 }
 
-/** Toggle width (530px for MC + SI + MF + SL). */
+/** Toggle width: 530px for MC + SI + MF + SL, 650px with Alpha Signals. */
 const WIDTH = 530;
+const WIDTH_AS = 650;
 /** From this viewport width the toggle is pinned to one spot on every module. */
 const PIN_MIN = 1024;
 
-const PIN_CSS = `
+const pinCss = (width: number) => `
 .mod-switch-pin [role="group"]::-webkit-scrollbar{display:none}
 @media (min-width: ${PIN_MIN}px) {
   .si-main-scroll .mod-switch-pin,
   .sl-main-scroll .mod-switch-pin,
-  .mf-main-scroll .mod-switch-pin {
+  .mf-main-scroll .mod-switch-pin,
+  .as-main-scroll .mod-switch-pin {
     position: fixed !important;
     top: 7px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 950;
   }
-  .si-nav-search { width: clamp(150px, calc(50vw - ${WIDTH / 2 + 12 + 378}px), 220px) !important; }
+  .si-nav-search { width: clamp(150px, calc(50vw - ${width / 2 + 12 + 378}px), 220px) !important; }
 }
 .app .subbar .mod-switch-pin {
   position: static !important;
@@ -72,13 +99,15 @@ const PIN_CSS = `
 `;
 
 export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
-  const { activeModule, enterSI, exitToMC, enterSL, enterMF } = useSI();
+  const { activeModule, enterSI, exitToMC, enterSL, enterMF, enterAS } = useSI();
   const { data: entitlements } = useEntitlements();
   const [hover, setHover] = useState<AppModule | null>(null);
-  const [upgradeModal, setUpgradeModal] = useState<"MF" | "SL" | null>(null);
+  const [upgradeModal, setUpgradeModal] = useState<PaidModule | null>(null);
+  const segments = SEGMENTS.filter(([m]) => showsModule(m, entitlements) || m === activeModule);
+  const width = segments.some(([m]) => m === "AS") ? WIDTH_AS : WIDTH;
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const refs = useRef<Record<AppModule, HTMLSpanElement | null>>({ MC: null, SI: null, SL: null, MF: null });
+  const refs = useRef<Record<AppModule, HTMLSpanElement | null>>({ MC: null, SI: null, SL: null, MF: null, AS: null });
   const [box, setBox] = useState<{ left: number; width: number } | null>(null);
 
   // Slide the indicator under the active segment (segments are sized by label).
@@ -109,31 +138,32 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
       ro?.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [activeModule]);
+  }, [activeModule, segments.length]);
 
   const go = (m: AppModule) => {
     if (!canAccessModule(m, entitlements)) {
-      setUpgradeModal(m === "MF" ? "MF" : "SL");
+      if (m === "MF" || m === "SL" || m === "AS") setUpgradeModal(m);
       return;
     }
     if (m === activeModule) return;
     if (m === "MC") exitToMC();
     else if (m === "SI") enterSI();
     else if (m === "MF") enterMF();
+    else if (m === "AS") enterAS();
     else enterSL();
   };
   const a = ACTIVE[activeModule];
 
   return (
     <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');${PIN_CSS}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');${pinCss(width)}`}</style>
       <div className="mod-switch-pin" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", zIndex: 900, pointerEvents: "auto", ...style }}>
         <div
           role="group"
           aria-label="Switch module"
           style={{
             position: "relative",
-            width: WIDTH,
+            width,
             maxWidth: "calc(100vw - 20px)",
             height: 34,
             borderRadius: 99,
@@ -163,7 +193,7 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
               }}
             />
           )}
-          {SEGMENTS.map(([m, label], i) => {
+          {segments.map(([m, label], i) => {
             const on = m === activeModule;
             const locked = !canAccessModule(m, entitlements);
             return (
@@ -181,7 +211,7 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
                   position: "relative",
                   flex: "1 1 auto",
                   alignSelf: "stretch",
-                  margin: i === 0 ? "3px 0 3px 3px" : i === SEGMENTS.length - 1 ? "3px 3px 3px 0" : "3px 0",
+                  margin: i === 0 ? "3px 0 3px 3px" : i === segments.length - 1 ? "3px 3px 3px 0" : "3px 0",
                   padding: "0 clamp(8px, 2.5vw, 14px)",
                   borderRadius: 99,
                   display: "flex",
@@ -239,12 +269,12 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
                   fontWeight: 800,
                   letterSpacing: ".04em",
                   textTransform: "uppercase",
-                  background: upgradeModal === "MF" ? "rgba(224,187,94,0.18)" : "rgba(201,162,74,0.18)",
-                  color: upgradeModal === "MF" ? "#e0bb5e" : "#c9a24a",
-                  border: upgradeModal === "MF" ? "1px solid rgba(224,187,94,0.35)" : "1px solid rgba(201,162,74,0.35)",
+                  background: UPGRADE[upgradeModal].tint,
+                  color: UPGRADE[upgradeModal].color,
+                  border: `1px solid ${UPGRADE[upgradeModal].line}`,
                 }}
               >
-                {upgradeModal === "MF" ? "Pro or Elite Feature" : "Elite Feature"}
+                {UPGRADE[upgradeModal].badge}
               </span>
               <button
                 onClick={() => setUpgradeModal(null)}
@@ -264,16 +294,10 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
             </div>
 
             <h2 style={{ margin: "0 0 10px", fontSize: "1.25rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }} data-testid="module-upgrade-title">
-              {upgradeModal === "MF" ? (
-                <>What&apos;s inside <span style={{ color: "#e0bb5e" }}>Money Flow</span></>
-              ) : (
-                <>What&apos;s inside <span style={{ color: "#c9a24a" }}>Strategy Lab</span></>
-              )}
+              <>What&apos;s inside <span style={{ color: UPGRADE[upgradeModal].color }}>{UPGRADE[upgradeModal].name}</span></>
             </h2>
             <p style={{ margin: "0 0 12px", fontSize: ".88rem", color: "#9aa3a8", lineHeight: 1.55 }}>
-              {upgradeModal === "MF"
-                ? "See where institutional money is moving, by sector, with the biggest institutional gainers and losers."
-                : "Build or pick a strategy, backtest it, and get entry, stop and target levels."}
+              {UPGRADE[upgradeModal].text}
             </p>
             <div style={{ margin: "0 0 18px", fontSize: ".82rem", color: "var(--brand, #4ade80)", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
               <span>✓</span> Cancel anytime (no questions asked)
@@ -281,7 +305,7 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <Link
-                href={plansHref(upgradeModal === "MF" ? "pro" : "elite")}
+                href={plansHref(UPGRADE[upgradeModal].plan)}
                 onClick={() => setUpgradeModal(null)}
                 data-testid="module-see-plans"
                 style={{ display: "flex", justifyContent: "center", alignItems: "center", textDecoration: "none", padding: "12px 18px", borderRadius: 10, background: "#22c55e", color: "#05210f", fontWeight: 800, fontSize: ".9rem" }}

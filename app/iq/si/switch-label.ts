@@ -23,8 +23,9 @@ const WORDS: Record<AppModule, [string, string]> = {
   SI: ["Stock", "Intelligence"],
   SL: ["Strategy", "Lab"],
   MF: ["Money", "Flow"],
+  AS: ["Alpha", "Signals"],
 };
-const ACCENT: Record<AppModule, string> = { MC: "#4ade80", SI: "#7fa8d0", SL: "#e0bb5e", MF: "#e0bb5e" };
+const ACCENT: Record<AppModule, string> = { MC: "#4ade80", SI: "#7fa8d0", SL: "#e0bb5e", MF: "#e0bb5e", AS: "#b3a8ff" };
 
 export function switchLabel(to: AppModule): SwitchLabel {
   return {

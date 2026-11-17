@@ -25,7 +25,7 @@ export const SWITCH_MS = 1500;
 const NAV_AT_MS = 400;
 
 /** The modules the global toggle switches between. */
-export type AppModule = "MC" | "SI" | "SL" | "MF";
+export type AppModule = "MC" | "SI" | "SL" | "MF" | "AS";
 
 export interface ActiveSwitch {
   to: AppModule;
@@ -58,6 +58,8 @@ const isSiPath = (p: string | null | undefined) => !!p && (p === "/si" || p.star
 export const isSlPath = (p: string | null | undefined) => !!p && (p === "/sl" || p.startsWith("/sl/"));
 /** Money Flow lives at /money-flow (a full-screen module like SI). */
 export const isMfPath = (p: string | null | undefined) => !!p && (p === "/money-flow" || p.startsWith("/money-flow/"));
+/** Alpha Signals lives at /alpha-signals (a full-screen module like SL). */
+export const isAsPath = (p: string | null | undefined) => !!p && (p === "/alpha-signals" || p.startsWith("/alpha-signals/"));
 
 /**
  * Runs one switch: overlay → navigate behind it → overlay fades out. Ignores
@@ -80,6 +82,7 @@ interface SIContextType {
   activeModule: AppModule;
   enterSL: () => void;
   enterMF: () => void;
+  enterAS: () => void;
   siTicker: string | null;
   activeTab: SITab;
   setActiveTab: (tab: SITab) => void;
@@ -100,7 +103,7 @@ export function SIProvider({ children }: { children: ReactNode }) {
   // The URL is the source of truth; while a switch runs, show where it's going
   // so the pill slides immediately on click.
   const isSI = sw ? sw.to === "SI" : isSiPath(pathname);
-  const activeModule: AppModule = sw ? sw.to : isSiPath(pathname) ? "SI" : isSlPath(pathname) ? "SL" : isMfPath(pathname) ? "MF" : "MC";
+  const activeModule: AppModule = sw ? sw.to : isSiPath(pathname) ? "SI" : isSlPath(pathname) ? "SL" : isMfPath(pathname) ? "MF" : isAsPath(pathname) ? "AS" : "MC";
 
   const [siTicker, setSiTicker] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
@@ -172,8 +175,9 @@ export function SIProvider({ children }: { children: ReactNode }) {
     (ticker?: string) => {
       if (typeof window === "undefined") return;
       const onSiPage = isSiPath(window.location.pathname);
-      // Strategy Lab and Money Flow have no ticker in view — they return to the dashboard.
-      if ((isSlPath(window.location.pathname) || isMfPath(window.location.pathname)) && !ticker) {
+      // Strategy Lab, Money Flow and Alpha Signals have no ticker in view — they return to the dashboard.
+      const p = window.location.pathname;
+      if ((isSlPath(p) || isMfPath(p) || isAsPath(p)) && !ticker) {
         runSwitch("MC", "/dashboard", router.push);
         return;
       }
@@ -206,6 +210,11 @@ export function SIProvider({ children }: { children: ReactNode }) {
     runSwitch("MF", "/money-flow", router.push);
   }, [router]);
 
+  const enterAS = useCallback(() => {
+    if (typeof window === "undefined" || isAsPath(window.location.pathname)) return;
+    runSwitch("AS", "/alpha-signals", router.push);
+  }, [router]);
+
   const toggleSI = useCallback(() => {
     if (typeof window !== "undefined" && isSiPath(window.location.pathname)) exitToMC();
     else enterSI();
@@ -218,6 +227,7 @@ export function SIProvider({ children }: { children: ReactNode }) {
         activeModule,
         enterSL,
         enterMF,
+        enterAS,
         siTicker,
         activeTab,
         setActiveTab,
@@ -241,6 +251,7 @@ export function useSI() {
       activeModule: "MC" as AppModule,
       enterSL: () => { },
       enterMF: () => { },
+      enterAS: () => { },
       siTicker: null,
       activeTab: "overview" as SITab,
       setActiveTab: () => { },

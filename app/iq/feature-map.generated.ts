@@ -22,6 +22,11 @@ export const FEATURE_GROUPS = [
     "id": "strategyLab",
     "name": "Strategy Lab",
     "summary": "Build or pick a strategy, backtest it, and get entry, stop and target levels."
+  },
+  {
+    "id": "alphaSignals",
+    "name": "Alpha Signals",
+    "summary": "Intraday and swing setups, bullish and bearish, each with an entry, stop and target. Opens once the free trial ends."
   }
 ] as const;
 
@@ -39,7 +44,8 @@ export const PLAN_GROUPS = {
     "marketDesk",
     "stockIntelligence",
     "moneyFlow",
-    "strategyLab"
+    "strategyLab",
+    "alphaSignals"
   ]
 } as const;
 
@@ -81,12 +87,14 @@ export const PLANS = [
       "marketDesk",
       "stockIntelligence",
       "moneyFlow",
-      "strategyLab"
+      "strategyLab",
+      "alphaSignals"
     ],
     "bullets": [
       "Everything in Pro",
       "Strategy Lab",
-      "Backtest any strategy"
+      "Backtest any strategy",
+      "Alpha Signals: intraday and swing setups (opens after the free trial)"
     ]
   }
 ] as const;
@@ -127,7 +135,8 @@ export const SCREEN_FEATURES = {
   "si": "stockIntelligence",
   "money-flow": "moneyFlow",
   "options": "optionsChain",
-  "sl": "strategyLab"
+  "sl": "strategyLab",
+  "alpha-signals": "alphaSignals"
 } as const;
 
 export const WIDGET_FEATURES = {
@@ -184,7 +193,8 @@ export const FEATURE_GROUP_OF = {
   "institutionalMovers": "moneyFlow",
   "optionsChain": "moneyFlow",
   "strategyLab": "strategyLab",
-  "backtesting": "strategyLab"
+  "backtesting": "strategyLab",
+  "alphaSignals": "alphaSignals"
 } as const;
 
 export const LOWEST_PLAN = {
@@ -219,5 +229,6 @@ export const LOWEST_PLAN = {
   "institutionalMovers": "pro",
   "optionsChain": "pro",
   "strategyLab": "elite",
-  "backtesting": "elite"
+  "backtesting": "elite",
+  "alphaSignals": "elite"
 } as const;

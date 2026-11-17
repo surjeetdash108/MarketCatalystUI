@@ -16,7 +16,7 @@ describe("Alpha Signals Top Pick Modal - View Full Chart button", () => {
   it("calls openStockDetail with pick ticker and list of pick tickers", () => {
     assert.match(
       alp,
-      /onViewFullChart=\{[^}]*openStockDetail\(pick\.c\.ticker,\s*picks\.map\(p\s*=>\s*p\.c\.ticker\)\)[^}]*\}/,
+      /onViewFullChart=\{[^}]*openStockDetail\(swingPick\.c\.ticker,\s*listTickers\)[^}]*\}/,
       "View Full Chart must call openStockDetail with pick ticker and pick tickers list"
     );
   });

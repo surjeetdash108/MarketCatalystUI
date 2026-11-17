@@ -21,6 +21,7 @@ import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-cont
 import { INDEX_MEMBERS } from "../index-constituents";
 import { pulseFromLive, buildSectorList, tapeItemsToIndexDocs } from "../live-market-indices";
 import { isCommonEquity } from "../universe.util";
+import { AlphaDashboardCard } from "./alpha-dashboard-card";
 import type {
   LiveMoverDoc, LiveEarningsDoc, CompanyDoc, SectorApiDoc,
   InsiderTxDoc, AnalystConsensusDoc, MarketSentimentDoc, MarketSentimentHistoryDoc, EarningsAnnouncementDoc,
@@ -429,7 +430,7 @@ export function DashboardScreen() {
   // (Phase 1) — not a direct market_indices Firestore listener.
   const { frame: tapeFrame } = useTapeStream();
   const liveIndices = tapeFrame ? tapeItemsToIndexDocs(tapeFrame.items) : [];
-  const { data: liveMovers, loading: moversLoading } = useApiList<LiveMoverDoc>("/market-data/movers");
+  const { data: liveMovers } = useApiList<LiveMoverDoc>("/market-data/movers");
   const { data: liveEarnings, loading: earningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   // Next scheduled report per ticker (earliest calendar date from today on).
   const nextErByTicker = useMemo(() => {
@@ -549,11 +550,6 @@ export function DashboardScreen() {
       point: fgAsOf ? `As of ${fgAsOf}` : undefined,
     });
   }
-  // "Heating up": green on the day with volume running well above normal.
-  const heatingUp = movers
-    .filter(m => m.pctChange >= 1 && m.rvolRatio >= 1.5)
-    .sort((a, b) => b.pctChange - a.pctChange)
-    .slice(0, 4);
   const topGainer = [...movers].sort((a, b) => b.pctChange - a.pctChange)[0];
   if (topGainer) {
     wmnSlides.push({
@@ -817,28 +813,9 @@ export function DashboardScreen() {
             </div>
           </div>
 
-          {/* Shown (with placeholder chips) while movers load, so the bar holds
-              its slot instead of popping in and pushing the cards below down. */}
-          {(heatingUp.length > 0 || moversLoading) && (
-            <Link className="alpha-bar" href="/menu/screener" title="Open Alpha Signals">
-              <div className="alpha-ic">
-                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M19.07 4.93A10 10 0 1 0 22 12" /><path d="M16.24 7.76A6 6 0 1 0 18 12" /><circle cx="12" cy="12" r="1.6" /><path d="M12 12l6-6" /></svg>
-              </div>
-              <div className="alpha-txt"><b>Alpha Signals</b><span>{heatingUp.length > 0
-                ? `${heatingUp.length} stocks heating up · up on the day with above-average volume`
-                : "Scanning today’s movers…"}</span></div>
-              <div className="alpha-chips">
-                {heatingUp.length > 0
-                  ? heatingUp.map(m => (
-                    <span key={m.ticker} className="alpha-chip">{m.ticker} <span className="up">{sign(m.pctChange)}</span></span>
-                  ))
-                  : [0, 1, 2, 3].map(i => <span key={i} className="alpha-chip ph" aria-hidden="true">&nbsp;</span>)}
-              </div>
-              <span className="alpha-go" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
-              </span>
-            </Link>
-          )}
+          {/* Alpha Signals: top 2 bullish + top 2 bearish, intraday and swing.
+              Renders nothing unless the plan includes Alpha Signals (never in the trial). */}
+          <AlphaDashboardCard />
 
         {/* ── 2b. Most Searched Tickers ── */}
         <div className="col-12">
