@@ -41,6 +41,73 @@ type State = { data: Entitlements | null; loading: boolean; error: boolean };
 let cache: State = { data: null, loading: false, error: false };
 let inflight: Promise<void> | null = null;
 const listeners = new Set<(s: State) => void>();
+/** True once this page has the server's answer (a session copy is only a stand-in). */
+let fresh = false;
+/** Whose entitlements `cache` holds. */
+let cacheUid: string | null = null;
+
+/**
+ * The last answer is kept for the browser session, so a page load draws the
+ * module toggle and gates with the right plan straight away instead of
+ * flashing locks for a second while /api/me/entitlements is in flight. It is
+ * only a stand-in: the server is always re-read, and the backend enforces.
+ */
+const SESSION_KEY = "iq-entitlements-v1";
+
+function saveSession(data: Entitlements) {
+  try {
+    const uid = firebaseAuth.currentUser?.uid ?? null;
+    if (uid) sessionStorage.setItem(SESSION_KEY, JSON.stringify({ uid, data }));
+  } catch {
+    /* private mode / quota */
+  }
+}
+
+function readSession(): { uid: string; data: Entitlements } | null {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? "null") as { uid?: string; data?: Entitlements } | null;
+    if (!v?.uid || !v.data || typeof v.data !== "object" || !v.data.entitlements) return null;
+    const current = firebaseAuth.currentUser?.uid;
+    if (current && current !== v.uid) return null;
+    return { uid: v.uid, data: v.data };
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+// A different account (or sign-out) must never see the previous one's plan.
+if (typeof window !== "undefined") {
+  try {
+    firebaseAuth.onAuthStateChanged((user) => {
+      const uid = user?.uid ?? null;
+      if (!uid) {
+        clearSession();
+        fresh = false;
+        cacheUid = null;
+        if (cache.data) publish({ data: null, loading: false, error: false });
+        return;
+      }
+      if (cacheUid && cacheUid !== uid) {
+        clearSession();
+        fresh = false;
+        cacheUid = null;
+        inflight = null;
+        publish({ data: null, loading: false, error: false });
+        if (listeners.size) void load();
+      }
+    });
+  } catch {
+    /* auth not initialised in this environment (tests) */
+  }
+}
 
 function publish(next: State) {
   cache = next;
@@ -51,7 +118,12 @@ async function load(): Promise<void> {
   if (inflight) return inflight;
   publish({ ...cache, loading: true });
   inflight = apiGet<Entitlements>("/api/me/entitlements")
-    .then((data) => publish({ data, loading: false, error: false }))
+    .then((data) => {
+      fresh = true;
+      cacheUid = firebaseAuth.currentUser?.uid ?? cacheUid;
+      saveSession(data);
+      publish({ data, loading: false, error: false });
+    })
     .catch(() => publish({ data: cache.data, loading: false, error: true }))
     .finally(() => {
       inflight = null;
@@ -79,7 +151,16 @@ export function useEntitlements(): State & { refresh: () => Promise<Entitlements
   const [state, setState] = useState<State>(cache);
   useEffect(() => {
     listeners.add(setState);
-    if (!cache.data && !cache.loading) void load();
+    // Session stand-in first (after mount, so the static HTML still hydrates
+    // cleanly), then the server's answer.
+    if (!cache.data) {
+      const seed = readSession();
+      if (seed) {
+        cacheUid = seed.uid;
+        publish({ data: seed.data, loading: false, error: false });
+      }
+    }
+    if (!fresh && !cache.loading) void load();
     return () => {
       listeners.delete(setState);
     };

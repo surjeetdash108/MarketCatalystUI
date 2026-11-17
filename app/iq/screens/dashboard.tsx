@@ -790,7 +790,7 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── 2. What Matters Now + Most Searched (left) · Community Pulse (right) ── */}
+        {/* ── 2. What Matters Now + Most Searched (left) · Market Catalyst Pulse (right) ── */}
         <div className="col-8 wmn-left" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <div className="wmn open">
             <div className="wmnc-head">

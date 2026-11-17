@@ -721,6 +721,37 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .pubbar .btn-pub{flex:none;padding:10px 20px}
 .bm-place{display:inline-flex;align-items:center;gap:7px;font:600 11px var(--f-mono);padding:5px 11px;border-radius:20px;margin-bottom:8px}
 @media(max-width:1000px){.blogboard{grid-template-columns:1fr;grid-template-areas:"left" "center" "right"}}
+/* Market Catalyst Pulse */
+.pl-head{margin-top:26px}
+.pl-head .pl-sub{font-size:12px;color:var(--dim2)}
+.pulseboard{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px}
+@media(max-width:1000px){.pulseboard{grid-template-columns:1fr}}
+.pl-form .fl{display:block;font:600 10px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim2);margin:12px 0 6px}
+.pl-form .fl:first-child{margin-top:0}
+.pl-opt{text-transform:none;letter-spacing:0;font-weight:500;color:var(--dim2)}
+.pl-count{text-align:right;font:500 10px var(--f-mono);color:var(--dim2);margin-top:4px}
+.pl-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pl-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.pl-tk{position:relative}
+.pl-tklist{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;background:var(--surface2);border:1px solid var(--border);border-radius:9px;max-height:240px;overflow:auto;box-shadow:0 12px 30px rgba(0,0,0,.4)}
+.pl-tklist button{display:flex;gap:10px;align-items:center;width:100%;background:none;border:0;color:var(--text);padding:8px 10px;cursor:pointer;text-align:left;font-size:12.5px}
+.pl-tklist button:hover{background:var(--surface)}
+.pl-tklist b{font-family:var(--f-mono);color:var(--hi);min-width:58px}
+.pl-tklist span{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-tksel{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:5px 8px 5px 5px;border:1px solid var(--border);border-radius:9px;background:var(--surface2);font:600 12px var(--f-mono);color:var(--hi)}
+.pl-tksel button{background:none;border:0;color:var(--dim2);cursor:pointer;font-size:14px;padding:0 2px}
+.pl-av{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px;flex:none;overflow:hidden;background:#3b5bdb}
+.pl-av img{width:100%;height:100%;object-fit:cover;background:#fff}
+.pl-card{display:flex;gap:10px;cursor:default}
+.pl-card .pl-main{min-width:0;flex:1}
+.pl-card .pl-top{display:flex;gap:6px;align-items:baseline;font-size:12px;padding-right:44px}
+.pl-card .pl-top b{color:var(--hi)}
+.pl-card .pl-top span{color:var(--dim2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-card .pl-text{font-size:13px;color:var(--text);line-height:1.45;margin:4px 0 6px;white-space:pre-wrap;word-break:break-word}
+.pl-card .pl-foot{display:flex;gap:10px;align-items:center;font:600 11px var(--f-mono);color:var(--dim2)}
+.pl-card .pl-foot .tk{color:var(--brand2)}
+.pl-card .pl-edit{position:absolute;top:8px;right:30px;background:none;border:0;color:var(--dim2);cursor:pointer;font-size:12px}
+.pl-card .pl-edit:hover{color:var(--hi)}
 .chan{display:inline-flex;gap:5px;align-items:center}
 .chan .ci{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;color:#fff}
 
@@ -1104,6 +1135,41 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
           <button class="btn-add" onclick="openAddBlog()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add blog</button>
         </div>
         <div class="blogboard" id="blogboard"></div>
+
+        <!-- Market Catalyst Pulse: short posts shown on every user's dashboard,
+             newest first. Writes go through the parent page (admin:pulse*). -->
+        <div class="bl-head pl-head">
+          <h2>Market Catalyst Pulse</h2>
+          <span class="pl-sub">Posts appear on every user's dashboard, newest on top.</span>
+        </div>
+        <div class="pulseboard">
+          <div class="bzone pl-zone">
+            <div class="zh"><span class="zdot" style="background:#4ADE80"></span><h4>New post</h4><span class="zpos">dashboard card</span></div>
+            <div class="pl-form">
+              <label class="fl" for="plText">Post</label>
+              <textarea id="plText" class="inp" rows="4" maxlength="500" placeholder="NVDA, AMD lead chip bid in premarket as TSMC flags stronger AI demand into 2027."></textarea>
+              <div class="pl-count"><span id="plCount">0</span> / 500</div>
+              <label class="fl" for="plTicker">Ticker <span class="pl-opt">optional — its logo replaces the letter</span></label>
+              <div class="pl-tk">
+                <input id="plTicker" class="inp" autocomplete="off" placeholder="Search ticker or company…">
+                <div id="plTkList" class="pl-tklist" hidden></div>
+                <div id="plTkSel" class="pl-tksel" hidden></div>
+              </div>
+              <div class="pl-two">
+                <div><label class="fl" for="plName">Name</label><input id="plName" class="inp" maxlength="40" placeholder="MarketCatalyst"></div>
+                <div><label class="fl" for="plHandle">Handle</label><input id="plHandle" class="inp" maxlength="31" placeholder="@MarketCatalyst"></div>
+              </div>
+              <div class="pl-actions">
+                <button class="btn-add ghost" id="plCancel" type="button" hidden onclick="plReset()">Cancel edit</button>
+                <button class="btn-add" id="plSubmit" type="button" onclick="plSave()">Post</button>
+              </div>
+            </div>
+          </div>
+          <div class="bzone pl-zone">
+            <div class="zh"><span class="zdot" style="background:#8b7cf6"></span><h4>Posted</h4><span class="zpos">newest first</span><span class="zn" id="plN">0</span></div>
+            <div class="zlist" id="plList"><div class="zempty">No posts here yet</div></div>
+          </div>
+        </div>
         <input type="file" id="blogFile" accept=".docx,.pdf" hidden>
         <!-- An html post is usually designed elsewhere and arrives as a file;
              its <style> blocks are split into the CSS field on import. -->
@@ -5270,6 +5336,115 @@ window.addEventListener('message', function(e){
     var m=document.getElementById('pwMsg');
     if(d.ok){ m.style.color='var(--up)'; m.textContent='Password updated.'; setTimeout(closePw,900); }
     else { m.style.color='var(--down)'; m.textContent=d.error||'Update failed.'; }
+  }
+});
+
+/* ── Market Catalyst Pulse ────────────────────────────────────────────────
+   The console has no backend token: list / save / delete / ticker search are
+   delegated to the parent page (admin:pulse*), which calls the AdminGuard API
+   and replies with the fresh list. */
+const PL={posts:[],editId:null,ticker:null,searchSeq:0};
+const plEl=id=>document.getElementById(id);
+const plAttr=v=>xesc(v).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const PL_AV=['#4ade80','#8b7cf6','#f2b33d','#6f9fd8','#f0565a','#5bc0f8'];
+function plPost(m){ try{ parent.postMessage(m, location.origin); }catch(e){} }
+function plAgo(iso){
+  const t=Date.parse(iso); if(!isFinite(t)) return '';
+  const s=Math.max(0,Math.round((Date.now()-t)/1000));
+  if(s<60) return 'now'; const m=Math.round(s/60); if(m<60) return m+'m';
+  const h=Math.round(m/60); if(h<24) return h+'h'; const d=Math.round(h/24); return d+'d';
+}
+function plTime(iso){
+  const t=Date.parse(iso); if(!isFinite(t)) return '';
+  const d=new Date(t), now=new Date();
+  const tm=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
+  const sameDay=d.toLocaleDateString('en-US',{timeZone:'America/New_York'})===now.toLocaleDateString('en-US',{timeZone:'America/New_York'});
+  return sameDay?tm:d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/New_York'})+' · '+tm;
+}
+function plAvatar(p,i){
+  const letter=xesc(((p.text||'').trim()[0]||'M').toUpperCase());
+  const bg=PL_AV[i%PL_AV.length];
+  if(p.ticker) return '<span class="pl-av" style="background:'+bg+'"><img alt="" src="/live/logo?ticker='+encodeURIComponent(p.ticker)+'" onerror="this.parentNode.textContent=\''+letter+'\'"></span>';
+  return '<span class="pl-av" style="background:'+bg+'">'+letter+'</span>';
+}
+function plRender(){
+  const list=plEl('plList'); if(!list) return;
+  plEl('plN').textContent=PL.posts.length;
+  list.innerHTML=PL.posts.length?PL.posts.map((p,i)=>'<div class="zcard pl-card" data-id="'+plAttr(p.id)+'">'
+    +plAvatar(p,i)
+    +'<div class="pl-main"><div class="pl-top"><b>'+xesc(p.name)+'</b><span>@'+xesc(p.handle)+'</span><span>'+xesc(plAgo(p.createdAt))+'</span></div>'
+    +'<div class="pl-text">'+xesc(p.text)+'</div>'
+    +'<div class="pl-foot">'+(p.ticker?'<span class="tk">$'+xesc(p.ticker)+'</span>':'')+'<span>'+xesc(plTime(p.createdAt))+' ET</span></div></div>'
+    +'<button class="pl-edit" title="Edit" onclick="plEdit(\''+plAttr(p.id)+'\')">Edit</button>'
+    +'<button class="zx" title="Delete" onclick="plDelete(\''+plAttr(p.id)+'\')">×</button></div>').join('')
+    :'<div class="zempty">No posts here yet</div>';
+}
+function plSetTicker(t,name){
+  PL.ticker=t||null;
+  const sel=plEl('plTkSel'), inp=plEl('plTicker');
+  plEl('plTkList').hidden=true;
+  if(PL.ticker){
+    sel.innerHTML='<span class="pl-av" style="width:22px;height:22px"><img alt="" src="/live/logo?ticker='+encodeURIComponent(PL.ticker)+'" onerror="this.remove()"></span>$'+xesc(PL.ticker)+(name?' <span style="font-weight:500;color:var(--dim)">'+xesc(name)+'</span>':'')+'<button type="button" title="Remove ticker" onclick="plSetTicker(null)">×</button>';
+    sel.hidden=false; inp.value=''; inp.hidden=true;
+  } else { sel.hidden=true; sel.innerHTML=''; inp.hidden=false; inp.value=''; }
+}
+function plReset(){
+  PL.editId=null; plEl('plText').value=''; plEl('plName').value=''; plEl('plHandle').value='';
+  plEl('plCount').textContent='0'; plSetTicker(null);
+  plEl('plSubmit').textContent='Post'; plEl('plCancel').hidden=true;
+}
+function plEdit(id){
+  const p=PL.posts.find(x=>x.id===id); if(!p) return;
+  PL.editId=id; plEl('plText').value=p.text; plEl('plCount').textContent=String(p.text.length);
+  plEl('plName').value=p.name==='MarketCatalyst'?'':p.name;
+  plEl('plHandle').value=p.handle==='MarketCatalyst'?'':'@'+p.handle;
+  plSetTicker(p.ticker);
+  plEl('plSubmit').textContent='Save changes'; plEl('plCancel').hidden=false;
+  plEl('plText').focus();
+}
+function plSave(){
+  const text=plEl('plText').value.trim();
+  if(!text){ toast('Write something to post'); return; }
+  if(!BLOG_BRIDGE){ toast('Posting works in the live console only'); return; }
+  plEl('plSubmit').disabled=true;
+  plPost({type:'admin:pulseSave', id:PL.editId, text, ticker:PL.ticker||'', name:plEl('plName').value.trim(), handle:plEl('plHandle').value.trim()});
+}
+function plDelete(id){
+  if(!confirm('Delete this post from every dashboard?')) return;
+  plPost({type:'admin:pulseDelete', id});
+}
+(function plInit(){
+  const txt=plEl('plText'), inp=plEl('plTicker'); if(!txt||!inp) return;
+  txt.addEventListener('input',()=>{ plEl('plCount').textContent=String(txt.value.length); });
+  let timer=null;
+  inp.addEventListener('input',()=>{
+    clearTimeout(timer);
+    const q=inp.value.trim();
+    if(!q){ plEl('plTkList').hidden=true; return; }
+    timer=setTimeout(()=>{ PL.searchSeq++; plPost({type:'admin:pulseSearch', q, seq:PL.searchSeq}); },220);
+  });
+  inp.addEventListener('keydown',e=>{ if(e.key==='Escape') plEl('plTkList').hidden=true; });
+  document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('.pl-tk')) plEl('plTkList').hidden=true; });
+  if(BLOG_BRIDGE) plPost({type:'admin:pulseList'});
+  setInterval(plRender,60000); // keep "5m ago" current
+})();
+window.addEventListener('message',function(e){
+  if(e.origin!==location.origin) return;
+  const d=e.data||{};
+  if(d.type==='admin:pulseSearchResult'){
+    if(d.seq!==PL.searchSeq) return;
+    const box=plEl('plTkList'); const rs=Array.isArray(d.results)?d.results:[];
+    box.innerHTML=rs.length?rs.slice(0,8).map(r=>'<button type="button" data-t="'+plAttr(r.ticker)+'" data-n="'+plAttr(r.name||'')+'"><b>'+xesc(r.ticker)+'</b><span>'+xesc(r.name||'')+'</span></button>').join(''):'<div class="zempty">No matches</div>';
+    box.querySelectorAll('button').forEach(b=>b.onclick=()=>plSetTicker(b.dataset.t,b.dataset.n));
+    box.hidden=false;
+    return;
+  }
+  if(d.type==='admin:pulseResult'){
+    plEl('plSubmit').disabled=false;
+    if(Array.isArray(d.posts)){ PL.posts=d.posts; plRender(); }
+    if(d.ok===false){ toast(xesc(d.error||'Could not save the post')); return; }
+    if(d.action==='save'){ toast(PL.editId?'Post updated':'Posted to Market Catalyst Pulse'); plReset(); }
+    if(d.action==='delete') toast('Post deleted');
   }
 });
 </script>

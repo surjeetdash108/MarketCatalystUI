@@ -282,6 +282,51 @@ export function AdminConsole() {
         }
         reply({ ok, ...(error ? { error } : {}), ...(rawKey ? { rawKey } : {}), ...(keys ? { keys } : {}) });
       }
+      /* ── Market Catalyst Pulse ──────────────────────────────────────────
+         Posts shown on every dashboard. Same delegation as the blog board;
+         every write re-fetches the list so the console shows the true state. */
+      if (
+        d.type === "admin:pulseList" || d.type === "admin:pulseSave" ||
+        d.type === "admin:pulseDelete" || d.type === "admin:pulseSearch"
+      ) {
+        if (e.source !== iframeRef.current?.contentWindow || e.origin !== window.location.origin) return;
+        const reply = (m: Record<string, unknown>) =>
+          iframeRef.current?.contentWindow?.postMessage(m, window.location.origin);
+        if (d.type === "admin:pulseSearch") {
+          try {
+            const r = await apiGet<{ results?: Array<{ ticker: string; name?: string | null }> }>(
+              `/live/search?q=${encodeURIComponent(String(d.q ?? "").slice(0, 40))}`,
+            );
+            reply({ type: "admin:pulseSearchResult", seq: d.seq, results: (r.results ?? []).map((x) => ({ ticker: x.ticker, name: x.name ?? "" })) });
+          } catch {
+            reply({ type: "admin:pulseSearchResult", seq: d.seq, results: [] });
+          }
+          return;
+        }
+        let ok = true;
+        let error: string | undefined;
+        try {
+          if (d.type === "admin:pulseSave") {
+            const body = { text: d.text, ticker: d.ticker, name: d.name, handle: d.handle };
+            if (d.id) await apiPatch(`/api/admin/pulse/${encodeURIComponent(String(d.id))}`, body);
+            else await apiPost("/api/admin/pulse", body);
+          } else if (d.type === "admin:pulseDelete") {
+            await apiDelete(`/api/admin/pulse/${encodeURIComponent(String(d.id))}`);
+          }
+        } catch (err) {
+          ok = false;
+          error = (err as Error).message;
+        }
+        let posts: unknown[] | undefined;
+        try {
+          posts = (await apiGet<{ posts: unknown[] }>("/api/admin/pulse")).posts ?? [];
+        } catch (err) {
+          if (ok && d.type === "admin:pulseList") { ok = false; error = (err as Error).message; }
+        }
+        const action = d.type === "admin:pulseSave" ? "save" : d.type === "admin:pulseDelete" ? "delete" : "list";
+        reply({ type: "admin:pulseResult", action, ok, ...(error ? { error } : {}), ...(posts ? { posts } : {}) });
+        return;
+      }
       if (d.type === "admin:blogDelete") {
         await blogWrite("admin:blogDeleteResult", async () => {
           await apiDelete(`/api/admin/posts/${encodeURIComponent(String(d.id))}`);

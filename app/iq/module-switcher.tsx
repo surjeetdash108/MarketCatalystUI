@@ -20,15 +20,15 @@ const ACTIVE: Record<AppModule, { bg: string; fg: string; glow: string; hover: s
  * Module order:
  * Starter — MC, SI
  * Pro     — MC, SI, MF
- * Elite   — MC, SI, MF, SL, Alpha Signals (Alpha Signals is not shown during
+ * Elite   — MC, SI, MF, Alpha Signals, SL (Alpha Signals is not shown during
  *           the free trial or the new-account intro)
  */
 const SEGMENTS: Array<[AppModule, string]> = [
   ["MC", "Market Catalyst"],
   ["SI", "Stock Intelligence"],
   ["MF", "Money Flow"],
-  ["SL", "Strategy Lab"],
   ["AS", "Alpha Signals"],
+  ["SL", "Strategy Lab"],
 ];
 
 /** Entitlement key behind each paid module (Market Catalyst and Stock Intelligence are always open). */
@@ -141,6 +141,14 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
   }, [activeModule, segments.length]);
 
   const go = (m: AppModule) => {
+    // Plan not known yet (first load): don't show an upgrade pop-up for a
+    // module the account may well have; the screen's own gate decides.
+    if (!entitlements && MODULE_KEY[m]) {
+      if (m === "MF") enterMF();
+      else if (m === "AS") enterAS();
+      else if (m === "SL") enterSL();
+      return;
+    }
     if (!canAccessModule(m, entitlements)) {
       if (m === "MF" || m === "SL" || m === "AS") setUpgradeModal(m);
       return;
@@ -195,7 +203,9 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
           )}
           {segments.map(([m, label], i) => {
             const on = m === activeModule;
-            const locked = !canAccessModule(m, entitlements);
+            // No lock until the plan is known: a lock that vanishes a second
+            // later (staff, Elite) reads as a glitch.
+            const locked = !!entitlements && !canAccessModule(m, entitlements);
             return (
               <span
                 key={m}
