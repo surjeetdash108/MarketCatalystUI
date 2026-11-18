@@ -733,6 +733,9 @@ const priced = (cs: CompanyDoc[]) => cs.filter(c => c.price != null);
 const sig = (ctx: ScreenCtx) => new Map(ctx.sigs.map(s => [s.c.ticker, s]));
 const compVal = (s: Signal | undefined, k: CompKey) => s?.comps.find(x => x.key === k)?.value ?? null;
 
+/** Prior-quarter 13F shares below this share of today's make a % change meaningless (> +900%). */
+const INST_MIN_BASE_SHARE = 0.1;
+
 export const SCREENS: Screen[] = [
   {
     id: "sp", label: "Top S&P 500", desc: "By market cap",
@@ -850,11 +853,19 @@ export const SCREENS: Screen[] = [
       priced(companies)
         .filter(c => (c.inst13FHoldersChange ?? 0) > 0 && (c.inst13FSharesChange ?? 0) > 0)
         .map(c => {
-          const base = c.inst13FShares != null ? c.inst13FShares - (c.inst13FSharesChange as number) : 0;
-          return { c, pct: base > 0 ? ((c.inst13FSharesChange as number) / base) * 100 : null };
+          const shares = Number(c.inst13FShares ?? 0);
+          const change = Number(c.inst13FSharesChange);
+          const base = shares - change;
+          // A % needs a prior quarter that can carry one: a near-empty base
+          // (AEHL: 1 share reported, so +17,610,200%) or a pre-split count
+          // makes the ratio meaningless — show the share count instead.
+          const pct = base > 0 && base >= shares * INST_MIN_BASE_SHARE ? (change / base) * 100 : null;
+          return { c, change, pct };
         })
         .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || (b.c.inst13FHoldersChange as number) - (a.c.inst13FHoldersChange as number))
-        .map(({ c, pct }) => rowOf(c, `${c.inst13FHoldersChange} more institutional holders${pct != null ? ` and ${pct.toFixed(1)}% more shares` : ""} vs. the prior quarter${c.instAsOf ? ` (${c.instAsOf})` : ""}.`)),
+        .map(({ c, change, pct }) => rowOf(c, `${c.inst13FHoldersChange} more institutional holders and ${
+          pct != null ? `${pct.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% more shares` : `${Math.round(change).toLocaleString("en-US")} more shares (almost none reported the prior quarter)`
+        } vs. the prior quarter${c.instAsOf ? ` (${c.instAsOf})` : ""}.`)),
   },
   {
     id: "si", label: "High Short Interest", desc: "Lagging relative strength — contrarian",
