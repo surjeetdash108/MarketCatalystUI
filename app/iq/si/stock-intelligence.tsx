@@ -487,7 +487,7 @@ function SixMonthAreaChart({
               borderTopColor: "var(--si-accent-soft, #7fa8d0)",
               borderRightColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
               borderBottomColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
-              borderLeftColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
+              borderLeftColor: pinned === activeHover.num ? "var(--si-text-hi, #ffffff)" : "var(--si-border-sec, #2a3a4a)",
               background: "var(--si-card, #0c1118)",
               boxShadow: "0 18px 44px rgba(0,0,0,0.6), 0 0 18px rgba(169,198,227,0.18)",
               padding: "10px 12px",
@@ -498,10 +498,10 @@ function SixMonthAreaChart({
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "#ffffff", whiteSpace: "nowrap" }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", whiteSpace: "nowrap" }}>
                   #{activeHover.num} · {activeHover.date}
                 </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 5px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "#ffffff", borderRadius: 2 }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 5px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "var(--si-text-hi, #ffffff)", borderRadius: 2 }}>
                   {activeHover.category.toUpperCase()}
                 </span>
               </span>
@@ -510,16 +510,16 @@ function SixMonthAreaChart({
                   {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
                 </span>
                 {pinned === activeHover.num && (
-                  <button type="button" aria-label="Close" onClick={() => setPinned(null)} style={{ width: 22, height: 22, border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "#ffffff", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 0 }}>
+                  <button type="button" aria-label="Close" onClick={() => setPinned(null)} style={{ width: 22, height: 22, border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-hi, #ffffff)", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 0 }}>
                     ×
                   </button>
                 )}
               </span>
             </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 700, color: "#ffffff", lineHeight: 1.3, ...(pinned === activeHover.num ? {} : clampLines(1)) }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.3, ...(pinned === activeHover.num ? {} : clampLines(1)) }}>
               {activeHover.label}
             </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffffff", lineHeight: 1.35, ...(pinned === activeHover.num ? {} : clampLines(2)) }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.35, ...(pinned === activeHover.num ? {} : clampLines(2)) }}>
               {activeHover.details}
             </div>
             {pinned === activeHover.num && <EventContextBlocks ev={activeHover} compact />}
@@ -3420,18 +3420,18 @@ export function StockIntelligenceScreen() {
                         boxShadow: up.past ? "0 0 0 6px rgba(93,107,121,0.12)" : "0 0 0 6px rgba(127,168,208,0.12)",
                       }}
                     />
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "#ffffff", marginTop: 4 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4 }}>
                       {up.date} · {up.days}
                     </span>
                     {up.cat && (
-                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", color: "#ffffff" }}>
+                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #ffffff)" }}>
                         {up.cat.toUpperCase()}
                       </span>
                     )}
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "#ffffff", lineHeight: 1 }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", lineHeight: 1 }}>
                       {up.n}
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "#ffffff", lineHeight: 1.5 }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.5 }}>
                       {up.txt}
                     </span>
                     <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "3px 9px", marginTop: 4 }}>
@@ -4090,7 +4090,7 @@ export function StockIntelligenceScreen() {
                   <StockLogo sym={stock.t} size={34} />
                   <div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{stock.t}</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#ffffff", opacity: 0.7, marginTop: 3 }}>{stock.name || liveCompany?.name}</div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-hi, #ffffff)", opacity: 0.7, marginTop: 3 }}>{stock.name || liveCompany?.name}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, whiteSpace: "nowrap" }}>
@@ -4128,8 +4128,8 @@ export function StockIntelligenceScreen() {
                 </span>
                 {stockDetail.levels.map((lv, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "#ffffff" }}>{lv.k}</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: lv.col }}>{lv.v}</span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)" }}>{lv.k}</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: lv.col === "#e8eef4" ? "var(--si-text-hi, #e8eef4)" : lv.col }}>{lv.v}</span>
                   </div>
                 ))}
               </div>
@@ -4291,7 +4291,7 @@ export function StockIntelligenceScreen() {
               padding: "0 18px",
               border: `1px solid ${active ? accent : "#1c2733"}`,
               background: active ? "rgba(89,128,166,0.2)" : "transparent",
-              color: "#ffffff",
+              color: "var(--si-text-hi, #ffffff)",
               opacity: disabled ? 0.35 : 1,
               fontFamily: "'Manrope', sans-serif",
               fontSize: 15,
@@ -4304,7 +4304,7 @@ export function StockIntelligenceScreen() {
                 {labSavedNote && (
                   <div style={{ maxWidth: 780, width: "100%", margin: "14px auto -6px", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.07)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <span style={{ color: "var(--up, #4ade80)", fontSize: 16 }}>✓</span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#ffffff" }}>{labSavedNote}</span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-hi, #ffffff)" }}>{labSavedNote}</span>
                     <button
                       onClick={() => {
                         setLabSavedNote(null);
@@ -4314,7 +4314,7 @@ export function StockIntelligenceScreen() {
                     >
                       VIEW IN TRADE TRACKER ▸
                     </button>
-                    <button onClick={() => setLabSavedNote(null)} aria-label="Dismiss" style={{ width: 26, height: 26, border: "none", background: "transparent", color: "#ffffff", fontSize: 16, cursor: "pointer" }}>
+                    <button onClick={() => setLabSavedNote(null)} aria-label="Dismiss" style={{ width: 26, height: 26, border: "none", background: "transparent", color: "var(--si-text-hi, #ffffff)", fontSize: 16, cursor: "pointer" }}>
                       ×
                     </button>
                   </div>
@@ -4325,7 +4325,7 @@ export function StockIntelligenceScreen() {
                 >
                   <div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>TRADE BUILDER</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "#ffffff", marginTop: 4, lineHeight: 1.05 }}>BUILD YOUR TRADE STRATEGY FOR {stock.t}</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>BUILD YOUR TRADE STRATEGY FOR {stock.t}</div>
                   </div>
                   <div>
                     <div style={stepLabel}>STEP 1 · DIRECTION</div>
@@ -4746,7 +4746,7 @@ export function StockIntelligenceScreen() {
                       style={{ width: "min(420px, 100%)", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card, #0c1118)", boxShadow: "0 18px 48px rgba(0,0,0,0.6)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}
                     >
                       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #e8eef4)" }}>ENGINE WEIGHTS</div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#ffffff", lineHeight: 1.55 }}>Switch to Advanced mode to edit the weights.</div>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.55 }}>Switch to Advanced mode to edit the weights.</div>
                       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
                         <button
                           onClick={() => setLabWeightsDialog(false)}
@@ -4776,7 +4776,7 @@ export function StockIntelligenceScreen() {
                   <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARKET HISTORY</span>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: "0.12em", color: "#ffffff" }}>LAST {labHz === "12M" ? "9M" : labHz}</span>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #ffffff)" }}>LAST {labHz === "12M" ? "9M" : labHz}</span>
                     </div>
                     <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
                       Historical Underlying Asset Benchmark Performance — buy-and-hold returns, drawdown and volatility; not an active strategy backtest.
@@ -4796,7 +4796,7 @@ export function StockIntelligenceScreen() {
                         <span style={{ position: "absolute", left: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#f05656", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>INVALIDATION {usd(stopV)}</span>
                       </div>
                       <div style={{ position: "absolute", left: 0, right: 0, top: nowYPct, borderTop: "1px dashed rgba(255,255,255,0.55)" }}>
-                        <span style={{ position: "absolute", right: 12, top: 3, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#ffffff", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>PRESENT {usd(stock.p)}</span>
+                        <span style={{ position: "absolute", right: 12, top: 3, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>PRESENT {usd(stock.p)}</span>
                       </div>
                       <div style={{ position: "absolute", right: -4, top: nowYPct, width: 8, height: 8, marginTop: -4, borderRadius: 99, background: "#e8eef4", boxShadow: "0 0 10px rgba(232,238,244,0.6)" }} />
                     </div>
@@ -4835,7 +4835,7 @@ export function StockIntelligenceScreen() {
                         ["TRADE CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
                       ].map(([k, v, c], idx) => (
                         <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "#ffffff" }}>{k}</div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-text-hi, #ffffff)" }}>{k}</div>
                           <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, color: c as string, marginTop: 4 }}>{v}</div>
                         </div>
                       ))}
@@ -4960,8 +4960,8 @@ export function StockIntelligenceScreen() {
                     onClick={(e) => e.stopPropagation()}
                     style={{ width: "min(440px, 100%)", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card, #0c1118)", boxShadow: "0 18px 48px rgba(0,0,0,0.6)", padding: "24px 26px", display: "flex", flexDirection: "column", gap: 14 }}
                   >
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.1em", color: "#ffffff" }}>SAVE THIS TRADE?</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "#ffffff", lineHeight: 1.55 }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-text-hi, #ffffff)" }}>SAVE THIS TRADE?</div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.55 }}>
                       <b style={{ color: thBull ? "var(--up, #4ade80)" : "var(--down, #f87171)" }}>{thBull ? "Long" : "Short"}</b> {stock.t}, target <b style={{ color: "var(--up, #4ade80)" }}>{usd(tgtV)}</b>, invalidation <b style={{ color: "var(--down, #f87171)" }}>{usd(stopV)}</b> over <b style={{ color: "#4fb3ff" }}>{labHz}</b>. It will be saved in your Trade Tracker, and you will be taken back to the Trade Builder setup.
                     </div>
                     <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>

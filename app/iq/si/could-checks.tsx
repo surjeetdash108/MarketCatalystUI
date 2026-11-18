@@ -96,7 +96,7 @@ export function BullBearChecks({ bullish, bearish, broken }: { bullish: Check[];
                   {col.title}
                 </span>
               </div>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#ffffff", opacity: 0.75, marginTop: 6 }}>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-hi, #ffffff)", opacity: 0.75, marginTop: 6 }}>
                 {col.title === "BULLISH" ? "What would validate this setup" : "What would break this setup"}
               </div>
             </div>
@@ -114,11 +114,11 @@ export function BullBearChecks({ bullish, bearish, broken }: { bullish: Check[];
                   e.currentTarget.style.background = `rgba(${col.rgb},0.07)`;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = it.already ? "rgba(248,113,113,0.5)" : "rgba(255,255,255,0.07)";
+                  e.currentTarget.style.borderColor = it.already ? "rgba(248,113,113,0.5)" : "var(--si-border, rgba(255,255,255,0.07))";
                   e.currentTarget.style.background = it.already ? "rgba(248,113,113,0.06)" : "rgba(255,255,255,0.025)";
                 }}
                 style={{
-                  border: it.already ? "1px solid rgba(248,113,113,0.5)" : "1px solid rgba(255,255,255,0.07)",
+                  border: it.already ? "1px solid rgba(248,113,113,0.5)" : "1px solid var(--si-border, rgba(255,255,255,0.07))",
                   background: it.already ? "rgba(248,113,113,0.06)" : "rgba(255,255,255,0.025)",
                   padding: "14px 16px 16px",
                   minWidth: 0,
@@ -134,8 +134,8 @@ export function BullBearChecks({ bullish, bearish, broken }: { bullish: Check[];
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: RED }}>ALREADY BROKEN</span>
                   )}
                 </div>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: "#ffffff", lineHeight: 1.3 }}>{it.title}</div>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "#ffffff", lineHeight: 1.5 }}>{highlightChecks(it.text)}</div>
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.3 }}>{it.title}</div>
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.5 }}>{highlightChecks(it.text)}</div>
               </div>
             ))}
           </div>
