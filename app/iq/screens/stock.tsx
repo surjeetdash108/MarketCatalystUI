@@ -2690,8 +2690,11 @@ export function StockScreen({
             // lastBarIsSession). Otherwise the last bar IS the previous close.
             const lastBar = lastBarIsSession ? lastYrBar : null;
             const prevBar = lastBarIsSession ? (yr.length > 1 ? yr[yr.length - 2] : null) : lastYrBar;
+            // Open: the session's daily bar when it is in (the series the chart's
+            // OHLC readout shows), so the two never disagree — vendors differ on
+            // the open (AAPL Nov 18: 351.87 official vs 351.94 first trade).
             const dayBar = hasSessionQuote
-              ? { o: sessOpen as number, h: sessHigh as number, l: sessLow as number }
+              ? { o: lastBar?.o ?? (sessOpen as number), h: sessHigh as number, l: sessLow as number }
               : lastBar;
             const prevClose = hasSessionQuote
               ? sessPrevClose
