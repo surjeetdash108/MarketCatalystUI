@@ -231,7 +231,7 @@ export function AlphaSignals() {
   const carRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const ctx = useMemo(() => ({ companies: A.companies, sigs: A.sigs, analyst: A.analyst, ipos, now: A.now }), [A.companies, A.sigs, A.analyst, ipos, A.now]);
+  const ctx = useMemo(() => ({ companies: A.companies, sigs: A.sigs, analyst: A.analyst, ipos, now: A.now, quotes: A.quotes }), [A.companies, A.sigs, A.analyst, ipos, A.now, A.quotes]);
   const rowsBy = useMemo(() => new Map(SCREENS.map(s => [s.id, s.rows(ctx)])), [ctx]);
 
   const screen = SCREENS.find(s => s.id === screenId) ?? SCREENS[0];

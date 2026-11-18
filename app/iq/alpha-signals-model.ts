@@ -701,6 +701,8 @@ export interface ScreenCtx {
   analyst: Map<string, AnalystConsensusDoc>;
   ipos: IpoEventDoc[];
   now: number;
+  /** The app-wide live quotes (tickers outside `companies`, e.g. new IPOs, too). */
+  quotes?: Map<string, { price: number | null; pctChange: number | null }>;
 }
 
 export interface Screen {
@@ -716,6 +718,11 @@ export interface Screen {
   rows: (ctx: ScreenCtx) => ScreenRow[];
 }
 
+/** A positive finite number (stored docs sometimes hold numbers as strings), else null. */
+const posNum = (v: unknown): number | null => {
+  const n = typeof v === "string" ? Number(v) : v;
+  return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : null;
+};
 const rowOf = (c: CompanyDoc, why: string): ScreenRow => ({
   ticker: c.ticker, name: c.name ?? c.ticker, sector: c.sector, price: c.price, pct: c.pctChange, why,
 });
@@ -865,12 +872,20 @@ export const SCREENS: Screen[] = [
         .filter(e => e.symbol && e.status === "history" && Date.parse(e.date) >= cutoff && Date.parse(e.date) <= ctx.now)
         .sort((a, b) => b.date.localeCompare(a.date))
         .map(e => {
-          const co = byT.get(e.symbol as string);
-          const bits = [`Listed ${e.date}${e.offerPrice != null ? ` at ${money(e.offerPrice)}` : ""}`];
-          if (e.returnSinceIpoPct != null) bits.push(`${signed(e.returnSinceIpoPct, 0)} since IPO`);
+          const sym = e.symbol as string;
+          const co = byT.get(sym);
+          const q = ctx.quotes?.get(sym);
+          // The live quote first (most new listings aren't in `companies`), then
+          // the company doc; the IPO doc's once-a-day close only as a last resort.
+          const price = posNum(q?.price) ?? posNum(co?.price) ?? posNum(e.currentPrice);
+          const pct = q?.price != null ? (q.pctChange ?? null) : co?.price != null ? (co.pctChange ?? null) : null;
+          const offer = posNum(e.offerPrice);
+          const bits = [`Listed ${e.date}${offer != null ? ` at ${money(offer)}` : " · offer price unavailable"}`];
+          if (offer != null && price != null) bits.push(`${signed((price / offer - 1) * 100, 0)} since IPO`);
+          if (price == null) bits.push("no trades yet");
           return {
-            ticker: e.symbol as string, name: e.name, sector: e.sector ?? co?.sector ?? null,
-            price: co?.price ?? e.currentPrice, pct: co?.pctChange ?? null, why: `${bits.join(" · ")}.`,
+            ticker: sym, name: e.name, sector: e.sector ?? co?.sector ?? null,
+            price, pct, why: `${bits.join(" · ")}.`,
           };
         });
     },
