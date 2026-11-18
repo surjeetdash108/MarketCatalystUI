@@ -14198,3 +14198,5 @@ h6.sd-sec {
 
 /* An empty Top Picks carousel is hidden; its display:grid would beat [hidden]. */
 .iq-root .alp-cards[hidden] { display: none; }
+
+.iq-root .alp-updated{font-size:.7rem;color:var(--text-dim-solid);margin:-4px 0 6px;text-align:right}

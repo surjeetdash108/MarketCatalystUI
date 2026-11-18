@@ -7,6 +7,7 @@ import { useBackendBars } from "../hooks/useBackendBars";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { useAlphaPicks } from "../hooks/useAlphaPicks";
 import { useLiveQuotes } from "../live-quotes-context";
+import { holdOrder } from "../hold-order";
 import { useIQActions } from "../shell";
 import { WatchlistPicker } from "../watchlist-picker";
 import { exchangeLabel } from "../exchange";
@@ -215,6 +216,7 @@ export function AlphaSignals() {
     setMode(m);
     setDir(d);
     setPickSym(null);
+    setSeen(null);
     try { localStorage.setItem(VIEW_KEY, JSON.stringify({ mode: m, dir: d })); } catch { /* private mode */ }
   };
 
@@ -244,9 +246,20 @@ export function AlphaSignals() {
   useLiveQuotes(rows.map(r => r.ticker));
 
   const bear = dir === "Bearish";
-  const swingList = bear ? A.swingBear : A.swingBull;
-  const intraList = bear ? A.intraBear : A.intraBull;
+  // The strip holds its order while the pointer is on it or a pick is open,
+  // so a live re-rank can't move a card under the cursor or reshuffle the pager.
+  const [hovering, setHovering] = useState(false);
+  const [seen, setSeen] = useState<string[] | null>(null);
+  const held = hovering || pickSym != null;
+  const rawSwing = bear ? A.swingBear : A.swingBull;
+  const rawIntra = bear ? A.intraBear : A.intraBull;
+  const rawTickers = mode === "Swing" ? rawSwing.map(s => s.c.ticker) : rawIntra.map(s => s.ticker);
+  const swingList = mode === "Swing" ? holdOrder(seen, rawSwing, s => s.c.ticker) : rawSwing;
+  const intraList = mode === "Intraday" ? holdOrder(seen, rawIntra, s => s.ticker) : rawIntra;
   const listTickers = mode === "Swing" ? swingList.map(s => s.c.ticker) : intraList.map(s => s.ticker);
+  useEffect(() => {
+    if (!held) queueMicrotask(() => setSeen(null));
+  }, [held]);
   const pickIdx = pickSym ? listTickers.indexOf(pickSym) : -1;
 
   const flash = useCallback((text: string, kind: "ok" | "error" = "ok") => {
@@ -264,7 +277,7 @@ export function AlphaSignals() {
   }, []);
   const openSideInfo = () => openModal(() => setPopup({ kind: "side" }));
   const openRules = (sym: string) => openModal(() => setPopup({ kind: "rules", sym }));
-  const openPick = (t: string) => openModal(() => setPickSym(t));
+  const openPick = (t: string) => openModal(() => { setSeen(v => v ?? rawTickers); setPickSym(t); });
 
   useEffect(() => {
     if (!pickSym && !popup) return;
@@ -362,7 +375,16 @@ export function AlphaSignals() {
           )}
         </div>
         {count === 0 && <div className="alp-none">{empty}</div>}
-        <div className="alp-cards" ref={carRef} hidden={count === 0}>
+        {count > 0 && (
+          <div className="alp-updated" data-testid="picks-updated">
+            {held ? "Order held while you browse" : `Updated ${etTime(mode === "Intraday" && A.lastRound ? A.lastRound : A.now)} ET`}
+          </div>
+        )}
+        <div
+          className="alp-cards" ref={carRef} hidden={count === 0}
+          onPointerEnter={() => { setHovering(true); setSeen(v => v ?? rawTickers); }}
+          onPointerLeave={() => setHovering(false)}
+        >
           {mode === "Swing"
             ? swingList.map(s => {
               const a = bear ? s.bear : s.action;
