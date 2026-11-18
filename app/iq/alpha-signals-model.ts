@@ -422,7 +422,9 @@ export function actionOf(c: CompanyDoc, score: number, trend: Trend, coverage: n
       const ext = extendedReason(c);
       if (ext) return A("alert", ext);
       if (isIlliquid(c)) return A("alert", "Thinly traded (under $5 or under $20M a day) — fills and stops are unreliable.");
-      return A("act", "Score is high, the trend is rising and the data is complete — the setup is in play.");
+      return A("act", coverage >= 100
+        ? "Score is high, the trend is rising and the data is complete — the setup is in play."
+        : `Score is high and the trend is rising — the setup is in play (${coverage}% of the inputs have data).`);
     }
     if (score < SWING_BUILD) return A("watch", "The trend is rising but the score is under 60 — no edge yet.");
     return A("alert", "Improving but not yet confirmed — watch for the score to cross 75.");
@@ -461,6 +463,16 @@ function tagsOf(c: CompanyDoc, coverage: number, soon: boolean): Tag[] {
   return t;
 }
 
+/** Signal families in the confluence check (momentum, RS, fundamentals, catalyst, 13F flow). */
+export const SIGNAL_FAMILIES = 5;
+
+/** "N of 5 signal families aligned" — always out of five, naming any without data. */
+export function confluenceMetric(aligned: number, available: number): string {
+  if (available < 3) return "Too few signal families to compare";
+  const missing = SIGNAL_FAMILIES - available;
+  return `${aligned} of ${SIGNAL_FAMILIES} signal families aligned${missing > 0 ? ` (${missing} unavailable)` : ""}`;
+}
+
 /** Score one company. Returns null when fewer than two components have data. */
 export function scoreCompany(c: CompanyDoc, a?: AnalystConsensusDoc, now = Date.now()): Signal | null {
   if (!num(c.price)) return null;
@@ -470,7 +482,7 @@ export function scoreCompany(c: CompanyDoc, a?: AnalystConsensusDoc, now = Date.
   const fam = [parts.m.v, parts.rs.v, parts.f.v, parts.c.v, instFlow(c)].filter((x): x is number => x != null);
   const aligned = fam.filter(v => v >= 60).length;
   const confV = fam.length >= 3 ? Math.round((aligned / fam.length) * 100) : null;
-  const confMetric = fam.length >= 3 ? `${aligned} of ${fam.length} signal families aligned` : "Too few signal families to compare";
+  const confMetric = confluenceMetric(aligned, fam.length);
 
   const value: Record<CompKey, number | null> = { m: parts.m.v, rs: parts.rs.v, f: parts.f.v, c: parts.c.v, conf: confV };
   const metric: Record<CompKey, string> = { m: parts.m.metric, rs: parts.rs.metric, f: parts.f.metric, c: parts.c.metric, conf: confMetric };
