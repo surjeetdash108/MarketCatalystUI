@@ -60,10 +60,13 @@ const fracPct = (f: number | null | undefined) => (f == null ? "—" : sign(f * 
 const usd = (v: number | null | undefined) => fmtPrice(v);
 const etTime = (t: number) => new Date(t).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
 
-function InfoDot({ onOpen }: { onOpen: () => void }) {
+const INTRADAY_INFO = "How the Intraday score works";
+const INTRADAY_SHORT_INFO = "How the Intraday short setups work";
+
+function InfoDot({ onOpen, title = "How the Emergence Score is calculated" }: { onOpen: () => void; title?: string }) {
   return (
     <span
-      role="button" tabIndex={0} className="alp-i" title="How the Emergence Score is calculated"
+      role="button" tabIndex={0} className="alp-i" title={title} aria-label={title}
       onClick={e => { e.stopPropagation(); e.preventDefault(); onOpen(); }}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); e.preventDefault(); onOpen(); } }}
     >i</span>
@@ -416,7 +419,7 @@ export function AlphaSignals() {
                 <div className="alp-card-mid">
                   <Ring score={s.score} bear={bear} />
                   <span className="alp-stack"><Pill k={s.action.key} text={s.action.label} bear={bear} /><SetupTag s={s} /></span>
-                  <InfoDot onOpen={openSideInfo} />
+                  <InfoDot onOpen={openSideInfo} title={bear ? INTRADAY_SHORT_INFO : INTRADAY_INFO} />
                 </div>
                 <div className="alp-card-foot">
                   <span title="Relative volume at this time of day · distance from VWAP">
@@ -873,7 +876,7 @@ function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, 
       <div className="alp-modal-h">
         <IntraHead s={s}><Star starred={starred} onStar={onStar} /></IntraHead>
         <div className="sc">
-          <div className="r"><InfoDot onOpen={onInfo} /><Ring score={s.score} size={44} /></div>
+          <div className="r"><InfoDot onOpen={onInfo} title={INTRADAY_INFO} /><Ring score={s.score} size={44} /></div>
           <small>Intraday · {s.status}</small>
         </div>
         <Step pos={pos} onPrev={onPrev} onNext={onNext} />
@@ -904,7 +907,7 @@ function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, 
         </div>
         <div className="alp-cols2">
           <div>
-            <div className="alp-k-row"><span className="alp-k">Signal breakdown</span><InfoDot onOpen={onInfo} /></div>
+            <div className="alp-k-row"><span className="alp-k">Signal breakdown</span><InfoDot onOpen={onInfo} title={INTRADAY_INFO} /></div>
             {s.comps.map(x => <CompRow key={x.key} x={x} />)}
           </div>
           <div className="alp-hist">
@@ -948,7 +951,7 @@ function IntraBearBody({ s, onInfo, onClose, onExplore, onViewFullChart }: { s: 
       <div className="alp-modal-h">
         <IntraHead s={s} />
         <div className="sc">
-          <div className="r"><InfoDot onOpen={onInfo} /><Ring score={s.score} size={44} bear /></div>
+          <div className="r"><InfoDot onOpen={onInfo} title={INTRADAY_SHORT_INFO} /><Ring score={s.score} size={44} bear /></div>
           <small>Emergence · lower = weaker</small>
         </div>
         <Close onClose={onClose} />
@@ -978,7 +981,7 @@ function IntraBearBody({ s, onInfo, onClose, onExplore, onViewFullChart }: { s: 
         </div>
         <div className="alp-cols2">
           <div>
-            <div className="alp-k-row"><span className="alp-k">Signal breakdown</span><InfoDot onOpen={onInfo} /></div>
+            <div className="alp-k-row"><span className="alp-k">Signal breakdown</span><InfoDot onOpen={onInfo} title={INTRADAY_SHORT_INFO} /></div>
             {s.comps.map(x => <CompRow key={x.key} x={x} />)}
           </div>
           <div className="alp-hist">
