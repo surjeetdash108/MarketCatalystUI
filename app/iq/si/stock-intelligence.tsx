@@ -2493,6 +2493,9 @@ export function StockIntelligenceScreen() {
           {/* Search Bar */}
           <div className="si-nav-search" style={{ position: "relative", width: 220, flex: "none" }}>
             <div
+              // The box can shrink to just the icon on narrow windows (module-switcher.tsx),
+              // so a click anywhere on it, not only on the input, focuses the input.
+              onClick={(e) => e.currentTarget.querySelector("input")?.focus()}
               style={{
                 height: 34,
                 border: "1px solid var(--si-border, #1c2733)",

@@ -88,7 +88,16 @@ const pinCss = (width: number) => `
     transform: translateX(-50%);
     z-index: 950;
   }
-  .si-nav-search { width: clamp(150px, calc(50vw - ${width / 2 + 12 + 378}px), 220px) !important; }
+  /* The search sits left of the pinned toggle. When the window is too narrow for the
+     full box it shrinks to a search icon (down to 40px) instead of running underneath
+     the toggle, and opens to its full 220px over the toggle while hovered or focused.
+     The doubled class beats the inline-style rule that lives later in the document. */
+  div.si-nav-search.si-nav-search { width: clamp(40px, calc(50vw - ${width / 2 + 12 + 378}px), 220px) !important; }
+  .si-nav-search > div:first-child { overflow: hidden; box-sizing: border-box; transition: width 120ms ease; cursor: text; }
+  .si-nav-search input { min-width: 0; }
+  .si-nav-search:hover > div:first-child,
+  .si-nav-search:focus-within > div:first-child { width: 220px; position: relative; z-index: 960; }
+  .si-nav-search:focus-within > div:nth-child(2) { right: auto !important; width: 220px; z-index: 961 !important; }
 }
 .app .subbar .mod-switch-pin {
   position: static !important;
