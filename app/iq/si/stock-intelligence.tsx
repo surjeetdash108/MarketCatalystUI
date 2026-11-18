@@ -3420,18 +3420,18 @@ export function StockIntelligenceScreen() {
                         boxShadow: up.past ? "0 0 0 6px rgba(93,107,121,0.12)" : "0 0 0 6px rgba(127,168,208,0.12)",
                       }}
                     />
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "#ffffff", marginTop: 4 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4 }}>
                       {up.date} · {up.days}
                     </span>
                     {up.cat && (
-                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", color: "#ffffff" }}>
+                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #ffffff)" }}>
                         {up.cat.toUpperCase()}
                       </span>
                     )}
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "#ffffff", lineHeight: 1 }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", lineHeight: 1 }}>
                       {up.n}
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "#ffffff", lineHeight: 1.5 }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.5 }}>
                       {up.txt}
                     </span>
                     <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "3px 9px", marginTop: 4 }}>
