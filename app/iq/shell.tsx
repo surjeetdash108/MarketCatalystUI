@@ -665,9 +665,10 @@ function AssetMark({ kind, label }: { kind: AssetKind; label: string }) {
 }
 
 // ---- Index drawer (openIndex) ----
-function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClose }: {
+function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClose, onOpenStock }: {
   idx: number | string; pulse: PulseItem[]; sectorsLive: SectorApiDoc[]; loading: boolean;
   phase: "open" | "pre" | "after" | "closed" | "unknown"; onClose: () => void;
+  onOpenStock: (sym: string) => void;
 }) {
   const x = typeof idx === "number"
     ? (livePulse[idx] ?? livePulse.find(p => p.label.toLowerCase() === String(idx).toLowerCase()))
@@ -682,13 +683,15 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
       loading={loading}
       phase={phase}
       onClose={onClose}
+      onOpenStock={onOpenStock}
     />
   );
 }
 
-function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
+function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose, onOpenStock }: {
   x: PulseItem; sectorsLive: SectorApiDoc[]; loading: boolean;
   phase: "open" | "pre" | "after" | "closed" | "unknown"; onClose: () => void;
+  onOpenStock: (sym: string) => void;
 }) {
   const router = useRouter();
   const [tf, setTf] = useState<string>("3M");
@@ -875,6 +878,29 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
                 />
               )}
             </div>
+
+            {/* Deep-link to the full stock page for the ticker this chart draws (IBIT for Bitcoin,
+                SPY for the S&P 500, ...). It goes through the shell's goToStock, which saves the
+                ticker and tells the Stock page to switch to it, the same path the search box
+                uses. The old button navigated with a "ticker" query parameter that the Stock page never
+                reads, so it opened on whichever stock was viewed last. */}
+            <button
+              className="btn"
+              style={{
+                width: "100%",
+                marginTop: 14,
+                fontSize: ".78rem",
+                color: "var(--text-dim-solid)",
+                background: "var(--surface-1)",
+                border: "1px solid var(--border)",
+              }}
+              onClick={() => {
+                onClose();
+                onOpenStock(chartTicker);
+              }}
+            >
+              Open {chartTicker} full analysis & technicals →
+            </button>
           </div>
         </div>
       </div>
@@ -1846,7 +1872,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <SectorDrawer name={drawer.name} companies={shellCompanies} sectorsLive={shellSectors} loading={shellCompaniesLoading} onClose={() => setDrawer(null)} />
           )}
           {drawer?.type === "index" && (
-            <IndexDrawer idx={drawer.idx} pulse={livePulse} sectorsLive={shellSectors} loading={shellSectorsLoading} phase={tapeFrame?.marketPhase ?? "unknown"} onClose={() => setDrawer(null)} />
+            <IndexDrawer idx={drawer.idx} pulse={livePulse} sectorsLive={shellSectors} loading={shellSectorsLoading} phase={tapeFrame?.marketPhase ?? "unknown"} onClose={() => setDrawer(null)} onOpenStock={goToStock} />
           )}
           {drawer?.type === "feargreed" && (
             <FearGreedDrawer onClose={() => setDrawer(null)} />
