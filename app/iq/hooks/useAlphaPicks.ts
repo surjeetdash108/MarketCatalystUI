@@ -58,6 +58,33 @@ export function metricsWithQuote(m: SessionMetrics, q: LiveQuote | undefined, to
   return { ...m, price, chg, dayHigh: Math.max(m.dayHigh, price), dayLow: Math.min(m.dayLow, price) };
 }
 
+/**
+ * Company docs with a current next report date: the bulk docs carry none (or
+ * a past one — it is resolved only on the single-stock read), so the earliest
+ * upcoming date from the earnings calendar fills it. Without this the swing
+ * "earnings within 5 days" cap never fired and NEXT EARNINGS read "—".
+ */
+export function withNextEarnings(
+  companies: CompanyDoc[],
+  events: Array<{ ticker: string; date: string }>,
+  today: string,
+): CompanyDoc[] {
+  const next = new Map<string, string>();
+  for (const e of events) {
+    const d = (e.date ?? "").slice(0, 10);
+    if (!e.ticker || d < today) continue;
+    const prev = next.get(e.ticker);
+    if (!prev || d < prev) next.set(e.ticker, d);
+  }
+  if (next.size === 0) return companies;
+  return companies.map(c => {
+    const have = c.nextEarningsDate ? c.nextEarningsDate.slice(0, 10) : null;
+    if (have && have >= today) return c;
+    const d = next.get(c.ticker);
+    return d ? { ...c, nextEarningsDate: d } : c;
+  });
+}
+
 /** 60-second clock: open/closed, the earnings window and staleness all read it. */
 export function useMarketClock(tickMs = 60_000) {
   const [now, setNow] = useState(() => Date.now());
@@ -134,7 +161,12 @@ export function useAlphaPicks({ limit, pool, barsPollMs, fill = false, enabled =
   // shows are subscribed below; every quote already in the map is used.
   const [watch, setWatch] = useState<string[]>([]);
   const quotes = useLiveQuotes(enabled ? watch : []);
-  const companies = useMemo(() => storedCompanies.map(c => withLiveQuote(c, quotes.get(c.ticker))), [storedCompanies, quotes]);
+  const { data: earningsEvents } = useApiList<{ ticker: string; date: string }>(enabled ? "/market-data/earnings" : null);
+  const today = etParts(new Date(now)).isoDate;
+  const companies = useMemo(
+    () => withNextEarnings(storedCompanies, earningsEvents, today).map(c => withLiveQuote(c, quotes.get(c.ticker))),
+    [storedCompanies, earningsEvents, today, quotes],
+  );
 
   const analyst = useMemo(() => new Map(analystDocs.map(a => [a.ticker, a])), [analystDocs]);
   // Scores use the clock minute (earnings window, freshness), not every render.
