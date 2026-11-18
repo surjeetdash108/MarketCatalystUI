@@ -1,6 +1,6 @@
 /**
  * Countdown shown for the new-account intro and paid free trials.
- * Both end at 11:59 PM US Eastern on the 7th calendar day after sign-up, so
+ * Both end at 11:59 PM US Eastern on day 7, the sign-up day being day 1, so
  * the banner shows the date only (no time) and counts calendar days: on the
  * last day it reads "Ends today".
  */

@@ -506,7 +506,7 @@ export function PlanSettingsCard({ isStaff }: { isStaff: boolean }) {
     line = "Paid plans are launching soon. You won't be charged anything until then.";
   } else if (status === "INTRO") {
     badge = "Market Catalyst intro";
-    line = `Your Market Catalyst intro ends on ${shortDate(ent?.introEndsAt)}. Choose a plan to keep going${(ent?.trialDays ?? 0) > 0 ? ` — every plan starts with a ${ent?.trialDays}-day free trial` : ""}.`;
+    line = `Your free trial ends on ${shortDate(ent?.introEndsAt)}. Choose a plan before then and nothing is charged until it ends; after that, a plan is billed when you buy it.`;
   } else if (subscribed) {
     badge = `${ent?.planName ?? ""}${cadence ? ` · ${cadence}` : ""}`;
     line =

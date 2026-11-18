@@ -12,8 +12,10 @@
  * itself — the backend's EntitlementGuard does — and it is a no-op while
  * SUBSCRIPTIONS_ENABLED is off. A slug absent here is on every plan.
  */
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { fetchPlans } from "./billing/api";
+import { displayPrice, isPaid, type CatalogPlan } from "./billing/catalog";
 import { ENTITLEMENTS } from "../admin/entitlement-catalog";
 import {
   SCREEN_FEATURES,
@@ -22,7 +24,7 @@ import {
   FEATURE_GROUP_OF,
   PLANS,
 } from "./feature-map.generated";
-import { featureDecision, hiddenInTrial, useEntitlements } from "./hooks/useEntitlements";
+import { featureDecision, hiddenInTrial, useEntitlements, type Entitlements } from "./hooks/useEntitlements";
 
 const KNOWN_KEYS = new Set(ENTITLEMENTS.map((e) => e.key));
 
@@ -73,7 +75,8 @@ export function LockedFeature({
   const groupName = groupForEntitlement(entitlement);
   const featureTitle = def?.label ?? groupName ?? "This feature";
   const widget = variant === "widget";
-  const trialDays = ent?.trialDays ?? 0;
+  const ended = trialEnded(ent);
+  if (ended) return <TrialEndedCard entitlement={entitlement} ended={ended} variant={variant} />;
   const badge = (
     <span data-testid="locked-badge" style={{ padding: "3px 12px", borderRadius: 99, fontSize: ".72rem", fontWeight: 700, background: "var(--brand-dim)", color: "var(--brand-2)", border: "1px solid var(--brand)" }}>
       {planName ? `Available on ${planName}${planKey === "elite" ? "" : " and up"}` : "Not on your plan"}
@@ -107,7 +110,6 @@ export function LockedFeature({
       {badge}
       <p style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".88rem", lineHeight: 1.5 }}>
         {def?.description ?? ""}
-        {trialDays > 0 ? ` Every plan starts with a ${trialDays}-day free trial.` : ""}
       </p>
       {cta}
     </div>
@@ -171,6 +173,131 @@ function TrialHidden({ variant }: { variant: "screen" | "widget" }) {
       >
         Back to the dashboard
       </Link>
+    </div>
+  );
+}
+
+/**
+ * The person's 7 free days are over and nothing replaced them: no plan, no
+ * intro, not staff. "trial" = never paid (the intro ran out); "plan" = a paid
+ * plan that was cancelled or stopped paying. Null when they have something
+ * (then a lock means "this needs a bigger plan", the usual panel).
+ */
+export function trialEnded(ent: Entitlements | null | undefined): "trial" | "plan" | null {
+  if (!ent || !ent.subscriptionsEnabled || ent.staff) return null;
+  if (ent.subscriptionPlanId || ent.inGrace) return null;
+  if (ent.status === "INTRO" || ent.status === "ACTIVE" || ent.status === "TRIALING") return null;
+  return ent.status === "CANCELLED" || ent.status === "PAST_DUE" ? "plan" : "trial";
+}
+
+/** "…to keep getting <this>." per screen; anything else: "…to keep using <label>." */
+const KEEP_GETTING: Record<string, string> = {
+  marketCatalyst: "the market pulse, movers and heatmap on your Dashboard",
+  news: "real-time market news and commentary in the Live Feed",
+  scanner: "the day's gainers, losers and unusual volume in Movers",
+  heatmap: "sector and stock performance in the Heatmap",
+  macro: "the economic, VIX and dividend Calendar",
+  ipos: "upcoming and recent IPOs with their offer prices",
+  earningsHub: "the earnings calendar and latest results in the Earnings Hub",
+  recaps: "the daily and weekly market Recaps",
+  watchlist: "live prices on your Watchlist",
+  workspaces: "every Market Catalyst workspace",
+  screener: "filtered stock lists in the Screener",
+  ownership: "insider trades and 13F fund holdings",
+  portfolio: "your Portfolio's live value and moves",
+};
+
+export function trialEndedLine(entitlement: string): string {
+  const keep = KEEP_GETTING[entitlement];
+  if (keep) return `Choose a plan to keep getting ${keep}.`;
+  const label = ENTITLEMENTS.find((e) => e.key === entitlement)?.label;
+  return label ? `Choose a plan to keep using ${label}.` : "Choose a plan to keep using Market Catalyst.";
+}
+
+/** "Starter from $31.20/mo, billed annually" from the live catalog (no hard-coded price). */
+export function cheapestPlanLine(plans: CatalogPlan[]): string | null {
+  const paid = plans.filter((p) => isPaid(p) && p.prices?.annual).sort((a, b) => (a.prices.annual?.amount ?? 0) - (b.prices.annual?.amount ?? 0));
+  const p = paid[0];
+  const price = p ? displayPrice(p, "annual") : null;
+  return p && price ? `${p.name} from ${price.perMonth}/mo, billed annually` : null;
+}
+
+let planLineCache: string | null | undefined;
+function usePlanLine(): string | null {
+  const [line, setLine] = useState<string | null>(planLineCache ?? null);
+  useEffect(() => {
+    if (planLineCache !== undefined) return;
+    let on = true;
+    void fetchPlans()
+      .then((r) => {
+        planLineCache = cheapestPlanLine(r.plans);
+        if (on) setLine(planLineCache);
+      })
+      .catch(() => {});
+    return () => {
+      on = false;
+    };
+  }, []);
+  return line;
+}
+
+function LockTile({ size }: { size: number }) {
+  return (
+    <div aria-hidden="true" style={{ width: size, height: size, borderRadius: size * 0.25, background: "var(--brand-dim, rgba(74,222,128,.14))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <svg width={size * 0.42} height={size * 0.42} viewBox="0 0 24 24" fill="none" stroke="var(--brand, #4ADE80)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="11" width="16" height="10" rx="2.5" />
+        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        <circle cx="12" cy="16" r="1" fill="var(--brand, #4ADE80)" />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * What every locked Market Catalyst screen and widget shows once the free
+ * trial is over and there's no plan: one card, one "Choose a plan" button.
+ */
+export function TrialEndedCard({
+  entitlement,
+  ended,
+  variant = "screen",
+  planLine,
+}: {
+  entitlement: string;
+  ended: "trial" | "plan";
+  variant?: "screen" | "widget";
+  /** Test hook; normally read from the plan catalog. */
+  planLine?: string | null;
+}) {
+  const live = usePlanLine();
+  const priceLine = planLine !== undefined ? planLine : live;
+  const widget = variant === "widget";
+  const title = ended === "plan" ? "Your plan has ended" : "Your free trial has ended";
+  const button = (
+    <Link
+      href="/choose-plan"
+      data-testid="choose-plan-btn"
+      style={{ display: "block", width: "100%", boxSizing: "border-box", padding: widget ? "9px 14px" : "14px 18px", borderRadius: 10, background: "var(--brand, #4ADE80)", color: "var(--on-brand, #07080A)", fontWeight: 700, fontSize: widget ? ".82rem" : "1rem", textAlign: "center", textDecoration: "none" }}
+    >
+      Choose a plan
+    </Link>
+  );
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: widget ? "10px 6px" : "64px 16px", width: "100%", boxSizing: "border-box" }}>
+      <div
+        data-testid="trial-ended"
+        data-variant={variant}
+        data-entitlement={entitlement}
+        style={{ width: "100%", maxWidth: widget ? 320 : 420, boxSizing: "border-box", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: widget ? 8 : 12, padding: widget ? "16px 14px" : "32px 34px 22px", borderRadius: widget ? 12 : 16, background: "var(--surface-2, rgba(255,255,255,.03))", border: "1px solid var(--border, rgba(255,255,255,.08))" }}
+      >
+        <LockTile size={widget ? 36 : 48} />
+        <h2 data-testid="trial-ended-title" style={{ margin: widget ? "2px 0 0" : "6px 0 0", fontSize: widget ? ".98rem" : "1.35rem", fontWeight: 800, color: "var(--text-hi)" }}>{title}</h2>
+        <p style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: widget ? ".78rem" : ".92rem", lineHeight: 1.5 }}>{trialEndedLine(entitlement)}</p>
+        <div style={{ width: "100%", marginTop: widget ? 4 : 10 }}>{button}</div>
+        <p data-testid="trial-ended-foot" style={{ margin: widget ? "2px 0 0" : "4px 0 0", color: "var(--text-dim-solid)", fontSize: widget ? ".68rem" : ".76rem" }}>
+          {priceLine ? `${priceLine} · Cancel anytime` : "Cancel anytime"}
+        </p>
+      </div>
     </div>
   );
 }
