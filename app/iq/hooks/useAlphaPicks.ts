@@ -13,16 +13,36 @@ import {
   type IntradaySignal, type SessionMetrics,
 } from "../alpha-intraday";
 
+const pos = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
+
 /**
  * A stored company doc with the app-wide live quote laid over its price and
  * day change (the same pair Market Catalyst shows — see pairedQuote), so a
  * ticker reads the same price on every screen.
+ *
+ * The 52-week range is brought up to that price too: the stored high/low come
+ * from completed sessions and their % fields from whatever price the nightly
+ * job saw, so today's high/low (the quote's, when there is one) and the price
+ * itself are folded in and both % are measured from the price shown.
  */
 export function withLiveQuote(c: CompanyDoc, q: LiveQuote | undefined): CompanyDoc {
-  if (!q) return c;
-  const { price, pctChange } = pairedQuote(q, c);
-  if (price === c.price && pctChange === c.pctChange) return c;
-  return { ...c, price, pctChange };
+  const { price, pctChange } = q ? pairedQuote(q, c) : { price: c.price ?? null, pctChange: c.pctChange ?? null };
+  const out: CompanyDoc = price === c.price && pctChange === c.pctChange ? c : { ...c, price, pctChange };
+  if (!pos(price)) return out;
+  const patch: Partial<CompanyDoc> = {};
+  if (pos(c.high52)) {
+    const high = Math.max(c.high52, price, pos(q?.dayHigh) ? q.dayHigh : 0);
+    const from = (price / high - 1) * 100;
+    if (high !== c.high52) patch.high52 = high;
+    if (from !== c.pctFromHigh52) patch.pctFromHigh52 = from;
+  }
+  if (pos(c.low52)) {
+    const low = Math.min(c.low52, price, pos(q?.dayLow) ? q.dayLow : Infinity);
+    const from = (price / low - 1) * 100;
+    if (low !== c.low52) patch.low52 = low;
+    if (from !== c.pctFromLow52) patch.pctFromLow52 = from;
+  }
+  return Object.keys(patch).length ? { ...out, ...patch } : out;
 }
 
 /**
