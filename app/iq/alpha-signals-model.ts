@@ -508,7 +508,9 @@ export function scoreCompany(c: CompanyDoc, a?: AnalystConsensusDoc, now = Date.
   const soon = earningsSoon(c, now);
 
   const why = (weak ? [...avail].reverse() : avail).slice(0, 3).map(x => {
-    const good = !weak && (x.value as number) >= 60;
+    // Weakest first for a weakening trend, but each line still says what its
+    // own score says (Momentum 65 is never "Momentum fading").
+    const good = (x.value as number) >= 60;
     const t = good ? TXT[x.key].up : TXT[x.key].dn;
     return { title: t[0], body: t[1], good };
   });
