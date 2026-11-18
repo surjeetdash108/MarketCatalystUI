@@ -1360,7 +1360,8 @@ export function StockIntelligenceScreen() {
     if (activeTab !== "lab" || labStarted || typeof window === "undefined") return;
     const toTop = () => {
       window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-      document.querySelectorAll("main.main, .main").forEach((el) => {
+      // On Stock Intelligence the page scrolls inside main.si-main-scroll (see shell.tsx), not the window.
+      document.querySelectorAll("main.main, .main, .si-main-scroll").forEach((el) => {
         if (el.scrollTop > 0) el.scrollTop = 0;
       });
     };
@@ -2050,6 +2051,8 @@ export function StockIntelligenceScreen() {
   // SVG path coordinates
   const svgW = 1000;
   const svgH = 320;
+  // Width reserved at the right of the Price History plot for the price scale.
+  const PH_GUTTER = 84;
   const pathD = hasRealBars
     ? priceSeries
       .map((val, idx) => {
@@ -2843,14 +2846,7 @@ export function StockIntelligenceScreen() {
 
               {/* Chart Canvas Area */}
               <div
-                onMouseMove={(e) => {
-                  if (!hasRealBars) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const f = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                  setHoverFrac(f);
-                }}
-                onMouseLeave={() => setHoverFrac(null)}
-                style={{ position: "relative", height: 320, margin: "14px 16px 10px", cursor: hasRealBars ? "crosshair" : "default" }}
+                style={{ position: "relative", height: 320, margin: "14px 16px 10px" }}
               >
                 {overviewBarsLoading && (
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(12, 17, 24, 0.7)", zIndex: 10, backdropFilter: "blur(2px)" }}>
@@ -2872,6 +2868,18 @@ export function StockIntelligenceScreen() {
                   </div>
                 )}
 
+                {/* The plot stops short of the right edge: the price scale sits in that gutter, not over the line. */}
+                <div
+                  className="si-ph-plot"
+                  onMouseMove={(e) => {
+                    if (!hasRealBars) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const f = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    setHoverFrac(f);
+                  }}
+                  onMouseLeave={() => setHoverFrac(null)}
+                  style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: PH_GUTTER, cursor: hasRealBars ? "crosshair" : "default" }}
+                >
                 <svg width="100%" height="320" viewBox="0 0 1000 320" preserveAspectRatio="none" style={{ display: "block" }}>
                   {hasRealBars && yTicks.map((t, idx) => (
                     <line
@@ -2899,6 +2907,7 @@ export function StockIntelligenceScreen() {
                     </>
                   )}
                 </svg>
+                </div>
 
                 {/* Right Y-Axis Price Scale Labels (Matches Technicals Y-axis display) */}
                 {hasRealBars && yTicks.length > 0 && (
@@ -2954,7 +2963,7 @@ export function StockIntelligenceScreen() {
 
                 {/* Vertical Crosshair Line, Horizontal Line, Glowing Dot, and Floating Tooltip */}
                 {hoverInfo && (
-                  <>
+                  <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: PH_GUTTER, pointerEvents: "none" }}>
                     <div
                       style={{
                         position: "absolute",
@@ -2981,7 +2990,7 @@ export function StockIntelligenceScreen() {
                     <div
                       style={{
                         position: "absolute",
-                        right: 8,
+                        right: 8 - PH_GUTTER,
                         top: `${hoverInfo.topPct}%`,
                         transform: "translateY(-50%)",
                         background: "#3b82f6",
@@ -3034,7 +3043,7 @@ export function StockIntelligenceScreen() {
                         {usd(hoverInfo.priceVal)}
                       </div>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
 
@@ -3043,7 +3052,7 @@ export function StockIntelligenceScreen() {
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  padding: "0 16px 14px",
+                  padding: `0 ${16 + PH_GUTTER}px 14px 16px`,
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 12,
                   color: "var(--si-text-sub, #5d6b79)",
@@ -4134,10 +4143,7 @@ export function StockIntelligenceScreen() {
             <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", display: "flex", flexDirection: "column", minHeight: 560 }}>
               <div style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                 <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                  ✦ AI RESEARCH COPILOT
-                </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-mid, #93a1af)", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 8px" }}>
-                  CONTEXT · {stock.t} · {stock.setup}
+                  ✦ ASK ME ANYTHING
                 </span>
               </div>
               <div style={{ flex: 1, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -4998,7 +5004,12 @@ export function StockIntelligenceScreen() {
                           setLabSaveOpen(false);
                           setLabSavedNote(`${stock.t} trade saved to your Trade Tracker`);
                           resetBuilder();
-                          setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 60);
+                          // Back to the top, where the "saved" note and the set-up are. The scroller is
+                          // main.si-main-scroll; the effect above also does this once the set-up re-renders.
+                          setTimeout(() => {
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                            document.querySelectorAll(".si-main-scroll").forEach((el) => el.scrollTo({ top: 0, behavior: "smooth" }));
+                          }, 60);
                         }}
                         style={{ height: 40, padding: "0 20px", border: "none", background: "#5980a6", color: "#ffffff", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
                       >

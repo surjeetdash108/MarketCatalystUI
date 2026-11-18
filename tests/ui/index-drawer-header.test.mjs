@@ -13,8 +13,21 @@ const body = drawer.slice(drawer.indexOf('<div className="drawer-b">'), drawer.i
 
 describe("index drawer header", () => {
   it("the price and the change are in the header, after the name and subtitle", () => {
-    assert.match(head, /\{sub\} · \{QUOTE_DELAY_LABEL\}[\s\S]*\{fmt\(x\.value, dec\)\}[\s\S]*\{arr\(x\.change\)\}/);
+    assert.match(head, /\{sub\}[\s\S]*\{fmt\(x\.value, dec\)\}[\s\S]*\{arr\(x\.change\)\}/);
     assert.match(head, /className="idx-head-px"/);
+  });
+  it("the subtitle carries no delay note", () => {
+    assert.doesNotMatch(head, /QUOTE_DELAY_LABEL|min delayed/);
+  });
+  it("every index and asset draws its own mark instead of a letter tile", () => {
+    assert.match(head, /<AssetMark kind=\{assetKind\(x\.label\)!\} label=\{x\.label\} \/>/);
+    for (const kind of ["bitcoin", "ethereum", "gold", "oil", "sp500", "nasdaq", "dow", "russell", "vix", "yield", "dollar"]) {
+      assert.match(shell, new RegExp(`"${kind}"`), kind);
+    }
+  });
+  it("has no Calendar button and no 'full analysis & technicals' button", () => {
+    assert.doesNotMatch(drawer, /Go to Calendar/);
+    assert.doesNotMatch(drawer, /full analysis & technicals/);
   });
   it("the body no longer repeats them above the metrics", () => {
     assert.doesNotMatch(body, /fmt\(x\.value, dec\)/);
