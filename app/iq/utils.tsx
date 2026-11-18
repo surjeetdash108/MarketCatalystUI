@@ -178,7 +178,9 @@ export function sign(n: number): string {
 }
 
 export function cls(n: number): string {
-  return n > 0 ? 'up' : n < 0 ? 'down' : 'flat';
+  // Same rounding as sign(): a move printed as "0.00%" is flat, not red/green.
+  const r = Math.round(n * 100) / 100;
+  return r > 0 ? 'up' : r < 0 ? 'down' : 'flat';
 }
 
 export function arr(n: number): string {

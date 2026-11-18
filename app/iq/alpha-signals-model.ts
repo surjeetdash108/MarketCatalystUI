@@ -147,7 +147,11 @@ export interface Signal {
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-const signed = (n: number, d = 1) => `${n > 0 ? "+" : ""}${n.toFixed(d)}%`;
+/** "+1.2%" / "-0.4%"; a value that rounds to zero prints "0.0%" (never "-0.0%"). */
+const signed = (n: number, d = 1) => {
+  const r = Number(n.toFixed(d));
+  return `${r > 0 ? "+" : ""}${(r === 0 ? 0 : r).toFixed(d)}%`;
+};
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 export const DAY = 86_400_000;
 

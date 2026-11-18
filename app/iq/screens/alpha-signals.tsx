@@ -447,7 +447,7 @@ export function AlphaSignals() {
                     <span className="who"><StockLogo sym={r.ticker} size={21} /><span className="nm"><b>{r.ticker}</b><small>{r.name}</small></span></span>
                     <span className="px mono">
                       <span>{r.price == null ? "—" : fmtPrice(r.price)}</span>
-                      {r.pct != null && <small className={cls(r.pct)}>{r.pct > 0 ? "▲ " : r.pct < 0 ? "▼ " : ""}{sign(r.pct)}</small>}
+                      {r.pct != null && <small className={cls(r.pct)}>{cls(r.pct) === "up" ? "▲ " : cls(r.pct) === "down" ? "▼ " : ""}{sign(r.pct)}</small>}
                     </span>
                   </button>
                 ))}
