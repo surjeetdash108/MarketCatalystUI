@@ -59,12 +59,16 @@ import { useSI } from "../si/si-context";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { moneyDayPossessive } from "../market-status";
 import { useApiResource } from "../hooks/useApiResource";
+import { apiGet } from "../backend";
+import { createBarsPrefetcher } from "../money-flow/prefetch-bars";
 import { PopFullChart } from "../money-flow/full-chart";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
 import { useLiveQuotes } from "../live-quotes-context";
 import { ModuleThemeToggle } from "../theme/theme-toggle";
 import { StockLogo } from "../utils";
+
+const prefetchBars = createBarsPrefetcher((path, opts) => apiGet(path, opts));
 
 /** Board refresh: rebuilds and polls every 15s to keep rankings fresh. */
 const BOARD_POLL_MS = 15_000;
@@ -210,16 +214,17 @@ export function MoneyFlowScreen() {
     return [];
   }, [popBars, board, popMin, hoveredStock, stockByT]);
 
-  // Prefetch visible tile 1m bars in background so popover chart appears with header
+  // Prefetch visible tile 1m bars in background so popover chart appears with header.
+  // Signed-in client (a bare fetch() has no ID token → 401), cancelled on leave.
   useEffect(() => {
     if (!board) return;
     const visibleTickers = [...board.gainers.slice(0, 15), ...board.losers.slice(0, 15)].map((s) => s.t);
-    const timer = setTimeout(() => {
-      for (const sym of visibleTickers) {
-        fetch(`/live/bars?ticker=${encodeURIComponent(sym)}&interval=1m`).catch(() => {});
-      }
-    }, 400);
-    return () => clearTimeout(timer);
+    const ac = new AbortController();
+    const timer = setTimeout(() => prefetchBars(visibleTickers, ac.signal), 400);
+    return () => {
+      clearTimeout(timer);
+      ac.abort();
+    };
   }, [board]);
 
   // Index cards from the FMP tape stream (identical to Dashboard Market Pulse)
