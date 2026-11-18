@@ -27,6 +27,8 @@ export interface NewsArticleDoc {
   keywords: string[];
   imageUrl: string | null;
   publishedAt: string;
+  /** First time the article was stored; the incremental-poll cursor. Older docs may omit it. */
+  createdAt?: string;
   updatedAt: string;
   /** Live-wire rows only (GET /live/news-wire): which FMP feed delivered it. */
   wireKind?: "news" | "press" | "analyst" | "filing" | "macro";

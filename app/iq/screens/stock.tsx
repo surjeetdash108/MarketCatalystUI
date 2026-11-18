@@ -13,6 +13,7 @@ import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
 import { apiPost, apiGet } from "../backend";
 import { useApiResource } from "../hooks/useApiResource";
+import { useTickerNews } from "../hooks/useTickerNews";
 import { useApiList } from "../hooks/useApiList";
 import { useBackendBars, useIntervalBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
@@ -38,7 +39,7 @@ const POPULAR_16_ETFS = new Set([
 
 import type {
   CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc, OwnershipDoc,
-  DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
+  DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, gaapQuarterEps, quarterLabel, ADJUSTED_SURPRISE_LABEL } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, salesDisplay, type EpsSalesPt } from "../eps-sales-data";
@@ -791,7 +792,7 @@ export function StockScreen({
   // Institutional rollup + top 13F holders (FMP) and short interest (Polygon).
   const { data: ownership, loading: ownershipLoading } = useApiResource<OwnershipDoc>(`/live/ownership?ticker=${encodeURIComponent(sym)}`);
   const { data: financialsDoc, loading: financialsLoading } = useApiResource<FinancialsDoc>(`/live/financials?ticker=${encodeURIComponent(sym)}`);
-  const { data: tickerNews } = useApiResource<NewsArticleDoc[]>(`/live/news?ticker=${encodeURIComponent(sym)}`, 30000);
+  const { data: tickerNews } = useTickerNews(sym || null, 30000);
   // On-demand AI read (technicals + news synthesised by OpenRouter), cached 30
   // min server-side. Appended below the deterministic rows + news list.
   const { data: aiAnalysis, loading: aiLoading, error: aiError } = useApiResource<AiAnalysisDoc>(
