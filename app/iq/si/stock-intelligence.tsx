@@ -2714,7 +2714,10 @@ export function StockIntelligenceScreen() {
       </div>
 
       {/* Main Container */}
-      <div className="si-main" style={{ maxWidth: 1480, margin: "0 auto", padding: "24px 24px 120px 24px" }}>
+      {/* 1480px left wide empty strips on a 1920px monitor while a 1536px laptop was already
+          edge to edge. The cap now only matters on ultra-wide screens, where lines would
+          get too long to read. */}
+      <div className="si-main" style={{ maxWidth: 2200, margin: "0 auto", padding: "24px 24px 120px 24px" }}>
         {/* ====================================================
             TAB 1: OVERVIEW (Issue 1 & 7 Complete Implementation)
             ==================================================== */}
