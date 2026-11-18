@@ -19,8 +19,11 @@ describe("index drawer header", () => {
   it("the subtitle carries no delay note", () => {
     assert.doesNotMatch(head, /QUOTE_DELAY_LABEL|min delayed/);
   });
-  it("Bitcoin and Ethereum draw their coin instead of a letter tile", () => {
-    assert.match(head, /<CryptoMark coin=\{x\.label\} \/>/);
+  it("every index and asset draws its own mark instead of a letter tile", () => {
+    assert.match(head, /<AssetMark kind=\{assetKind\(x\.label\)!\} label=\{x\.label\} \/>/);
+    for (const kind of ["bitcoin", "ethereum", "gold", "oil", "sp500", "nasdaq", "dow", "russell", "vix", "yield", "dollar"]) {
+      assert.match(shell, new RegExp(`"${kind}"`), kind);
+    }
   });
   it("has no Calendar button and no 'full analysis & technicals' button", () => {
     assert.doesNotMatch(drawer, /Go to Calendar/);

@@ -576,12 +576,72 @@ const INDEX_BENCHMARKS: Record<string, { ticker: string; title: string; subtitle
   "DXY": { ticker: "UUP", title: "US Dollar Index (UUP)", subtitle: "Invesco DB US Dollar Index" },
 };
 
-// Coin mark for the crypto tiles: the index drawer has no ticker logo to fetch
-// for these (the chart below tracks an ETF), so draw the coin itself.
-function CryptoMark({ coin }: { coin: "Bitcoin" | "Ethereum" }) {
+// The mark in the index drawer header. These tiles have no company logo to fetch
+// (the chart below tracks an ETF), so each gets a mark drawn here: the coin for
+// crypto, a coin / drop for gold and oil, and a short colour badge for the
+// indices (our own badges, not the index providers' logos).
+type AssetKind =
+  | "bitcoin" | "ethereum" | "gold" | "oil"
+  | "sp500" | "nasdaq" | "dow" | "russell" | "vix" | "yield" | "dollar";
+
+function assetKind(label: string): AssetKind | null {
+  const l = label.toLowerCase();
+  if (l.includes("bitcoin") || l === "btc") return "bitcoin";
+  if (l.includes("ethereum") || l === "eth") return "ethereum";
+  if (l.includes("s&p") || l === "spx") return "sp500";
+  if (l.includes("nasdaq") || l === "ndx") return "nasdaq";
+  if (l.includes("dow") || l === "dji") return "dow";
+  if (l.includes("russell") || l === "rut") return "russell";
+  if (l.includes("vix")) return "vix";
+  if (l.includes("yield") || l === "us10y") return "yield";
+  if (l.includes("crude") || l.includes("wti") || l.includes("oil")) return "oil";
+  if (l.includes("gold")) return "gold";
+  if (l.includes("dollar") || l.includes("dxy")) return "dollar";
+  return null;
+}
+
+const INDEX_BADGES: Partial<Record<AssetKind, { bg: string; text: [string] | [string, string] }>> = {
+  sp500: { bg: "#1D4ED8", text: ["S&P", "500"] },
+  nasdaq: { bg: "#0284C7", text: ["NDX"] },
+  dow: { bg: "#475569", text: ["DOW"] },
+  russell: { bg: "#7C3AED", text: ["RUT"] },
+  vix: { bg: "#DC2626", text: ["VIX"] },
+  yield: { bg: "#0891B2", text: ["10Y"] },
+  dollar: { bg: "#15803D", text: ["$"] },
+};
+
+function AssetMark({ kind, label }: { kind: AssetKind; label: string }) {
+  const badge = INDEX_BADGES[kind];
+  const font = { fontFamily: "var(--f-display), system-ui, sans-serif", fontWeight: 800 } as const;
   return (
-    <svg className="sd-logo" viewBox="0 0 32 32" role="img" aria-label={coin} style={{ background: "none" }}>
-      {coin === "Bitcoin" ? (
+    <svg className="sd-logo" viewBox="0 0 32 32" role="img" aria-label={label} style={{ background: "none" }}>
+      {badge ? (
+        <>
+          <rect width="32" height="32" rx="8" fill={badge.bg} />
+          {badge.text.length === 2 ? (
+            <>
+              <text x="16" y="14.5" textAnchor="middle" fontSize="10.5" fill="#fff" style={font}>{badge.text[0]}</text>
+              <text x="16" y="25" textAnchor="middle" fontSize="9.5" fill="#fff" fillOpacity=".85" style={font}>{badge.text[1]}</text>
+            </>
+          ) : (
+            <text x="16" y={badge.text[0] === "$" ? 22.5 : 20.5} textAnchor="middle" fontSize={badge.text[0] === "$" ? 18 : badge.text[0].length >= 3 ? 9.5 : 10.5} fill="#fff" style={font}>
+              {badge.text[0]}
+            </text>
+          )}
+        </>
+      ) : kind === "gold" ? (
+        <>
+          <circle cx="16" cy="16" r="16" fill="#D4AF37" />
+          <circle cx="16" cy="16" r="12.5" fill="none" stroke="#9A7B16" strokeWidth="1.2" />
+          <text x="16" y="20.5" textAnchor="middle" fontSize="12" fill="#5C4300" style={font}>Au</text>
+        </>
+      ) : kind === "oil" ? (
+        <>
+          <rect width="32" height="32" rx="8" fill="#111827" />
+          <path fill="#F59E0B" d="M16 5C16 5 8.5 13.5 8.5 19a7.5 7.5 0 0 0 15 0C23.5 13.5 16 5 16 5z" />
+          <path fill="none" stroke="#fff" strokeOpacity=".6" strokeWidth="1.4" strokeLinecap="round" d="M12.4 19.4a3.8 3.8 0 0 0 2.8 3.6" />
+        </>
+      ) : kind === "bitcoin" ? (
         <>
           <circle cx="16" cy="16" r="16" fill="#F7931A" />
           <path
@@ -676,8 +736,8 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
       <div className="scrim open" onClick={onClose} />
       <div className="side-drawer index-side-drawer">
         <div className="drawer-h" style={{ flexWrap: "wrap" }}>
-          {x.label === "Bitcoin" || x.label === "Ethereum" ? (
-            <CryptoMark coin={x.label} />
+          {assetKind(x.label) ? (
+            <AssetMark kind={assetKind(x.label)!} label={x.label} />
           ) : (
             <div className="sd-logo" style={{ background: "linear-gradient(135deg,#14181B,#0E1013)", color: "var(--brand)" }}>
               {x.label[0]}
