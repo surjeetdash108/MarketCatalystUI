@@ -2493,6 +2493,9 @@ export function StockIntelligenceScreen() {
           {/* Search Bar */}
           <div className="si-nav-search" style={{ position: "relative", width: 220, flex: "none" }}>
             <div
+              // The box can shrink to just the icon on narrow windows (module-switcher.tsx),
+              // so a click anywhere on it, not only on the input, focuses the input.
+              onClick={(e) => e.currentTarget.querySelector("input")?.focus()}
               style={{
                 height: 34,
                 border: "1px solid var(--si-border, #1c2733)",
@@ -2711,7 +2714,10 @@ export function StockIntelligenceScreen() {
       </div>
 
       {/* Main Container */}
-      <div className="si-main" style={{ maxWidth: 1480, margin: "0 auto", padding: "24px 24px 120px 24px" }}>
+      {/* 1480px left wide empty strips on a 1920px monitor while a 1536px laptop was already
+          edge to edge. The cap now only matters on ultra-wide screens, where lines would
+          get too long to read. */}
+      <div className="si-main" style={{ maxWidth: 2200, margin: "0 auto", padding: "24px 24px 120px 24px" }}>
         {/* ====================================================
             TAB 1: OVERVIEW (Issue 1 & 7 Complete Implementation)
             ==================================================== */}
@@ -3315,9 +3321,6 @@ export function StockIntelligenceScreen() {
                 </span>
                 <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
                   {highlightSignedPercents(movedWeek ? movedWeek.text : stockDetail.movedTxt)}
-                </div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 14 }}>
-                  SUPPORTING EVIDENCE
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {(movedWeek ? [...movedWeek.ev, stockDetail.movedEv[0]] : stockDetail.movedEv).map((me: React.ReactNode, i: number) => (
@@ -4149,9 +4152,6 @@ export function StockIntelligenceScreen() {
                 {aiAnalysisDoc?.analysis && (
                   <div style={{ border: "1px solid rgba(127,168,208,0.25)", background: "var(--si-card-tint, rgba(12, 17, 24, 0.6))", padding: "14px 16px", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#4ade80", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.1)", padding: "1px 6px" }}>
-                        MC AI SYNTHESIS · {aiAnalysisDoc.model || "GEMINI"}
-                      </span>
                       {aiAnalysisDoc.analysis.headline && (
                         <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                           {aiAnalysisDoc.analysis.headline}
