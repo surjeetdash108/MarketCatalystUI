@@ -147,7 +147,7 @@ describe("actions (§4.5) and robustness caps (§4.7)", () => {
     for (const [name, m, ctx] of caps) {
       const s = evaluateIntraday("X", strongLong(m), null, { ...CTX, ...ctx });
       assert.equal(s.action.key, "alert", name);
-      assert.equal(s.plan?.t1, null, `${name}: no targets unless Setup active`);
+      assert.equal(s.plan?.ifTriggered, true, `${name}: Building targets are marked "if triggered"`);
     }
   });
   it("the backend's 15-minute bar cache alone is not stale", () => {

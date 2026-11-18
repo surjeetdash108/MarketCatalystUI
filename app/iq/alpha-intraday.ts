@@ -373,6 +373,8 @@ export interface IntradayPlan {
   stopDist: number;
   t1: number | null;
   t2: number | null;
+  /** True on Building: the targets apply only once the setup triggers. */
+  ifTriggered?: boolean;
   size: "Small" | "Normal";
 }
 
@@ -448,8 +450,8 @@ export const actBarAt = (minutes: number) => (minutes >= T.primeEnd && minutes <
  * The Action for an intraday setup, in the glossary's order: stretched, then
  * price already past the entry zone or a stop too wide (Watch at any score),
  * then the score (Watch under 55 / 45, Building below the act bar), then data
- * coverage and the robustness caps, else Setup active (which alone carries
- * 1R / 2R targets).
+ * coverage and the robustness caps, else Setup active. Setup active and
+ * Building carry 1R / 2R targets (Building's marked "if triggered").
  */
 export function decideIntradayAction(x: {
   setup: Setup;
@@ -490,11 +492,15 @@ export function decideIntradayAction(x: {
     action = act("watch", SETUP_DESC[setup.name]);
     longAction = action;
   }
-  // Targets only on Setup active (§4.5); the card hides the 1R/2R footer otherwise.
-  if (plan && action.key === "act") {
-    const R = Math.abs(price - plan.stop);
-    if (setup.dir === "Long") { plan.t1 = price + R; plan.t2 = price + 2 * R; }
-    else { plan.t1 = price - R; plan.t2 = price - 2 * R; }
+  // 1R / 2R from the planned entry (the price, held inside the entry zone) to
+  // the stop: live on Setup active, "if triggered" on Building so the trade
+  // can be planned before the trigger. Watch has none.
+  if (plan && (action.key === "act" || action.key === "alert")) {
+    const entry = Math.min(plan.zoneHi, Math.max(plan.zoneLo, price));
+    const R = Math.abs(entry - plan.stop);
+    if (setup.dir === "Long") { plan.t1 = entry + R; plan.t2 = entry + 2 * R; }
+    else { plan.t1 = entry - R; plan.t2 = entry - 2 * R; }
+    plan.ifTriggered = action.key === "alert";
   }
   return { action, longAction, plan };
 }
