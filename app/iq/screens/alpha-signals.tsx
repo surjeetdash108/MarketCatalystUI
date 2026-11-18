@@ -8,6 +8,7 @@ import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { useAlphaPicks } from "../hooks/useAlphaPicks";
 import { useLiveQuotes } from "../live-quotes-context";
 import { holdOrder } from "../hold-order";
+import { priceAxis, priceChartState } from "../alpha-chart";
 import { useIQActions } from "../shell";
 import { WatchlistPicker } from "../watchlist-picker";
 import { exchangeLabel } from "../exchange";
@@ -143,13 +144,27 @@ type PriceRangeKey = (typeof PRICE_RANGES)[number]["key"];
 function PriceChart({ sym }: { sym: string }) {
   const [rangeKey, setRangeKey] = useState<PriceRangeKey>("5D");
   const range = PRICE_RANGES.find(r => r.key === rangeKey)!;
-  const { bars, loading } = useBackendBars(sym, range.tf);
+  const { bars, loading, error } = useBackendBars(sym, range.tf);
   const [now] = useState(() => Date.now());
   const pts = useMemo(() => {
     const ms = (t: number) => (t < 1e11 ? t * 1000 : t);
-    const all = (bars ?? []).map(b => ({ t: ms(b.t), c: b.c }));
+    const all = (bars ?? []).map(b => ({ t: ms(b.t), c: b.c, h: b.h, l: b.l }));
     return range.days ? all.filter(p => p.t >= now - range.days * DAY) : all;
   }, [bars, now, range.days]);
+  // How long this ticker + range has been loading (drives the "slow" line).
+  const loadKey = `${sym}|${range.tf}`;
+  const [loadStart, setLoadStart] = useState<{ key: string; at: number }>(() => ({ key: loadKey, at: Date.now() }));
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    queueMicrotask(() => setLoadStart({ key: loadKey, at: Date.now() }));
+  }, [loadKey]);
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
+  const waitedMs = loadStart.key === loadKey ? tick - loadStart.at : 0;
+  const state = priceChartState({ loading, error: error ?? null, waitedMs, points: pts.length });
   const head = (
     <div className="alp-k-row">
       <span className="alp-k">Price · {range.key}</span>
@@ -160,9 +175,13 @@ function PriceChart({ sym }: { sym: string }) {
       </div>
     </div>
   );
-  if (loading && pts.length === 0) return <>{head}<div className="alp-chart-empty">Loading price history…</div></>;
-  if (pts.length < 3) return <>{head}<div className="alp-chart-empty">No price history available.</div></>;
-  const lo = Math.min(...pts.map(p => p.c)), hi = Math.max(...pts.map(p => p.c)), span = hi - lo || 1;
+  if (state === "loading") return <>{head}<div className="alp-chart-empty">Loading price history…</div></>;
+  if (state === "slow") return <>{head}<div className="alp-chart-empty">Price history is taking longer than usual — still trying…</div></>;
+  if (state === "failed") return <>{head}<div className="alp-chart-empty">Price history couldn&apos;t be loaded right now. Try another range or reopen the stock.</div></>;
+  if (state === "empty") return <>{head}<div className="alp-chart-empty">No price history available.</div></>;
+  // Axis from the bars' highs and lows (AAPL 1M: the $360.83 high, not the $356.27 close); line on closes.
+  const { hi, lo } = priceAxis(pts);
+  const span = hi - lo || 1;
   const L = 58, Rt = 552;
   const X = (i: number) => L + (i * (Rt - L)) / (pts.length - 1);
   const Y = (v: number) => 130 - ((v - lo) / span) * 104;
