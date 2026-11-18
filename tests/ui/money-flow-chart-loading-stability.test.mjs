@@ -19,8 +19,8 @@ describe("Item 8: Chart loading prefetch and Full Chart layout stability", () =>
   it("prefetches visible tile bars in background", () => {
     assert.match(
       screenSrc,
-      /fetch\s*\(\s*`\/live\/bars\?ticker=\${encodeURIComponent\((?:s|sym|t)\)}&interval=1m`\s*\)/,
-      "Screen must prefetch visible tile bars"
+      /setTimeout\(\(\) => prefetchBars\(visibleTickers, ac\.signal\)/,
+      "Screen must prefetch visible tile bars (through the signed-in client — see money-flow/prefetch-bars.ts)"
     );
   });
 
