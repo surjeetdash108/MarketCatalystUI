@@ -128,7 +128,7 @@ export function BillingSuccess() {
                     {`Your ${change.toPlanName} plan starts on ${change.effectiveAt ? longDate(change.effectiveAt) : "the end of your current period"}`}
                   </p>
                 )}
-                {isPlanChange && change ? (
+                {isPlanChange && change && change.kind !== "upgrade" ? (
                   <div data-testid="change-confirmation" style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 460, fontSize: ".9rem", color: "var(--text)", lineHeight: 1.5 }}>
                     {planChangeLines(change, (n) => formatMoney(n, change.currency), longDate).map((l) => (
                       <p key={l} style={{ margin: 0 }}>{l}</p>
