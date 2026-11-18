@@ -33,6 +33,8 @@ export type Mode = "Intraday" | "Swing";
 export type Dir = "Bullish" | "Bearish";
 
 const VIEW_KEY = "iq-alpha-view";
+/** Screens with a feed behind them; one still waiting on its data (High Short Interest) is not listed. */
+const LIVE_SCREENS = SCREENS.filter(s => !s.pending);
 /** 5-minute bars are re-read this often on this screen while the market is open. */
 const BARS_POLL_MS = 30_000;
 
@@ -452,9 +454,9 @@ export function AlphaSignals() {
 
       <div className="alp-grid">
         <div className="alp-panel alp-screens">
-          <div className="alp-panel-h"><b>Stock Screens</b><span>{SCREENS.length} screens</span></div>
+          <div className="alp-panel-h"><b>Stock Screens</b><span>{LIVE_SCREENS.length} screens</span></div>
           <div className="alp-screen-list">
-            {SCREENS.map(s => {
+            {LIVE_SCREENS.map(s => {
               const n = rowsBy.get(s.id)?.length ?? 0;
               return (
                 <button key={s.id} type="button" className={`alp-screen${s.id === screen.id ? " on" : ""}`} onClick={() => { setScreenId(s.id); setSel(null); }}>
