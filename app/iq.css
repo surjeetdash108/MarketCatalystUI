@@ -14200,3 +14200,9 @@ h6.sd-sec {
 .iq-root .alp-cards[hidden] { display: none; }
 
 .iq-root .alp-updated{font-size:.7rem;color:var(--text-dim-solid);margin:-4px 0 6px;text-align:right}
+
+.iq-root .cpulse-search{display:flex;align-items:center;gap:7px;margin:0 16px 8px;padding:6px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-1);color:var(--text-dim-solid)}
+.iq-root .cpulse-search:focus-within{border-color:var(--brand)}
+.iq-root .cpulse-search input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font-size:.78rem}
+.iq-root .cpulse-search input::-webkit-search-cancel-button{display:none}
+.iq-root .cpulse-search .clr{background:none;border:0;color:var(--text-dim-solid);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px}

@@ -48,13 +48,27 @@ export function pulseTime(iso: string, now: number): string {
   return `${new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: tz })} · ${time}`;
 }
 
+/** The read for the card: the newest posts, or the search for `q` (ticker, words, name or handle). */
+export const pulseQueryPath = (q: string) => {
+  const t = q.trim().slice(0, 100);
+  return t ? `/api/pulse?q=${encodeURIComponent(t)}` : "/api/pulse";
+};
+
 /** The avatar letter when no ticker is tagged: the post's first character. */
 export const pulseLetter = (text: string) => (text.trim()[0] ?? "M").toUpperCase();
 
 export function CommunityPulse() {
   const { openStock } = useIQActions();
-  const { data, loading } = useApiResource<{ posts: PulsePost[] }>("/api/pulse", POLL_MS);
+  // Search box: the query is sent after a short pause in typing.
+  const [q, setQ] = useState("");
+  const [sentQ, setSentQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setSentQ(q), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+  const { data, loading } = useApiResource<{ posts: PulsePost[] }>(pulseQueryPath(sentQ), POLL_MS);
   const posts = data?.posts ?? [];
+  const searching = sentQ.trim().length > 0;
   // Keeps "5m" / "1h" current between polls.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -71,11 +85,25 @@ export function CommunityPulse() {
         <h3>Market Catalyst Pulse</h3>
         <span className="wmn-live"><span className="dot" />Live</span>
       </div>
+      <div className="cpulse-search">
+        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+        <input
+          type="search"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          onKeyDown={e => { if (e.key === "Escape") setQ(""); }}
+          placeholder="Search posts — ticker, keyword or @handle"
+          aria-label="Search Market Catalyst Pulse"
+          maxLength={100}
+          data-testid="pulse-search"
+        />
+        {q && <button type="button" className="clr" aria-label="Clear search" onClick={() => setQ("")}>×</button>}
+      </div>
 
       <div className="cpulse-body">
         {posts.length === 0 && (
           <div style={{ padding: "18px 4px", fontSize: ".8rem", color: "var(--text-dim-solid)", textAlign: "center" }}>
-            {loading && !data ? "Loading…" : "No posts yet."}
+            {loading && !data ? (searching ? "Searching…" : "Loading…") : searching ? `No posts match “${sentQ.trim()}”.` : "No posts yet."}
           </div>
         )}
         {posts.map((p, i) => (

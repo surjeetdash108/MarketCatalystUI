@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
-import { pulseAgo, pulseLetter, pulseTime } from "./community-pulse";
+import { pulseAgo, pulseLetter, pulseQueryPath, pulseTime } from "./community-pulse";
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
 
@@ -10,7 +10,7 @@ describe("Market Catalyst Pulse (dashboard)", () => {
     const src = read("./community-pulse.tsx");
     assert.match(src, /<h3>Market Catalyst Pulse<\/h3>/);
     assert.doesNotMatch(src, /Latest Tweets|Trader Chat|Walter Bloomberg/);
-    assert.match(src, /useApiResource<\{ posts: PulsePost\[\] \}>\("\/api\/pulse", POLL_MS\)/);
+    assert.match(src, /useApiResource<\{ posts: PulsePost\[\] \}>\(pulseQueryPath\(sentQ\), POLL_MS\)/);
   });
   it("time since the post and the post time (US Eastern)", () => {
     const at = "2026-11-18T14:41:00Z"; // 9:41 AM ET
@@ -45,5 +45,17 @@ describe("module toggle", () => {
   });
   it("shows no lock until the plan is known", () => {
     assert.match(read("./module-switcher.tsx"), /const locked = !!entitlements && !canAccessModule\(m, entitlements\);/);
+  });
+});
+
+describe("Market Catalyst Pulse search", () => {
+  it("an empty box reads the newest posts; a query is sent to the backend search", () => {
+    assert.equal(pulseQueryPath("  "), "/api/pulse");
+    assert.equal(pulseQueryPath(" $NVDA chips "), "/api/pulse?q=%24NVDA%20chips");
+  });
+  it("the card has the search box", () => {
+    const src = read("./community-pulse.tsx");
+    assert.match(src, /data-testid="pulse-search"/);
+    assert.match(src, /No posts match/);
   });
 });
