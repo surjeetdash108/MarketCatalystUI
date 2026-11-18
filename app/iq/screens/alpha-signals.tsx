@@ -77,8 +77,11 @@ function InfoDot({ onOpen, title = "How the Emergence Score is calculated" }: { 
   );
 }
 
+/** One score per stock on every screen; on the bearish side a LOWER score is a stronger short. */
+const BEAR_SCALE = "Lower = stronger short setup (the same 0–100 score as everywhere; weaker stocks score lower)";
+
 function Ring({ score, size = 32, bear = false }: { score: number; size?: number; bear?: boolean }) {
-  return <span className={`alp-ring${bear ? " bear" : ""}`} style={{ width: size, height: size, fontSize: size >= 50 ? "1.1rem" : size >= 40 ? ".95rem" : ".74rem" }}>{score}</span>;
+  return <span className={`alp-ring${bear ? " bear" : ""}`} title={bear ? BEAR_SCALE : undefined} style={{ width: size, height: size, fontSize: size >= 50 ? "1.1rem" : size >= 40 ? ".95rem" : ".74rem" }}>{score}</span>;
 }
 
 function Pill({ k, text, bear }: { k: ActionKey; text: string; bear: boolean }) {
@@ -796,7 +799,7 @@ function SwingBearBody({ p, onInfo, onClose, onExplore, onViewFullChart }: { p: 
           </div>
         </div>
         <div className="sc">
-          <div className="r"><InfoDot onOpen={onInfo} /><Ring score={p.score} size={44} bear /></div>
+          <div className="r"><InfoDot onOpen={onInfo} /><Ring score={p.score} size={44} bear /><small className="alp-ring-note">lower = stronger short</small></div>
           <small>Emergence · lower = weaker</small>
         </div>
         <Close onClose={onClose} />
@@ -917,7 +920,7 @@ function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, 
           <div className="plan five">
             <div><span className="alp-k">Entry zone</span><b className="mono">{plan ? `${usd(plan.zoneLo)} – ${usd(plan.zoneHi)}` : "—"}</b></div>
             <div><span className="alp-k">Invalidation</span><b className="mono down">{plan ? usd(plan.stop) : "—"} <small>{stopPct(s)}</small></b></div>
-            <div><span className="alp-k">Targets (1R · 2R)</span><b className="mono up">{plan?.t1 != null && plan.t2 != null ? `${usd(plan.t1)} · ${usd(plan.t2)}` : "—"}</b></div>
+            <div><span className="alp-k">Targets (1R · 2R){plan?.ifTriggered ? " if triggered" : ""}</span><b className="mono up">{plan?.t1 != null && plan.t2 != null ? `${usd(plan.t1)} · ${usd(plan.t2)}` : "—"}</b></div>
             <div><span className="alp-k">Horizon</span><b>Intraday · exit by close</b></div>
             <div><span className="alp-k">Position size</span><b>{plan?.size ?? "—"}</b></div>
           </div>
@@ -975,7 +978,7 @@ function IntraBearBody({ s, onInfo, onClose, onExplore, onViewFullChart }: { s: 
       <div className="alp-modal-h">
         <IntraHead s={s} />
         <div className="sc">
-          <div className="r"><InfoDot onOpen={onInfo} title={INTRADAY_SHORT_INFO} /><Ring score={s.score} size={44} bear /></div>
+          <div className="r"><InfoDot onOpen={onInfo} title={INTRADAY_SHORT_INFO} /><Ring score={s.score} size={44} bear /><small className="alp-ring-note">lower = stronger short</small></div>
           <small>Emergence · lower = weaker</small>
         </div>
         <Close onClose={onClose} />
@@ -991,7 +994,7 @@ function IntraBearBody({ s, onInfo, onClose, onExplore, onViewFullChart }: { s: 
           <div className="plan five">
             <div><span className="alp-k">Short entry zone</span><b className="mono">{plan ? `${usd(plan.zoneLo)} – ${usd(plan.zoneHi)}` : "—"}</b></div>
             <div><span className="alp-k">Cover stop (above)</span><b className="mono down">{plan ? usd(plan.stop) : "—"} <small>{stopPct(s)}</small></b></div>
-            <div><span className="alp-k">Targets (1R · 2R down)</span><b className="mono up">{plan?.t1 != null && plan.t2 != null ? `${usd(plan.t1)} · ${usd(plan.t2)}` : "—"}</b></div>
+            <div><span className="alp-k">Targets (1R · 2R down){plan?.ifTriggered ? " if triggered" : ""}</span><b className="mono up">{plan?.t1 != null && plan.t2 != null ? `${usd(plan.t1)} · ${usd(plan.t2)}` : "—"}</b></div>
             <div><span className="alp-k">Horizon</span><b>Intraday · cover by close</b></div>
             <div><span className="alp-k">Position size</span><b>{plan?.size ?? "—"}</b></div>
           </div>

@@ -14206,3 +14206,5 @@ h6.sd-sec {
 .iq-root .cpulse-search input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font-size:.78rem}
 .iq-root .cpulse-search input::-webkit-search-cancel-button{display:none}
 .iq-root .cpulse-search .clr{background:none;border:0;color:var(--text-dim-solid);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px}
+
+.iq-root .alp-ring-note{display:block;font-size:.6rem;color:var(--text-dim-solid);text-align:center;margin-top:3px;white-space:nowrap}
