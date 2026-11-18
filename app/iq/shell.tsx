@@ -59,7 +59,7 @@ import { WatchlistPicker } from "./watchlist-picker";
 import { pulseFromLive, tapeItemsToIndexDocs } from "./live-market-indices";
 import type { CompanyDoc, SectorApiDoc, LiveEarningsDoc } from "./types";
 import { surprisePct } from "./types";
-import { LiveQuotesProvider, QUOTE_DELAY_LABEL } from "./live-quotes-context";
+import { LiveQuotesProvider } from "./live-quotes-context";
 import { SIProvider, useSI } from "./si/si-context";
 import { SISweepOverlay } from "./si/si-switcher";
 import { ModuleSwitcher } from "./module-switcher";
@@ -576,6 +576,34 @@ const INDEX_BENCHMARKS: Record<string, { ticker: string; title: string; subtitle
   "DXY": { ticker: "UUP", title: "US Dollar Index (UUP)", subtitle: "Invesco DB US Dollar Index" },
 };
 
+// Coin mark for the crypto tiles: the index drawer has no ticker logo to fetch
+// for these (the chart below tracks an ETF), so draw the coin itself.
+function CryptoMark({ coin }: { coin: "Bitcoin" | "Ethereum" }) {
+  return (
+    <svg className="sd-logo" viewBox="0 0 32 32" role="img" aria-label={coin} style={{ background: "none" }}>
+      {coin === "Bitcoin" ? (
+        <>
+          <circle cx="16" cy="16" r="16" fill="#F7931A" />
+          <path
+            fill="#fff"
+            d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.745-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"
+          />
+        </>
+      ) : (
+        <>
+          <circle cx="16" cy="16" r="16" fill="#627EEA" />
+          <path fill="#fff" fillOpacity=".6" d="M16 5v8.9l7.5 3.3z" />
+          <path fill="#fff" d="M16 5l-7.5 12.2 7.5-3.3z" />
+          <path fill="#fff" fillOpacity=".6" d="M16 21.9V27l7.5-10.4z" />
+          <path fill="#fff" d="M16 27v-5.1l-7.5-4.3z" />
+          <path fill="#fff" fillOpacity=".2" d="M16 20.6l7.5-4.4-7.5-3.3z" />
+          <path fill="#fff" fillOpacity=".6" d="M8.5 16.2l7.5 4.4v-7.7z" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 // ---- Index drawer (openIndex) ----
 function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClose }: {
   idx: number | string; pulse: PulseItem[]; sectorsLive: SectorApiDoc[]; loading: boolean;
@@ -648,15 +676,19 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
       <div className="scrim open" onClick={onClose} />
       <div className="side-drawer index-side-drawer">
         <div className="drawer-h" style={{ flexWrap: "wrap" }}>
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#14181B,#0E1013)", color: "var(--brand)" }}>
-            {x.label[0]}
-          </div>
+          {x.label === "Bitcoin" || x.label === "Ethereum" ? (
+            <CryptoMark coin={x.label} />
+          ) : (
+            <div className="sd-logo" style={{ background: "linear-gradient(135deg,#14181B,#0E1013)", color: "var(--brand)" }}>
+              {x.label[0]}
+            </div>
+          )}
           <div>
             <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
               {x.label}
             </div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-              {sub} · {QUOTE_DELAY_LABEL}
+              {sub}
             </div>
           </div>
           {/* The price beside the name (it had a line of its own under the header). */}
@@ -716,16 +748,18 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
             </>
           )}
 
-          <button
-            className={`btn ${eq ? "cta" : "primary"}`}
-            style={{ width: "100%", marginTop: 14 }}
-            onClick={() => {
-              onClose();
-              router.push(eq ? `/menu/heatmap?index=${encodeURIComponent(x.label)}` : "/menu/macro");
-            }}
-          >
-            {eq ? "View market heatmap →" : "Go to Calendar →"}
-          </button>
+          {eq && (
+            <button
+              className="btn cta"
+              style={{ width: "100%", marginTop: 14 }}
+              onClick={() => {
+                onClose();
+                router.push(`/menu/heatmap?index=${encodeURIComponent(x.label)}`);
+              }}
+            >
+              View market heatmap →
+            </button>
+          )}
 
           {/* Under redirection to heatmap: stock chart for each individual index/asset */}
           <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid var(--border)", paddingBottom: 16 }}>
@@ -781,25 +815,6 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
                 />
               )}
             </div>
-
-            {/* Deep-link to full stock page */}
-            <button
-              className="btn"
-              style={{
-                width: "100%",
-                marginTop: 14,
-                fontSize: ".78rem",
-                color: "var(--text-dim-solid)",
-                background: "var(--surface-1)",
-                border: "1px solid var(--border)",
-              }}
-              onClick={() => {
-                onClose();
-                router.push(`/menu/stock?ticker=${encodeURIComponent(chartTicker)}`);
-              }}
-            >
-              Open {chartTicker} full analysis & technicals →
-            </button>
           </div>
         </div>
       </div>
