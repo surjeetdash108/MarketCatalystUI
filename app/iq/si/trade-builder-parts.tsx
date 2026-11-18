@@ -38,10 +38,10 @@ export function TradeBuilderGuide({ done }: { done: boolean[] }) {
           <div key={num} style={{ padding: "4px 2px", opacity: done[i] ? 0.4 : i === current ? 1 : 0.75, transition: "opacity 220ms ease" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-accent, #5980a6)" }}>{num}</span>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.1em", color: "#ffffff" }}>{title.toUpperCase()}</span>
+              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-text-hi, #ffffff)" }}>{title.toUpperCase()}</span>
             </div>
             <div style={{ height: 1, background: "var(--si-border, #1c2733)", margin: "8px 0" }} />
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#ffffff", opacity: 0.85, lineHeight: 1.55 }}>{body}</div>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-hi, #ffffff)", opacity: 0.85, lineHeight: 1.55 }}>{body}</div>
           </div>
         ))}
       </div>
@@ -52,8 +52,8 @@ export function TradeBuilderGuide({ done }: { done: boolean[] }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 12 }}>
           {AFTER_RUN.map(([title, body]) => (
             <div key={title}>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 700, color: "#ffffff" }}>{title}</div>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#ffffff", opacity: 0.85, lineHeight: 1.55, marginTop: 4 }}>{body}</div>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #ffffff)" }}>{title}</div>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-hi, #ffffff)", opacity: 0.85, lineHeight: 1.55, marginTop: 4 }}>{body}</div>
             </div>
           ))}
         </div>
@@ -79,18 +79,18 @@ export function ConfidenceBreakdown({
 }) {
   const rows = cats.filter((c) => c.ds.length > 0 && c.w > 0);
   const num = { textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700 } as const;
-  const head = { textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "#ffffff", opacity: 0.7 } as const;
+  const head = { textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 } as const;
   const grid = "minmax(0,1fr) 58px 52px 58px 14px";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent-light, #a9c6e3)" }}>SCORE BREAKDOWN</span>
-        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#ffffff", opacity: 0.75 }}>
+        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-hi, #ffffff)", opacity: 0.75 }}>
           weight × score = points · points add up to the trade confidence · click a row for its drivers
         </span>
       </div>
       {rows.length === 0 ? (
-        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffffff" }}>No driver has data yet.</div>
+        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-hi, #ffffff)" }}>No driver has data yet.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ display: "grid", gridTemplateColumns: grid, gap: 10, padding: "2px 0 6px" }}>
@@ -116,14 +116,14 @@ export function ConfidenceBreakdown({
                 style={{ display: "grid", gridTemplateColumns: grid, alignItems: "center", gap: 10, padding: "24px 0", cursor: "pointer" }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "#ffffff" }}>{c.label}</div>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #ffffff)" }}>{c.label}</div>
                   <div style={{ height: 4, background: "#1c2733", marginTop: 5 }}>
                     <div style={{ height: 4, width: `${Math.max(0, Math.min(100, c.score))}%`, background: colorFor(c.score) }} />
                   </div>
                 </div>
-                <span style={{ ...num, color: "#ffffff" }}>{Math.round(c.w)}%</span>
+                <span style={{ ...num, color: "var(--si-text-hi, #ffffff)" }}>{Math.round(c.w)}%</span>
                 <span style={{ ...num, color: colorFor(c.score) }}>{Math.round(c.score)}</span>
-                <span style={{ ...num, color: "#ffffff" }}>{c.pts.toFixed(1)}</span>
+                <span style={{ ...num, color: "var(--si-text-hi, #ffffff)" }}>{c.pts.toFixed(1)}</span>
                 <span style={{ transform: open[c.k] ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "var(--si-accent, #5980a6)", fontSize: 12 }}>▼</span>
               </div>
               {open[c.k] && (
@@ -131,9 +131,9 @@ export function ConfidenceBreakdown({
                   {c.ds.map((d, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "#ffffff" }}>{d.name}</div>
+                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #ffffff)" }}>{d.name}</div>
                         {d.val != null && String(d.val) !== "" && (
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#ffffff", opacity: 0.7, marginTop: 1 }}>{String(d.val)}</div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-hi, #ffffff)", opacity: 0.7, marginTop: 1 }}>{String(d.val)}</div>
                         )}
                       </div>
                       <div style={{ width: "clamp(36px,18%,90px)", flex: "none", height: 4, background: "#1c2733" }}>
@@ -184,9 +184,9 @@ export function ConfidenceExplainer({
   }, [onClose]);
 
   const top = cats.filter((c) => c.ds.length > 0 && c.w > 0).sort((a, b) => b.pts - a.pts)[0];
-  const body = { fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffffff", lineHeight: 1.55 } as const;
+  const body = { fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.55 } as const;
   const step = { fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-accent-light, #a9c6e3)", marginTop: 4 } as const;
-  const th = { fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#ffffff", opacity: 0.7, textAlign: "right", padding: "3px 0" } as const;
+  const th = { fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7, textAlign: "right", padding: "3px 0" } as const;
   const shownHz = hz === "12M" ? "9M" : hz;
   const dir = bull ? "Bull" : "Bear";
   return (
@@ -213,7 +213,7 @@ export function ConfidenceExplainer({
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
             HOW THE TRADE CONFIDENCE IS CALCULATED
           </div>
-          <button type="button" aria-label="Close" onClick={onClose} style={{ width: 26, height: 26, border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "#ffffff", fontSize: 16, lineHeight: 1, cursor: "pointer", flex: "none" }}>
+          <button type="button" aria-label="Close" onClick={onClose} style={{ width: 26, height: 26, border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-hi, #ffffff)", fontSize: 16, lineHeight: 1, cursor: "pointer", flex: "none" }}>
             ×
           </button>
         </div>
@@ -245,7 +245,7 @@ export function ConfidenceExplainer({
                 <div key={h} style={{ display: "grid", gridTemplateColumns: "52px repeat(7, 1fr)", gap: 4, padding: "3px 0", borderTop: "1px solid #141d27", background: mine ? "rgba(89,128,166,0.16)" : "transparent" }}>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: mine ? "var(--si-accent-light, #a9c6e3)" : "#ffffff" }}>{h}</span>
                   {CATS_T.map(([k]) => (
-                    <span key={k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: mine ? 700 : 500, color: "#ffffff", textAlign: "right" }}>{w[k]}%</span>
+                    <span key={k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: mine ? 700 : 500, color: "var(--si-text-hi, #ffffff)", textAlign: "right" }}>{w[k]}%</span>
                   ))}
                 </div>
               );
@@ -276,12 +276,12 @@ export function ConfidenceExplainer({
                 (label === "WEAK" && conf < 45));
             return (
               <div key={label} style={{ display: "grid", gridTemplateColumns: "74px 150px minmax(0,1fr)", gap: 12, alignItems: "baseline", padding: "7px 8px", borderTop: "1px solid #141d27", background: now ? "rgba(89,128,166,0.16)" : "transparent" }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "#ffffff" }}>{range}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-text-hi, #ffffff)" }}>{range}</span>
                 <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.08em", color }}>
                   {label}
                   {now ? " ◄ now" : ""}
                 </span>
-                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "#ffffff", opacity: 0.85, lineHeight: 1.45 }}>{text}</span>
+                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-hi, #ffffff)", opacity: 0.85, lineHeight: 1.45 }}>{text}</span>
               </div>
             );
           })}
