@@ -126,6 +126,10 @@ html.is-scrolling ::-webkit-scrollbar-thumb{background:var(--brand)}
 table{width:100%;border-collapse:collapse}
 thead th{text-align:left;font:600 10px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--dim2);padding:0 14px 11px;border-bottom:1px solid var(--border)}
 thead th.num{text-align:right}
+thead th.sortable{cursor:pointer;user-select:none}
+thead th.sortable:hover{color:var(--text)}
+thead th.sortable .sarr{display:inline-block;margin-left:5px;font-size:9px;opacity:.4}
+thead th.sortable.asc .sarr,thead th.sortable.desc .sarr{opacity:1;color:var(--brand)}
 tbody td{padding:12px 14px;border-bottom:1px solid #16203350;font-size:13.5px}
 tbody tr{cursor:pointer;transition:background .1s}
 tbody tr:hover{background:#ffffff06}
@@ -989,7 +993,7 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
         </div>
         <div class="card" style="padding:6px 4px 4px">
           <table>
-            <thead><tr><th>User</th><th>Plan</th><th>Status</th><th class="num">MRR</th><th class="num">Watchlists</th><th class="num">Joined</th><th class="num">Last active</th></tr></thead>
+            <thead><tr><th>User</th><th class="sortable" data-sort="plan" title="Sort by plan">Plan<span class="sarr">↕</span></th><th class="sortable" data-sort="status" title="Sort by status">Status<span class="sarr">↕</span></th><th class="num">MRR</th><th class="num">Watchlists</th><th class="num sortable" data-sort="joined" title="Sort by joined date">Joined<span class="sarr">↕</span></th><th class="num sortable" data-sort="lastActive" title="Sort by last active">Last active<span class="sarr">↕</span></th></tr></thead>
             <tbody id="usersBody"></tbody>
           </table>
         </div>
@@ -1701,11 +1705,42 @@ function avatarEl(u,cls=''){return `<div class="avatar ${cls}" style="background
 
 /* ---------- users table + filters + search ---------- */
 let filt={plan:'all',status:'all',q:''};
+/* Header sort for Plan / Status / Joined / Last active. Click cycles first order →
+   reversed → off (back to the original order). "First order" is the useful one:
+   Plan = Elite, Pro, Plus, then Free/none; Status = A–Z; dates = newest first. */
+let userSort={key:null,dir:1};
+const PLAN_RANK={elite:0,pro:1,plus:2,free:3,none:3};
+function userSortCmp(a,b){
+  const k=userSort.key;
+  if(k==='joined'||k==='lastActive')return (+b[k]||0)-(+a[k]||0);
+  if(k==='plan'){
+    const ra=PLAN_RANK[String(a.plan).toLowerCase()],rb=PLAN_RANK[String(b.plan).toLowerCase()];
+    if(ra!==undefined&&rb!==undefined&&ra!==rb)return ra-rb;
+    if((ra===undefined)!==(rb===undefined))return ra===undefined?1:-1;
+  }
+  return String(a[k]).localeCompare(String(b[k]));
+}
+function paintSortHeads(){
+  document.querySelectorAll('#users th.sortable').forEach(th=>{
+    const on=th.dataset.sort===userSort.key;
+    th.classList.toggle('asc',on&&userSort.dir===1);
+    th.classList.toggle('desc',on&&userSort.dir===-1);
+    th.querySelector('.sarr').textContent=!on?'↕':(userSort.dir===1?'▲':'▼');
+  });
+}
+document.querySelectorAll('#users th.sortable').forEach(th=>th.onclick=()=>{
+  const k=th.dataset.sort;
+  if(userSort.key!==k)userSort={key:k,dir:1};
+  else if(userSort.dir===1)userSort.dir=-1;
+  else userSort={key:null,dir:1};
+  paintSortHeads(); renderUsers();
+});
 function renderUsers(){
   let rows=USERS.filter(u=>
     (filt.plan==='all'||u.plan===filt.plan)&&
     (filt.status==='all'||u.status===filt.status)&&
     (filt.q===''||(u.name+u.email).toLowerCase().includes(filt.q)));
+  if(userSort.key)rows=rows.slice().sort((a,b)=>userSort.dir*userSortCmp(a,b));
   document.getElementById('userCount').textContent=rows.length+' of '+USERS.length+' users';
   document.getElementById('usersBody').innerHTML=rows.map(u=>`<tr onclick="openUser('${u.id}')">
     <td><div class="user">${avatarEl(u)}<div><div class="nm">${u.name}</div><div class="em">${u.email} · ${u.country}</div></div></div></td>
