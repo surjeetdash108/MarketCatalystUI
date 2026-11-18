@@ -25,9 +25,17 @@ describe("index drawer header", () => {
       assert.match(shell, new RegExp(`"${kind}"`), kind);
     }
   });
-  it("has no Calendar button and no 'full analysis & technicals' button", () => {
+  it("has no Calendar button", () => {
     assert.doesNotMatch(drawer, /Go to Calendar/);
-    assert.doesNotMatch(drawer, /full analysis & technicals/);
+  });
+  it("keeps the 'full analysis & technicals' button and opens the ticker through the shell's goToStock", () => {
+    assert.match(drawer, /Open \{chartTicker\} full analysis & technicals/);
+    assert.match(drawer, /onOpenStock\(chartTicker\)/);
+    // The old button pushed /menu/stock?ticker=X; the Stock page never reads `ticker`, so it
+    // opened on whichever stock was viewed last (someone else's data).
+    assert.doesNotMatch(drawer, /menu\/stock\?ticker=/);
+    // the shell must hand the drawer its goToStock
+    assert.match(shell, /<IndexDrawer [^\n]*onOpenStock=\{goToStock\}/);
   });
   it("the body no longer repeats them above the metrics", () => {
     assert.doesNotMatch(body, /fmt\(x\.value, dec\)/);
