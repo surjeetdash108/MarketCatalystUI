@@ -65,6 +65,7 @@ import { range52 } from "../range52";
 import { forwardAnnualEstimates } from "../eps-sales-data";
 import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
+import { useTickerNews } from "../hooks/useTickerNews";
 import { useApiList } from "../hooks/useApiList";
 import { apiGet, apiPost } from "../backend";
 import type {
@@ -682,10 +683,8 @@ export function StockIntelligenceScreen() {
   const { data: financialsDoc, loading: financialsLoading, error: financialsError } = useApiResource<FinancialsDoc>(
     currentTicker ? `/live/financials?ticker=${encodeURIComponent(currentTicker)}` : null
   );
-  const { data: tickerNews } = useApiResource<NewsArticleDoc[]>(
-    currentTicker ? `/live/news?ticker=${encodeURIComponent(currentTicker)}` : null,
-    30000
-  );
+  // First load = stored history; every 30 s after, only new/changed articles (?since=).
+  const { data: tickerNews } = useTickerNews(currentTicker || null, 30000);
   // Scoped to this ticker: FMP on demand, so any stock has its own consensus
   // and full insider history (not just tickers a nightly sweep covered).
   const { data: liveConsensusList } = useApiList<AnalystConsensusDoc>(
