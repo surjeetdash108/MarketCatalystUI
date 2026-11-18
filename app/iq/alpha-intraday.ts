@@ -376,7 +376,7 @@ export interface IntradayPlan {
   size: "Small" | "Normal";
 }
 
-function planFor(m: SessionMetrics, s: Setup, noiseStops: boolean): IntradayPlan | null {
+export function planFor(m: SessionMetrics, s: Setup, noiseStops: boolean): IntradayPlan | null {
   if (!s.dir || s.trigger == null) return null;
   const tr = s.trigger;
   const vwapType = Math.abs(tr - m.vwap) < 1e-9;
@@ -388,12 +388,18 @@ function planFor(m: SessionMetrics, s: Setup, noiseStops: boolean): IntradayPlan
     const hi = Math.max(m.vwap, m.orLow);
     const level = hi < m.price ? hi : Math.min(m.vwap, m.orLow);
     stop = Math.min(level * (1 - T.stopBuffer), m.price * (1 - minDist));
+    // Never inside the entry zone or above the trigger: losing the trigger is
+    // what invalidates the long, so the stop sits a buffer beneath both.
+    stop = Math.min(stop, Math.min(tr, zoneLo) * (1 - T.stopBuffer));
   } else {
     if (vwapType) { zoneLo = tr * (1 - T.vwapZone); zoneHi = tr; }
     else { zoneLo = tr * (1 - T.confirmMax); zoneHi = tr * (1 - T.confirmMin); }
     const lo = Math.min(m.vwap, m.orHigh);
     const level = lo > m.price ? lo : Math.max(m.vwap, m.orHigh);
     stop = Math.max(level * (1 + T.stopBuffer), m.price * (1 + minDist));
+    // Never inside the short entry zone or below the trigger (B: zone
+    // 34.25–34.57 under a 34.60 trigger had its cover stop at 34.55).
+    stop = Math.max(stop, Math.max(tr, zoneHi) * (1 + T.stopBuffer));
   }
   const stopDist = Math.abs(m.price - stop) / m.price;
   const size = stopDist > 0.01 || (m.rvol ?? 0) > T.rvolClimax || Math.abs(m.gap ?? 0) > T.gapMax ? "Small" : "Normal";
