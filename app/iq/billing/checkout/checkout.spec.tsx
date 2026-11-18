@@ -30,7 +30,7 @@ describe("checkout summary card", () => {
     const trial = { ...preview, trial: { days: 7, endsAt: "2026-11-17T12:00:00.000Z" }, dueToday: 0, firstCharge: { amount: 5748, at: "2026-11-17T12:00:00.000Z" } };
     const html = renderToStaticMarkup(<SummaryCard plan={pro} interval="monthly" step={2} preview={trial} action={null} />);
     // The trial line has no amount next to it; "Due today $0" says what is charged.
-    assert.match(html, /data-testid="summary-trial"><span>7-day free trial<\/span><\/div>/);
+    assert.match(html, /data-testid="summary-trial"><span>7 more days free<\/span><\/div>/);
     assert.match(html, /Due today<\/span><span data-testid="summary-total">\$0</);
     // The N-days-free box moved above the card field; the summary says when to cancel for free.
     // The date only (the trial ends at 11:59 PM US Eastern that day).

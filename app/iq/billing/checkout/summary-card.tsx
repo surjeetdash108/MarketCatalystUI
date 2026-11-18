@@ -6,6 +6,13 @@ import { formatMoney, type BillingInterval, type CatalogPlan } from "../catalog"
 import { REFUND_POLICY } from "../refund-policy.generated";
 import { cadence } from "./model";
 
+/**
+ * The days left of the free period, said as what's LEFT: the trial is the same
+ * 7 days the account started with, so "6 days free" read like a new 6-day
+ * trial. "6 more days free" / "1 more day free".
+ */
+export const trialLeft = (days: number) => `${days} more ${days === 1 ? "day" : "days"} free`;
+
 /** Turns "Terms of Use" / "Privacy Policy" in the consent sentence into links (opening the legal modal). */
 export function ConsentText({ text, onOpen }: { text: string; onOpen: (doc: "terms" | "privacy") => void }) {
   const parts: ReactNode[] = [];
@@ -40,7 +47,7 @@ export function TrialBox({ trial }: { trial: { days: number; endsAt: string } | 
   if (!trial) return null;
   return (
     <div className="co-box" data-testid="trial-box" style={{ background: "rgba(34, 197, 94, 0.08)", borderColor: "rgba(34, 197, 94, 0.25)", marginBottom: 14 }}>
-      <h4 style={{ color: "var(--brand-2)" }}>🎁 {trial.days} {trial.days === 1 ? "day" : "days"} free</h4>
+      <h4 style={{ color: "var(--brand-2)" }}>🎁 {trialLeft(trial.days)}</h4>
       Cancel for free before <b>{trialEnd(trial.endsAt)}</b>.
     </div>
   );
@@ -93,7 +100,7 @@ export function SummaryCard(props: {
         </div>
         {trial && (
           <div className="co-row" style={{ color: "var(--brand-2)" }} data-testid="summary-trial">
-            <span>{trial.days}-day free trial</span>
+            <span>{trialLeft(trial.days)}</span>
           </div>
         )}
         <div className="co-row total"><span>Due today</span><span data-testid="summary-total">{money(dueToday)}{!trial && !taxKnown ? " + tax" : ""}</span></div>
@@ -111,7 +118,7 @@ export function SummaryCard(props: {
             <ul>
               {trial ? (
                 <>
-                  <li>{trial.days} days free — nothing is charged today.</li>
+                  <li>{trialLeft(trial.days)} — nothing is charged today.</li>
                   <li>Cancel for free before {trialEnd(trial.endsAt)}.</li>
                   <li>Renews automatically until you cancel.</li>
                 </>
