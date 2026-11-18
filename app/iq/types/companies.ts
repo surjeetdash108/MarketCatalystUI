@@ -149,6 +149,8 @@ export interface CompanyDoc {
   technicalsUpdatedAt?: string | null;
   /** Vendor security metadata, when present (read by isCommonEquity). */
   type?: string | null;
+  /** SEC SIC code (6770 = blank-check company / SPAC). */
+  sicCode?: string | number | null;
   isEtf?: boolean | null;
   isFund?: boolean | null;
 }

@@ -18,7 +18,7 @@ describe("a move that rounds to zero is unchanged", () => {
     assert.doesNotMatch(src, /r\.pct > 0 \? "▲ " : r\.pct < 0 \? "▼ "/);
   });
   it("screen text never prints −0.0%", () => {
-    const c = { ticker: "ED", name: "ED", price: 100, pctChange: 0, aboveSma50: true, aboveSma200: true, pctFromHigh52: -2, high52: 102, week5ChangePct: -0.04 } as CompanyDoc;
+    const c = { ticker: "ED", name: "ED", sector: "Utilities", type: "CS", price: 100, pctChange: 0, aboveSma50: true, aboveSma200: true, pctFromHigh52: -2, high52: 102, week5ChangePct: -0.04 } as CompanyDoc;
     const [r] = SCREENS.find(s => s.id === "tight")!.rows({ companies: [c], sigs: [], analyst: new Map(), ipos: [], now: 0 });
     assert.match(r.why, /5-day move only 0\.0%/);
   });

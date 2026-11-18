@@ -249,7 +249,7 @@ function catalyst(c: CompanyDoc, a: AnalystConsensusDoc | undefined, now: number
   if (a && num(c.price) && c.price > 0 && num(a.priceTargetConsensus)) {
     const up = a.priceTargetConsensus / c.price - 1;
     parts.push(clamp(50 + up * 100 * 1.5));
-    bits.push(`target ${signed(up * 100, 0)} vs price`);
+    bits.push(`FMP consensus target ${signed(up * 100, 0)} vs price`);
   }
   if (a) {
     const tot = a.strongBuy + a.buy + a.hold + a.sell + a.strongSell;
@@ -410,7 +410,12 @@ const fmtDay = (iso: string) => {
 
 /** Bullish-side action (§3.4). */
 export function actionOf(c: CompanyDoc, score: number, trend: Trend, coverage: number, now: number): Action {
-  if (trend === "Weakening") return A("avoid", "Price action is deteriorating — wait for it to stabilise.");
+  if (trend === "Weakening") {
+    // A strong score on a deteriorating chart is worth watching, not avoiding.
+    return score >= SWING_ACT
+      ? A("watch", `Score ${score} is strong, but the trend is deteriorating — wait for it to stabilise before acting.`)
+      : A("avoid", "Price action is deteriorating — wait for it to stabilise.");
+  }
   if (trend === "Losing momentum") return A("watch", "Price is not above its 50-day average — wait for it to reclaim it.");
   if (trend === "Under pressure") return A("watch", "Down 5% or more today — wait for the close.");
   if (isRising(trend)) {
@@ -719,6 +724,8 @@ export interface ScreenCtx {
   analyst: Map<string, AnalystConsensusDoc>;
   ipos: IpoEventDoc[];
   now: number;
+  /** Live index membership (GET /market-data/index-members), when loaded. */
+  indexMembers?: { sp500?: Set<string> };
   /** The app-wide live quotes (tickers outside `companies`, e.g. new IPOs, too). */
   quotes?: Map<string, { price: number | null; pctChange: number | null }>;
 }
@@ -748,8 +755,18 @@ const money = (v: number) => `$${v.toLocaleString("en-US", { minimumFractionDigi
 const compact = (v: number) =>
   v >= 1e12 ? `$${(v / 1e12).toFixed(2)}T` : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : `$${(v / 1e6).toFixed(0)}M`;
 const priced = (cs: CompanyDoc[]) => cs.filter(c => c.price != null);
+/** SIC 6770: blank-check companies (SPACs), typed as common stock by the vendor. */
+const SPAC_SIC = "6770";
+/** "Stock" screens list common stock and ADRs: no ETFs/ETNs, funds, preferreds, units or SPACs. */
+const stocks = (cs: CompanyDoc[]) => priced(cs).filter(c => isPickable(c) && String(c.sicCode ?? "") !== SPAC_SIC);
 const sig = (ctx: ScreenCtx) => new Map(ctx.sigs.map(s => [s.c.ticker, s]));
 const compVal = (s: Signal | undefined, k: CompKey) => s?.comps.find(x => x.key === k)?.value ?? null;
+
+/** "Q3 2026" → 20263 (sortable); 0 when absent or unreadable. */
+const quarterKey = (asOf: string | null | undefined) => {
+  const m = /^Q([1-4])\s+(\d{4})$/.exec((asOf ?? "").trim());
+  return m ? Number(m[2]) * 10 + Number(m[1]) : 0;
+};
 
 /** Prior-quarter 13F shares below this share of today's make a % change meaningless (> +900%). */
 const INST_MIN_BASE_SHARE = 0.1;
@@ -758,17 +775,20 @@ export const SCREENS: Screen[] = [
   {
     id: "sp", label: "Top S&P 500", desc: "By market cap",
     src: "FMP · company profile + quote",
-    rows: ({ companies }) =>
-      priced(companies)
-        .filter(c => INDEX_MEMBERS.SP500.has(c.ticker) && c.marketCap != null)
+    rows: ({ companies, indexMembers }) => {
+      // The live constituent list (index-members job) when loaded; the static list until then.
+      const spMembers = indexMembers?.sp500 && indexMembers.sp500.size >= 400 ? indexMembers.sp500 : INDEX_MEMBERS.SP500;
+      return priced(companies)
+        .filter(c => spMembers.has(c.ticker) && c.marketCap != null)
         .sort((a, b) => (b.marketCap as number) - (a.marketCap as number))
-        .map((c, i) => rowOf(c, `#${i + 1} S&P 500 constituent by market cap (${compact(c.marketCap as number)}).`)),
+        .map((c, i) => rowOf(c, `#${i + 1} S&P 500 constituent by market cap (${compact(c.marketCap as number)}).`));
+    },
   },
   {
     id: "h52", label: "New 52W High", desc: "Momentum-led stocks pressing their highs",
     src: "Polygon · daily aggregates",
     rows: ({ companies }) =>
-      priced(companies)
+      stocks(companies)
         .filter(c => c.pctFromHigh52 != null && c.pctFromHigh52 >= -1.5)
         .sort((a, b) => (b.pctFromHigh52 as number) - (a.pctFromHigh52 as number))
         .map(c => rowOf(c, (c.pctFromHigh52 as number) >= -0.05
@@ -779,7 +799,7 @@ export const SCREENS: Screen[] = [
     id: "l52", label: "New 52W Low", desc: "Weakening momentum and relative strength",
     src: "Polygon · daily aggregates",
     rows: ({ companies }) =>
-      priced(companies)
+      stocks(companies)
         .filter(c => c.pctFromLow52 != null && c.pctFromLow52 <= 5)
         .sort((a, b) => (a.pctFromLow52 as number) - (b.pctFromLow52 as number))
         .map(c => rowOf(c, (c.pctFromLow52 as number) <= 0.05
@@ -790,8 +810,10 @@ export const SCREENS: Screen[] = [
     id: "vol", label: "Highest Volatility", desc: "Elevated 30-day realized volatility",
     src: "Polygon · daily aggregates (realized, not implied)",
     rows: ({ companies }) =>
-      priced(companies)
-        .filter(c => c.realizedVol30 != null && c.realizedVol30 >= 40)
+      stocks(companies)
+        // A floor so the list isn't sub-$1 shells: $5+ and $20M+ traded a day.
+        .filter(c => c.realizedVol30 != null && c.realizedVol30 >= 40 && (c.price as number) >= 5
+          && c.avgVolume20 != null && c.avgVolume20 * (c.price as number) >= 20_000_000)
         .sort((a, b) => (b.realizedVol30 as number) - (a.realizedVol30 as number))
         .map(c => rowOf(c, `30-day realized volatility ${Math.round(c.realizedVol30 as number)}% — large recent price swings.`)),
   },
@@ -799,7 +821,7 @@ export const SCREENS: Screen[] = [
     id: "rsl", label: "RS Leaders", desc: "Strongest relative strength vs. the market",
     src: "Polygon · rs-rating job",
     rows: ({ companies }) =>
-      priced(companies)
+      stocks(companies)
         .filter(c => c.rsRating != null && c.rsRating >= 85)
         .sort((a, b) => (b.rsRating as number) - (a.rsRating as number))
         .map(c => rowOf(c, `RS rating ${Math.round(c.rsRating as number)}/99 — outperforming most of the market.`)),
@@ -808,7 +830,7 @@ export const SCREENS: Screen[] = [
     id: "brk", label: "Breaking Out", desc: "Momentum surge on heavy volume near highs",
     src: "Polygon · daily aggregates",
     rows: ({ companies }) =>
-      priced(companies)
+      stocks(companies)
         .filter(c => (c.pctChange ?? 0) >= 2 && (c.rvol ?? 0) >= 1.5 && c.pctFromHigh52 != null && c.pctFromHigh52 >= -5)
         .sort((a, b) => (b.pctChange as number) - (a.pctChange as number))
         .map(c => rowOf(c, `Up ${(c.pctChange as number).toFixed(1)}% on ${(c.rvol as number).toFixed(1)}× normal volume, ${Math.abs(c.pctFromHigh52 as number).toFixed(1)}% from its 52-week high.`)),
@@ -817,7 +839,7 @@ export const SCREENS: Screen[] = [
     id: "tight", label: "Tight Setups", desc: "Steady trend, consolidating near highs",
     src: "Polygon · daily aggregates",
     rows: ({ companies }) =>
-      priced(companies)
+      stocks(companies)
         .filter(c => c.aboveSma50 === true && c.aboveSma200 === true
           && c.pctFromHigh52 != null && c.pctFromHigh52 >= -8
           && c.week5ChangePct != null && Math.abs(c.week5ChangePct) <= 3)
@@ -828,17 +850,17 @@ export const SCREENS: Screen[] = [
     id: "eps", label: "Earnings Acceleration", desc: "Strongest year-over-year earnings growth",
     src: "FMP · fundamentals-growth job",
     rows: ({ companies }) =>
-      priced(companies)
+      stocks(companies)
         .filter(c => c.epsGrowthYoY != null && c.epsGrowthYoY >= 0.25)
         .sort((a, b) => (b.epsGrowthYoY as number) - (a.epsGrowthYoY as number))
-        .map(c => rowOf(c, `EPS ${signed((c.epsGrowthYoY as number) * 100, 0)} YoY${c.revenueGrowthYoY != null ? `, revenue ${signed(c.revenueGrowthYoY * 100, 0)} YoY` : ""}.`)),
+        .map(c => rowOf(c, `Adjusted EPS ${signed((c.epsGrowthYoY as number) * 100, 0)} YoY${c.revenueGrowthYoY != null ? `, revenue ${signed(c.revenueGrowthYoY * 100, 0)} YoY` : ""}.`)),
   },
   {
     id: "surp", label: "Fundamentals + Catalyst", desc: "Supportive fundamentals plus a catalyst",
     src: "Emergence components", model: true,
     rows: ctx => {
       const sg = sig(ctx);
-      return priced(ctx.companies)
+      return stocks(ctx.companies)
         .filter(c => (compVal(sg.get(c.ticker), "f") ?? 0) >= 65 && (compVal(sg.get(c.ticker), "c") ?? 0) >= 60)
         .sort((a, b) => {
           const sa = sg.get(a.ticker), sb = sg.get(b.ticker);
@@ -854,7 +876,7 @@ export const SCREENS: Screen[] = [
     id: "upg", label: "Analyst Upgrades", desc: "Rating upgrades in the last 30 days",
     src: "FMP · upgrades-downgrades",
     rows: ctx =>
-      priced(ctx.companies)
+      stocks(ctx.companies)
         .map(c => ({ c, g: recentGrades(ctx.analyst.get(c.ticker), 30, ctx.now) }))
         .filter(x => x.g.ups.length > x.g.downs.length)
         .sort((a, b) => (b.g.ups.length - b.g.downs.length) - (a.g.ups.length - a.g.downs.length)
@@ -867,9 +889,13 @@ export const SCREENS: Screen[] = [
   {
     id: "inst", label: "Institutional Accumulation", desc: "13F holders and shares rising",
     src: "FMP · 13F institutional ownership",
-    rows: ({ companies }) =>
-      priced(companies)
-        .filter(c => (c.inst13FHoldersChange ?? 0) > 0 && (c.inst13FSharesChange ?? 0) > 0)
+    rows: ({ companies }) => {
+      // One quarter per list: rows whose 13F rollup is older than the newest
+      // reported quarter would compare a different period (Q2 beside Q3).
+      const rising = stocks(companies).filter(c => (c.inst13FHoldersChange ?? 0) > 0 && (c.inst13FSharesChange ?? 0) > 0);
+      const newest = rising.reduce((m, c) => Math.max(m, quarterKey(c.instAsOf)), 0);
+      return rising
+        .filter(c => quarterKey(c.instAsOf) === newest)
         .map(c => {
           const shares = Number(c.inst13FShares ?? 0);
           const change = Number(c.inst13FSharesChange);
@@ -883,7 +909,8 @@ export const SCREENS: Screen[] = [
         .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || (b.c.inst13FHoldersChange as number) - (a.c.inst13FHoldersChange as number))
         .map(({ c, change, pct }) => rowOf(c, `${c.inst13FHoldersChange} more institutional holders and ${
           pct != null ? `${pct.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% more shares` : `${Math.round(change).toLocaleString("en-US")} more shares (almost none reported the prior quarter)`
-        } vs. the prior quarter${c.instAsOf ? ` (${c.instAsOf})` : ""}.`)),
+        } vs. the prior quarter${c.instAsOf ? ` (${c.instAsOf})` : ""}.`));
+    },
   },
   {
     id: "si", label: "High Short Interest", desc: "Lagging relative strength — contrarian",

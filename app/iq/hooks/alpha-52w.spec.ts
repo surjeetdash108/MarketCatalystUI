@@ -29,7 +29,7 @@ describe("52-week figures follow the price on screen and today's range", () => {
     assert.equal(Number(out.pctFromHigh52?.toFixed(2)), -0.07);
   });
   it("SGC: without a quote, the stored price still re-anchors (−0.3%/at the high, not −4.6%)", () => {
-    const c = { ticker: "SGC", price: 14.65, pctChange: 4.49, high52: 14.7, low52: 8.3, pctFromHigh52: -4.59, rvol: 1.5 } as CompanyDoc;
+    const c = { ticker: "SGC", name: "Surgalign", sector: "Consumer Durables", type: "CS", price: 14.65, pctChange: 4.49, high52: 14.7, low52: 8.3, pctFromHigh52: -4.59, rvol: 1.5 } as CompanyDoc;
     const out = withLiveQuote(c, undefined);
     assert.equal(Number(out.pctFromHigh52?.toFixed(1)), -0.3);
     assert.match(rowsOf("brk", [out])[0].why, /0\.3% from its 52-week high/);

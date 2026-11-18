@@ -6,7 +6,7 @@ import type { CompanyDoc } from "./types";
 const rows = (companies: CompanyDoc[]) =>
   SCREENS.find(s => s.id === "inst")!.rows({ companies, sigs: [], analyst: new Map(), ipos: [], now: 0 });
 const co = (ticker: string, shares: number, change: number, holders: number, holdersChange: number, asOf = "Q3 2026") =>
-  ({ ticker, name: ticker, price: 10, pctChange: 0, inst13FShares: shares, inst13FSharesChange: change, inst13FHolders: holders, inst13FHoldersChange: holdersChange, instAsOf: asOf }) as CompanyDoc;
+  ({ ticker, name: ticker, sector: "Technology", type: "CS", price: 10, pctChange: 0, inst13FShares: shares, inst13FSharesChange: change, inst13FHolders: holders, inst13FHoldersChange: holdersChange, instAsOf: asOf }) as CompanyDoc;
 
 // Errors 10–11: "17610200.0% more shares" — a prior quarter of 1 reported share
 // (AEHL 176,103 now, +176,102) makes the ratio meaningless.
