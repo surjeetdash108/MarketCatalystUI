@@ -838,6 +838,7 @@ function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, 
 }) {
   const m = s.m;
   const plan = s.plan;
+  const hasTargets = plan?.t1 != null && plan?.t2 != null;
   const avail = s.comps.filter(x => x.value != null).sort((a, b) => (b.value as number) - (a.value as number));
   const weakest = avail[avail.length - 1];
   const keyRisk = s.caps.length
@@ -871,7 +872,8 @@ function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, 
             <div><span className="alp-k">Horizon</span><b>Intraday · exit by close</b></div>
             <div><span className="alp-k">Position size</span><b>{plan?.size ?? "—"}</b></div>
           </div>
-          <small className="fn">Book half at 1R, trail the rest to 2R · Rule-based levels on live prices, not personalised advice</small>
+          {hasTargets && <small className="fn">Book half at 1R, trail the rest to 2R · Rule-based levels on live prices, not personalised advice</small>}
+          {!hasTargets && <small className="fn">Targets appear when the setup is active · Rule-based levels on live prices, not personalised advice</small>}
         </div>
         <div className="alp-why">
           <div className="alp-k vio">Why it&apos;s on the list</div>
@@ -918,6 +920,7 @@ function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, 
 function IntraBearBody({ s, onInfo, onClose, onExplore, onViewFullChart }: { s: IntradaySignal; onInfo: () => void; onClose: () => void; onExplore: () => void; onViewFullChart: () => void }) {
   const m = s.m;
   const plan = s.plan;
+  const hasTargets = plan?.t1 != null && plan?.t2 != null;
   return (
     <>
       <div className="alp-modal-h">
@@ -943,7 +946,8 @@ function IntraBearBody({ s, onInfo, onClose, onExplore, onViewFullChart }: { s: 
             <div><span className="alp-k">Horizon</span><b>Intraday · cover by close</b></div>
             <div><span className="alp-k">Position size</span><b>{plan?.size ?? "—"}</b></div>
           </div>
-          <small className="fn">Book half at 1R, trail the rest to 2R · Check borrow availability before trading</small>
+          {hasTargets && <small className="fn">Book half at 1R, trail the rest to 2R · Check borrow availability before trading</small>}
+          {!hasTargets && <small className="fn">Targets appear when the setup is active · Check borrow availability before trading</small>}
         </div>
         <div className="alp-why">
           <div className="alp-k down">Why it&apos;s on the short list</div>

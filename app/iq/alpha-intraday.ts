@@ -444,12 +444,66 @@ const act = (key: ActionKey, why: string): IntradayAction => ({
 export const actBarAt = (minutes: number) => (minutes >= T.primeEnd && minutes < T.middayEnd ? T.actBarMidday : T.actBar);
 
 /** Evaluate one stock (§4.4–§4.7). */
+/**
+ * The Action for an intraday setup, in the glossary's order: stretched, then
+ * price already past the entry zone or a stop too wide (Watch at any score),
+ * then the score (Watch under 55 / 45, Building below the act bar), then data
+ * coverage and the robustness caps, else Setup active (which alone carries
+ * 1R / 2R targets).
+ */
+export function decideIntradayAction(x: {
+  setup: Setup;
+  internal: number;
+  display: number;
+  price: number;
+  plan: IntradayPlan | null;
+  coverage: number;
+  caps: string[];
+  minutes: number;
+}): { action: IntradayAction; longAction: IntradayAction; plan: IntradayPlan | null } {
+  const { setup, internal, display, price, plan, coverage, caps } = x;
+  const bar = actBarAt(x.minutes);
+  let action: IntradayAction;
+  let longAction: IntradayAction;
+  if (setup.dir === "Long" && plan) {
+    if (setup.name === "Extended") action = act("watch", "More than 3% above VWAP — too stretched to chase; wait for a pullback.");
+    else if (price > plan.zoneHi) action = act("watch", "Price is already past the entry zone — wait for a retest.");
+    else if (plan.stopDist > T.stopMax) action = act("watch", `The stop would be ${(plan.stopDist * 100).toFixed(1)}% away — too wide for an intraday trade.`);
+    else if (internal < T.buildBar) action = act("watch", `Score ${display} is under 55 — no edge yet.`);
+    else if (internal < bar) action = act("alert", bar === T.actBarMidday && internal >= T.actBar ? "Midday needs a score of 75 — wait for the trigger." : "Improving, but not yet confirmed — wait for the trigger.");
+    else if (coverage < T.minCoverage) action = act("alert", `Only ${coverage}% of the inputs are reliable — wait for a cleaner read.`);
+    else if (caps.length) action = act("alert", `Held back: ${caps.join("; ")}.`);
+    else action = act("act", "Score, entry zone and a tight stop all line up — the setup is live.");
+    longAction = action;
+  } else if (setup.dir === "Short" && plan) {
+    const shortBar = 100 - bar;
+    if (setup.name === "Extended down") action = act("watch", "More than 3% below VWAP — too stretched to chase; wait for a bounce.");
+    else if (price < plan.zoneLo) action = act("watch", "Already well below the trigger — wait for a bounce to retest it.");
+    else if (plan.stopDist > T.stopMax) action = act("watch", `The cover stop would be ${(plan.stopDist * 100).toFixed(1)}% away — too wide for an intraday trade.`);
+    else if (display > 100 - T.buildBar) action = act("watch", `Score ${display} is above 45 — not weak enough for a short setup.`);
+    else if (display > shortBar) action = act("alert", shortBar === 100 - T.actBarMidday && display <= 100 - T.actBar ? "Midday needs a score of 25 or lower — wait for the break below the trigger." : "Weakness is building — wait for the break below the trigger.");
+    else if (coverage < T.minCoverage) action = act("alert", `Only ${coverage}% of the inputs are reliable — wait for a cleaner read.`);
+    else if (caps.length) action = act("alert", `Held back: ${caps.join("; ")}.`);
+    else action = act("act", "Score, short entry zone and a tight cover stop all line up — the short setup is live.");
+    longAction = act("avoid", "A bearish setup — not a long.");
+  } else {
+    action = act("watch", SETUP_DESC[setup.name]);
+    longAction = action;
+  }
+  // Targets only on Setup active (§4.5); the card hides the 1R/2R footer otherwise.
+  if (plan && action.key === "act") {
+    const R = Math.abs(price - plan.stop);
+    if (setup.dir === "Long") { plan.t1 = price + R; plan.t2 = price + 2 * R; }
+    else { plan.t1 = price - R; plan.t2 = price - 2 * R; }
+  }
+  return { action, longAction, plan };
+}
+
 export function evaluateIntraday(ticker: string, m: SessionMetrics, c: CompanyDoc | null, ctx: IntradayCtx): IntradaySignal {
   const setup = classify(m, ctx);
   const sc = score(m, setup, ctx);
   const noise = ctx.noiseStops !== false;
   const plan = planFor(m, setup, noise);
-  const bar = actBarAt(m.minutes);
 
   // Robustness caps (§4.7): each only downgrades Setup active → Building.
   const caps: string[] = [];
@@ -463,42 +517,9 @@ export function evaluateIntraday(ticker: string, m: SessionMetrics, c: CompanyDo
   if (setup.dir === "Long" && ctx.swingTrend === "Weakening") caps.push("the stock's swing trend is down");
   if (setup.dir === "Short" && (ctx.swingTrend === "Emerging" || ctx.swingTrend === "Strengthening" || ctx.swingTrend === "Pulling back")) caps.push("the stock's swing trend is up");
 
-  let action: IntradayAction;
-  let longAction: IntradayAction;
-  if (setup.dir === "Long" && plan) {
-    if (setup.name === "Extended") action = act("watch", "More than 3% above VWAP — too stretched to chase; wait for a pullback.");
-    else if (sc.internal < T.buildBar) action = act("watch", `Score ${sc.display} is under 55 — no edge yet.`);
-    else if (sc.internal < bar) action = act("alert", bar === T.actBarMidday && sc.internal >= T.actBar ? "Midday needs a score of 75 — wait for the trigger." : "Improving, but not yet confirmed — wait for the trigger.");
-    else if (m.price > plan.zoneHi) action = act("watch", "Price is already past the entry zone — wait for a retest.");
-    else if (plan.stopDist > T.stopMax) action = act("watch", `The stop would be ${(plan.stopDist * 100).toFixed(1)}% away — too wide for an intraday trade.`);
-    else if (sc.coverage < T.minCoverage) action = act("alert", `Only ${sc.coverage}% of the inputs are reliable — wait for a cleaner read.`);
-    else if (caps.length) action = act("alert", `Held back: ${caps.join("; ")}.`);
-    else action = act("act", "Score, entry zone and a tight stop all line up — the setup is live.");
-    longAction = action;
-  } else if (setup.dir === "Short" && plan) {
-    const shortBar = 100 - bar;
-    const trig = setup.trigger as number;
-    const vwapType = Math.abs(trig - m.vwap) < 1e-9;
-    const pastZone = m.price < trig * (1 - (vwapType ? T.vwapZone : T.confirmMax));
-    if (setup.name === "Extended down") action = act("watch", "More than 3% below VWAP — too stretched to chase; wait for a bounce.");
-    else if (sc.display > 100 - T.buildBar) action = act("watch", `Score ${sc.display} is above 45 — not weak enough for a short setup.`);
-    else if (sc.display > shortBar) action = act("alert", shortBar === 100 - T.actBarMidday && sc.display <= 100 - T.actBar ? "Midday needs a score of 25 or lower — wait for the break below the trigger." : "Weakness is building — wait for the break below the trigger.");
-    else if (pastZone) action = act("watch", "Already well below the trigger — wait for a bounce to retest it.");
-    else if (plan.stopDist > T.stopMax) action = act("watch", `The cover stop would be ${(plan.stopDist * 100).toFixed(1)}% away — too wide for an intraday trade.`);
-    else if (sc.coverage < T.minCoverage) action = act("alert", `Only ${sc.coverage}% of the inputs are reliable — wait for a cleaner read.`);
-    else if (caps.length) action = act("alert", `Held back: ${caps.join("; ")}.`);
-    else action = act("act", "Score, short entry zone and a tight cover stop all line up — the short setup is live.");
-    longAction = act("avoid", "A bearish setup — not a long.");
-  } else {
-    action = act("watch", SETUP_DESC[setup.name]);
-    longAction = action;
-  }
-
-  if (plan && action.key === "act") {
-    const R = Math.abs(m.price - plan.stop);
-    if (setup.dir === "Long") { plan.t1 = m.price + R; plan.t2 = m.price + 2 * R; }
-    else { plan.t1 = m.price - R; plan.t2 = m.price - 2 * R; }
-  }
+  const { action, longAction } = decideIntradayAction({
+    setup, internal: sc.internal, display: sc.display, price: m.price, plan, coverage: sc.coverage, caps, minutes: m.minutes,
+  });
 
   return {
     ticker, c, m, setup, desc: SETUP_DESC[setup.name],
