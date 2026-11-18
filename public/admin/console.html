@@ -925,6 +925,7 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
     <button type="button" class="navlbl" data-sec="Grow" aria-expanded="false"><span class="sec-name">Grow</span><span class="sec-dot" aria-hidden="true"></span><svg class="sec-caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="nav" data-view="blogs"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h13a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z" stroke="currentColor" stroke-width="2"/><path d="M8 9h7M8 13h7M8 17h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Blogs</div>
     <div class="nav" data-view="mcpkeys"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 0-4 4h.5L9 13.5V16H6.5V18.5H4V22h5v-2.5l4.5-4.5H14a4 4 0 0 0 1-7.9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="16" cy="7" r="1.3" fill="currentColor"/></svg>MCP Keys</div>
+    <div class="nav" data-view="feedback"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H9l-5 4V5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Feedback</div>
     <div class="nav" data-view="studio"><svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"/><circle cx="17.2" cy="6.8" r="1.3" fill="currentColor"/></svg>Social Studio<span class="badge-ig">IG</span></div>
     </div>
     <div class="side-foot">
@@ -1218,6 +1219,22 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
             <span class="sub">each key lets a Claude Code / Claude Desktop connection author &amp; manage blog posts through the MCP server — treat one like a password</span>
           </div>
           <table><thead><tr><th>Label</th><th>Key</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody id="mcpKeysBody"></tbody></table>
+        </div>
+      </section>
+
+      <!-- FEEDBACK -->
+      <section class="view" id="feedback">
+        <div class="toolbar">
+          <span class="count" id="fbCount"></span>
+          <input id="fbSearch" class="inp" style="max-width:280px;margin-left:auto" placeholder="Search email or feedback…" oninput="paintFeedback()">
+          <button class="btn" style="flex:none" onclick="requestFeedback()">Refresh</button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-h" style="padding:14px 16px">
+            <h3>User feedback</h3>
+            <span class="sub">from the in-app “Enjoying our platform?” box · newest first</span>
+          </div>
+          <table><thead><tr><th style="width:24%">Email</th><th style="width:18%">Date &amp; time</th><th>Feedback</th></tr></thead><tbody id="fbBody"></tbody></table>
         </div>
       </section>
 
@@ -4049,7 +4066,7 @@ function initBlogs(){
 initBlogs();
 
 /* ---------- nav ---------- */
-const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',jobs:'Jobs <span>· scheduled work, and run it now</span>',apidocs:'API Docs <span>· which screen calls which API</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>',blogs:'Blogs <span>· publish articles to your site</span>',mcpkeys:'MCP Keys <span>· connect Claude to your blog</span>'};
+const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',jobs:'Jobs <span>· scheduled work, and run it now</span>',apidocs:'API Docs <span>· which screen calls which API</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>',blogs:'Blogs <span>· publish articles to your site</span>',mcpkeys:'MCP Keys <span>· connect Claude to your blog</span>',feedback:'Feedback <span>· what users tell us in the app</span>'};
 /* The Monitor tab lists the backend's API surface (GET /admin/api-health,
    staged in REAL.apiHealth) and health-checks the safely-probeable endpoints.
    The iframe has no Firebase token, so a live Re-check is delegated to the
@@ -5159,6 +5176,56 @@ function paintMcpKeys(){
   }).join('');
 }
 
+/* ── User feedback ───────────────────────────────────────────────────────────
+   Read-only list from the in-app feedback box. Delegated to the parent
+   (admin:feedbackList), which calls the AdminGuard'd /api/admin/feedback. */
+let FEEDBACK = null, FEEDBACK_LOADING = false, FEEDBACK_ERR = null;
+
+function requestFeedback(){
+  FEEDBACK_LOADING = true;
+  paintFeedback();
+  parent.postMessage({ type:'admin:feedbackList' }, '*');
+}
+
+function paintFeedback(){
+  const body = document.getElementById('fbBody');
+  const count = document.getElementById('fbCount');
+  if (!body) return;
+  if (FEEDBACK_LOADING && !FEEDBACK){
+    body.innerHTML = '<tr><td colspan="3" style="color:var(--dim);padding:16px">Loading…</td></tr>';
+    if (count) count.textContent = '';
+    return;
+  }
+  if (!FEEDBACK){
+    body.innerHTML = '<tr><td colspan="3" style="color:var(--dim);padding:16px">'+xesc(FEEDBACK_ERR||'Sign in as the admin to load feedback.')+'</td></tr>';
+    if (count) count.textContent = '';
+    return;
+  }
+  const q = ((document.getElementById('fbSearch')||{}).value||'').trim().toLowerCase();
+  const rows = q ? FEEDBACK.filter(function(f){ return ((f.email||'')+' '+(f.text||'')).toLowerCase().indexOf(q) >= 0; }) : FEEDBACK;
+  if (count) count.textContent = rows.length + (rows.length===1?' message':' messages') + (q ? ' of ' + FEEDBACK.length : '');
+  if (!rows.length){
+    body.innerHTML = '<tr><td colspan="3" style="color:var(--dim);padding:16px">'+(q?'No feedback matches.':'No feedback yet.')+'</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map(function(f){
+    return '<tr>'
+      + '<td>'+(f.email?xesc(f.email):'<span style="color:var(--dim)">(no email)</span>')+'</td>'
+      + '<td style="white-space:nowrap">'+fmtWhen(f.createdAt)+'</td>'
+      + '<td style="white-space:pre-wrap;word-break:break-word">'+xesc(f.text)+'</td>'
+      + '</tr>';
+  }).join('');
+}
+
+window.addEventListener('message', function(e){
+  const d = e.data || {};
+  if (d.type !== 'admin:feedbackListResult') return;
+  FEEDBACK_LOADING = false;
+  if (d.ok && d.feedback){ FEEDBACK = d.feedback; FEEDBACK_ERR = null; }
+  else { FEEDBACK_ERR = d.error || 'error'; }
+  paintFeedback();
+});
+
 function requestMcpKeys(){
   MCP_KEYS_LOADING = true;
   parent.postMessage({ type:'admin:mcpKeyList' }, '*');
@@ -5241,7 +5308,7 @@ window.addEventListener('message', function(e){
    console is a same-origin iframe, so it drives the PARENT's URL/history so each
    screen deep-links (/admin/users, /admin/subs, …). All parent access is wrapped
    in try/catch — standalone review of console.html has no parent. */
-const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','jobs','apidocs','studio','blogs','mcpkeys'];
+const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','jobs','apidocs','studio','blogs','mcpkeys','feedback'];
 
 function viewFromParentPath(){
   try{
@@ -5269,6 +5336,7 @@ function switchView(name, opts){
   if (name === 'jobs') renderJobs();
   if (name === 'apidocs') renderApiDocs();
   if (name === 'mcpkeys') renderMcpKeys();
+  if (name === 'feedback') requestFeedback();
   document.getElementById('pageTitle').innerHTML=TITLES[name]||name;
   document.querySelector('.main').scrollTo({top:0});
   // Reflect the active screen in the parent URL — but never when the switch was

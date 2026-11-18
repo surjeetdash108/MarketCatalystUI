@@ -282,6 +282,17 @@ export function AdminConsole() {
         }
         reply({ ok, ...(error ? { error } : {}), ...(rawKey ? { rawKey } : {}), ...(keys ? { keys } : {}) });
       }
+      /* ── User feedback (read-only list) ───────────────────────────────── */
+      if (d.type === "admin:feedbackList") {
+        const reply = (m: Record<string, unknown>) =>
+          iframeRef.current?.contentWindow?.postMessage({ type: "admin:feedbackListResult", ...m }, "*");
+        try {
+          const list = await apiGet<{ feedback: unknown[] }>("/api/admin/feedback");
+          reply({ ok: true, feedback: list.feedback ?? [] });
+        } catch (err) {
+          reply({ ok: false, error: (err as Error).message });
+        }
+      }
       /* ── Market Catalyst Pulse ──────────────────────────────────────────
          Posts shown on every dashboard. Same delegation as the blog board;
          every write re-fetches the list so the console shows the true state. */

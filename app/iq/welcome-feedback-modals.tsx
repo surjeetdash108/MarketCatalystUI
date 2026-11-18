@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useEntitlements } from "./hooks/useEntitlements";
 import { welcomeDecision } from "./welcome/welcome-rule";
+import { apiPost } from "./backend";
 
 export function WelcomeFeedbackModals() {
   const { data: ent } = useEntitlements();
@@ -45,6 +46,10 @@ export function WelcomeFeedbackModals() {
 
   const handleFeedbackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Saved for the admin's Feedback list (who sent it comes from the sign-in
+    // token). Best-effort: the thank-you shows either way.
+    const text = feedbackText.trim();
+    if (text) void apiPost("/api/feedback", { text }).catch(() => {});
     setFeedbackSent(true);
     setTimeout(() => {
       closeFeedback();
