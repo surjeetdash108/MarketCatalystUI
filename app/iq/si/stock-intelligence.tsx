@@ -2142,7 +2142,7 @@ export function StockIntelligenceScreen() {
   const confluenceCount = overviewRun.cats.filter((c) => Math.round(c.score) >= 75).length;
   const confluenceColor = confluenceCount >= 5 ? UP : confluenceCount >= 3 ? STEEL : confluenceCount === 2 ? "#f5b031" : DN;
 
-  type HeroStat = { k: string; v: string; col?: string; node?: React.ReactNode; link?: boolean };
+  type HeroStat = { k: string; v: string; col?: string; node?: React.ReactNode };
   const statsRow: HeroStat[] = [
     { k: "MARKET CAP", v: realMcap || "—", col: MCAP_BLUE },
     { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", col: MCAP_BLUE },
@@ -2159,36 +2159,10 @@ export function StockIntelligenceScreen() {
         </>
       ),
     },
-    {
-      k: "MC CONFIDENCE",
-      v: mcConfidence != null ? `${mcConfidence} / 100` : "—",
-      col: mcConfidenceColor,
-      link: true,
-      node:
-        mcConfidence != null ? (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 84,
-                height: 84,
-                borderRadius: "50%",
-                border: `4px solid ${mcConfidenceColor}`,
-                fontSize: 38,
-                fontWeight: 700,
-                lineHeight: 1,
-              }}
-            >
-              {mcConfidence}
-            </span>
-            <span style={{ fontSize: 20, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>/ 100</span>
-          </span>
-        ) : undefined,
-    },
   ];
-  const scrollToSignals = () => document.getElementById("si-signals")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  /** The MC Confidence band, on the same scale the score colours use. */
+  const mcConfidenceBand =
+    mcConfidence == null ? null : mcConfidence >= 75 ? "High conviction" : mcConfidence >= 60 ? "Constructive" : mcConfidence >= 45 ? "Mixed" : "Weak";
 
   // Technical Read card: shown on Overview and on the Technicals tab.
   const technicalReadCard = (
@@ -2379,7 +2353,7 @@ export function StockIntelligenceScreen() {
         }
         /* ── Phone (≤760px): the stat columns stack under the name instead of crushing to one character a line ── */
         @media (max-width: 1300px) { .si-hero-stat > div:last-child { white-space: normal !important; overflow-wrap: anywhere; } }
-        /* Seven columns share the hero row now (market cap and P/E joined the stats), so on laptop widths the labels get a tighter setting and may wrap instead of running into the next column. */
+        /* Six columns share the hero row (market cap and P/E joined the stats), so on laptop widths the labels get a tighter setting and may wrap instead of running into the next column. */
         @media (min-width: 761px) and (max-width: 1700px) {
           .si-hero-stat { padding: 14px 10px !important; }
           .si-hero-stat > div:first-child { white-space: normal !important; font-size: 12px !important; letter-spacing: 0.08em !important; line-height: 1.25; }
@@ -2736,7 +2710,7 @@ export function StockIntelligenceScreen() {
                 border: "1px solid var(--si-border, #1c2733)",
                 background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                 display: "grid",
-                gridTemplateColumns: "auto repeat(4, minmax(0, 1fr)) minmax(max-content, 1.3fr) minmax(max-content, 1.5fr)",
+                gridTemplateColumns: "auto repeat(4, minmax(0, 1fr)) minmax(max-content, 1.3fr)",
               }}
             >
               {/* Identity: logo, ticker, name and price */}
@@ -2767,17 +2741,12 @@ export function StockIntelligenceScreen() {
                 </div>
               </div>
 
-              {/* Stats, one row: market cap, P/E, revenue growth, EPS growth, 52-week range, MC confidence */}
+              {/* Stats, one row: market cap, P/E, revenue growth, EPS growth, 52-week range */}
               {statsRow.map((st, i, arr) => (
                 <div
                   key={st.k}
                   className="si-hero-stat"
-                  role={st.link ? "button" : undefined}
-                  tabIndex={st.link ? 0 : undefined}
-                  onClick={st.link ? scrollToSignals : undefined}
-                  onKeyDown={st.link ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); scrollToSignals(); } } : undefined}
                   style={{
-                    cursor: st.link ? "pointer" : undefined,
                     padding: "14px 20px",
                     display: "flex",
                     flexDirection: "column",
@@ -2795,11 +2764,6 @@ export function StockIntelligenceScreen() {
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: st.col ?? "var(--si-text-hi, #e8eef4)", marginTop: 8, whiteSpace: "nowrap", lineHeight: 1.4 }}>
                     {st.node ?? st.v}
                   </div>
-                  {st.link && (
-                    <div style={{ marginTop: 6, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
-                      Click here to know more ↓
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -3261,6 +3225,54 @@ export function StockIntelligenceScreen() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* MC Confidence: the overall score, under the signal scores it summarises */}
+              <div
+                id="si-confidence"
+                style={{
+                  border: "1px solid var(--si-border, #1c2733)",
+                  background: "var(--si-card, rgba(12, 17, 24, 0.9))",
+                  padding: "18px 20px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 24,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 84,
+                      height: 84,
+                      borderRadius: "50%",
+                      border: `4px solid ${mcConfidenceColor}`,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 38,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      color: mcConfidenceColor,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {mcConfidence ?? "—"}
+                  </span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>/ 100</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 220, flex: 1 }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    MC CONFIDENCE
+                  </span>
+                  {mcConfidenceBand && (
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 700, color: mcConfidenceColor }}>{mcConfidenceBand}</span>
+                  )}
+                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5 }}>
+                    The overall read across the signal scores above, on the same 0–100 scale: 75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak.
+                  </span>
+                </div>
               </div>
               </div>
               {/* Right column: the take, then the two reads */}
