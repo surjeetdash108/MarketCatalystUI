@@ -10,6 +10,7 @@ import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
 import { DeleteAccountDialog } from "./delete-account-dialog";
 import { useEntitlements } from "../hooks/useEntitlements";
+import { MarketingEmailToggle } from "../marketing-email-toggle";
 
 const FONTS: { key: FontKey; rank: number; label: string; desc: string; stack: string }[] = [
   { key: "geist", rank: 6,         label: "Geist",         desc: "Clean & neutral · Minimal sans",      stack: "var(--font-geist-sans,'Geist Sans',sans-serif)" },
@@ -168,6 +169,7 @@ const SETTINGS_INDEX: { section: SectionKey; title: string; desc: string; words:
   { section: "appearance", title: "Dark mode", desc: "Switch between the dark and light interface", words: "theme dark light mode colour color" },
   { section: "appearance", title: "Font", desc: "Choose the typeface used across the app", words: "font typeface text type" },
   { section: "notifications", title: "Alerts", desc: "Price alerts and market notifications", words: "alerts notifications price market" },
+  { section: "notifications", title: "Tips and offers by email", desc: "Getting-started tips and trial reminders", words: "email marketing unsubscribe tips offers newsletter" },
   { section: "notifications", title: "Schedule & share recap", desc: "Get the end-of-day summary by email", words: "recap schedule email summary eod digest" },
   { section: "plan", title: "Plan", desc: "Your current plan, renewal date and billing", words: "plan subscription billing renew trial manage purchase history invoice" },
   { section: "danger", title: "Delete account", desc: "Permanently remove your account and all data", words: "delete remove account data close" },
@@ -453,6 +455,7 @@ export function SettingsScreen() {
                           <span className="iq-toggle-slider" />
                         </label>
                       </div>
+                      <MarketingEmailToggle />
                       <div className="st-block" style={{ marginTop: 6, borderTop: "1px solid var(--border-soft)", paddingTop: 16 }}>
                         <div className="st-t">Font</div>
                         <div className="st-d" style={{ marginBottom: 12 }}>The typeface used across the app. Scroll sideways for more.</div>

@@ -1,6 +1,8 @@
 "use client";
 
-import { sendEmailVerification } from "firebase/auth";
+// Firebase's verification email is retired: verification is the branded 6-digit
+// code (email-code-step.tsx, sent through SendGrid). Kept for reference only.
+// import { sendEmailVerification } from "firebase/auth";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { firebaseAuth } from "../../firebase";
 import { LINK_SENT_KEY, resendWaitSeconds, verifyContinueUrl } from "./email-code";
@@ -50,7 +52,9 @@ export function EmailLinkStep({ onVerified, title = "Verify your email", next = 
     if (!u) return;
     setMessage(null);
     try {
-      await sendEmailVerification(u, { url: verifyContinueUrl(window.location.origin, next) });
+      // await sendEmailVerification(u, { url: verifyContinueUrl(window.location.origin, next) });
+      void verifyContinueUrl(window.location.origin, next);
+      throw Object.assign(new Error("retired"), { code: "retired" });
       try {
         sessionStorage.setItem(LINK_SENT_KEY, String(Date.now()));
       } catch {

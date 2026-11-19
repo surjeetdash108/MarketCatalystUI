@@ -1,3 +1,8 @@
+/** Digits only, at most 6 (the verification code input). */
+export function sanitizeCode(raw: string): string {
+  return String(raw ?? "").replace(/\D/g, "").slice(0, 6);
+}
+
 /** Only same-site paths are followed after verification ("/x", never "//host" or a URL). */
 export function safeNext(next: string | null | undefined, fallback = "/dashboard"): string {
   const n = String(next ?? "");

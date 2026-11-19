@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { sendPasswordResetEmail } from "firebase/auth";
-import { firebaseAuth } from "../../firebase";
+// import { sendPasswordResetEmail } from "firebase/auth";
+import { apiPost } from "../../iq/backend";
+// import { firebaseAuth } from "../../firebase"; // only Firebase's retired reset email used it
 import { getAuthErrorMessage } from "../auth-utils";
 
 const label: React.CSSProperties = {
@@ -23,7 +24,10 @@ export function ForgotForm() {
     e.preventDefault();
     setError(""); setSuccess(""); setIsSubmitting(true);
     try {
-      await sendPasswordResetEmail(firebaseAuth, email);
+      // Branded reset email through our backend (SendGrid); Firebase's own email is retired.
+      // await sendPasswordResetEmail(firebaseAuth, email);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) throw Object.assign(new Error("invalid"), { code: "auth/invalid-email" });
+      await apiPost("/api/account/password-reset", { email: email.trim() });
     } catch (err) {
       const code = (err as { code?: string })?.code;
       // Surface only genuine input/rate errors. Crucially, do NOT reveal
