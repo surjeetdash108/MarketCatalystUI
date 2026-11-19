@@ -1093,83 +1093,84 @@ function FearGreedDrawer({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ---- Copilot panel ----
-// No LLM backend is wired up yet (no /api/copilot-style endpoint exists) —
-// this used to cycle 4 hardcoded replies regardless of what was typed while
-// claiming "Connected to your portfolio · live data". That's exactly the kind
-// of fabricated response this pass removes: it never leaves silent, but it
-// must say plainly that there's no real assistant behind it yet.
-type CopilotMsg = { role: "user" | "ai"; text: string };
-const NOT_AVAILABLE_REPLY = "AI Copilot isn't connected to a live assistant yet — there's no model wired up behind this panel. Use the screens directly for live data (Stock Detail, Screener, Dashboard, etc.).";
+// Hidden for now: the panel was a placeholder with no assistant behind it (see git history to restore).
+// // ---- Copilot panel ----
+// // No LLM backend is wired up yet (no /api/copilot-style endpoint exists) —
+// // this used to cycle 4 hardcoded replies regardless of what was typed while
+// // claiming "Connected to your portfolio · live data". That's exactly the kind
+// // of fabricated response this pass removes: it never leaves silent, but it
+// // must say plainly that there's no real assistant behind it yet.
+// type CopilotMsg = { role: "user" | "ai"; text: string };
+// const NOT_AVAILABLE_REPLY = "AI Copilot isn't connected to a live assistant yet — there's no model wired up behind this panel. Use the screens directly for live data (Stock Detail, Screener, Dashboard, etc.).";
 
-function CopilotPanel({ onClose }: { onClose: () => void }) {
-  const [messages, setMessages] = useState<CopilotMsg[]>([
-    { role: "ai", text: "AI Copilot is a planned feature — no live assistant is connected yet. Your message won't be answered, but the rest of the app's data is real." },
-  ]);
-  const [input, setInput] = useState("");
-  const bodyRef = useRef<HTMLDivElement>(null);
+// function CopilotPanel({ onClose }: { onClose: () => void }) {
+//   const [messages, setMessages] = useState<CopilotMsg[]>([
+//     { role: "ai", text: "AI Copilot is a planned feature — no live assistant is connected yet. Your message won't be answered, but the rest of the app's data is real." },
+//   ]);
+//   const [input, setInput] = useState("");
+//   const bodyRef = useRef<HTMLDivElement>(null);
 
-  function send(overrideText?: string) {
-    const txt = (overrideText ?? input).trim();
-    if (!txt) return;
-    setMessages(prev => [...prev, { role: "user", text: txt }, { role: "ai", text: NOT_AVAILABLE_REPLY }]);
-    setInput("");
-    setTimeout(() => { bodyRef.current?.scrollTo({ top: 9999, behavior: "smooth" }); }, 50);
-  }
+//   function send(overrideText?: string) {
+//     const txt = (overrideText ?? input).trim();
+//     if (!txt) return;
+//     setMessages(prev => [...prev, { role: "user", text: txt }, { role: "ai", text: NOT_AVAILABLE_REPLY }]);
+//     setInput("");
+//     setTimeout(() => { bodyRef.current?.scrollTo({ top: 9999, behavior: "smooth" }); }, 50);
+//   }
 
-  const SUGGESTS = [
-    "Explain today's biggest mover",
-    "How's my portfolio positioned?",
-    "What's driving rates today?",
-  ];
+//   const SUGGESTS = [
+//     "Explain today's biggest mover",
+//     "How's my portfolio positioned?",
+//     "What's driving rates today?",
+//   ];
 
-  return (
-    <div className="copilot">
-      <div className="copilot-head">
-        <div className="copilot-icon">✦</div>
-        <div>
-          <div className="copilot-title">Market Copilot</div>
-          <div className="copilot-sub">
-            <span className="dot" style={{ background: "var(--text-dim-solid)", width: 6, height: 6, borderRadius: "50%", display: "inline-block" }} />
-            Not connected — no live assistant yet
-          </div>
-        </div>
-        <button className="copilot-close" onClick={onClose}>✕</button>
-      </div>
-      <div className="copilot-body" ref={bodyRef}>
-        {/* Keyed by role+position+content rather than the bare index: the list
-            grows from the top as replies stream in, and an index key made React
-            reuse the previous message's DOM node for the new one. */}
-        {messages.map((m, i) => (
-          <div key={`${m.role}-${i}-${m.text.slice(0, 24)}`} className={`copilot-msg ${m.role}`}>
-            <div className="cm-text">{m.text}</div>
-          </div>
-        ))}
-      </div>
-      {messages.length === 1 && (
-        <div className="cop-suggest">
-          {SUGGESTS.map(s => (
-            <button key={s} onClick={() => send(s)}>{s}</button>
-          ))}
-        </div>
-      )}
-      <div className="copilot-inp">
-        <input
-          placeholder="Ask about markets, earnings, your portfolio…"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") send(); }}
-          autoFocus
-        />
-        <button className="copilot-send" onClick={() => send()}>
-          <svg viewBox="0 0 24 24" width="16" fill="none">
-            <path d="M4 12l16-8-6 16-2-6-8-2z" fill="#fff" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
+//   return (
+//     <div className="copilot">
+//       <div className="copilot-head">
+//         <div className="copilot-icon">✦</div>
+//         <div>
+//           <div className="copilot-title">Market Copilot</div>
+//           <div className="copilot-sub">
+//             <span className="dot" style={{ background: "var(--text-dim-solid)", width: 6, height: 6, borderRadius: "50%", display: "inline-block" }} />
+//             Not connected — no live assistant yet
+//           </div>
+//         </div>
+//         <button className="copilot-close" onClick={onClose}>✕</button>
+//       </div>
+//       <div className="copilot-body" ref={bodyRef}>
+//         {/* Keyed by role+position+content rather than the bare index: the list
+//             grows from the top as replies stream in, and an index key made React
+//             reuse the previous message's DOM node for the new one. */}
+//         {messages.map((m, i) => (
+//           <div key={`${m.role}-${i}-${m.text.slice(0, 24)}`} className={`copilot-msg ${m.role}`}>
+//             <div className="cm-text">{m.text}</div>
+//           </div>
+//         ))}
+//       </div>
+//       {messages.length === 1 && (
+//         <div className="cop-suggest">
+//           {SUGGESTS.map(s => (
+//             <button key={s} onClick={() => send(s)}>{s}</button>
+//           ))}
+//         </div>
+//       )}
+//       <div className="copilot-inp">
+//         <input
+//           placeholder="Ask about markets, earnings, your portfolio…"
+//           value={input}
+//           onChange={e => setInput(e.target.value)}
+//           onKeyDown={e => { if (e.key === "Enter") send(); }}
+//           autoFocus
+//         />
+//         <button className="copilot-send" onClick={() => send()}>
+//           <svg viewBox="0 0 24 24" width="16" fill="none">
+//             <path d="M4 12l16-8-6 16-2-6-8-2z" fill="#fff" />
+//           </svg>
+//         </button>
+//       </div>
+//     </div>
+//   );
+// }
 
 
 // The last theme write still in flight to /api/settings. Module-level so it
@@ -1301,7 +1302,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, []);
 
-  const [copilotOpen, setCopilotOpen] = useState(false);
+  // Hidden for now (see the CopilotPanel note above).
+  // const [copilotOpen, setCopilotOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [expandedChart, setExpandedChart] = useState<{ title: string; node: ReactNode } | null>(null);
   // Collapsed-rail tooltip. A CSS ::after cannot be used here: .rail sets
@@ -1480,7 +1482,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(true); (document.querySelector(".cmd-input") as HTMLInputElement)?.focus(); }
-      if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); setDrawer(null); setCopilotOpen(false); setNavOpen(false); }
+      if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); setDrawer(null); setNavOpen(false); }
     }
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -1511,7 +1513,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     openIndex: useCallback((idx) => setDrawer({ type: "index", idx }), []),
     openFearGreed: useCallback(() => setDrawer({ type: "feargreed" }), []),
     openChart: useCallback((title: string, node: ReactNode) => setExpandedChart({ title, node }), []),
-    setCopilot: setCopilotOpen,
+    // setCopilot: setCopilotOpen,   // panel hidden
+    setCopilot: () => {},
     theme,
     setTheme,
     font,
@@ -1656,10 +1659,12 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   ? <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
                   : <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>}
               </button>
+              {/* AI Copilot button: hidden for now, no assistant is connected behind it.
               <button className={`iconbtn${copilotOpen ? " ai-active" : ""}`} title="AI Copilot"
                 onClick={() => setCopilotOpen(o => !o)}>
                 ✦
               </button>
+              */}
               {/* Bell sits immediately left of the profile avatar. */}
               <NotificationBell />
               <ProfileMenu />
@@ -1879,8 +1884,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           )}
 
 
-          {/* Copilot panel */}
+          {/* Copilot panel: hidden for now.
           {copilotOpen && <CopilotPanel onClose={() => setCopilotOpen(false)} />}
+          */}
 
           {/* Chart expand modal */}
           {expandedChart && (
