@@ -836,7 +836,9 @@ export const SCREENS: Screen[] = [
     src: "Polygon · daily aggregates",
     rows: ({ companies }) =>
       stocks(companies)
-        .filter(c => (c.pctChange ?? 0) >= 2 && (c.rvol ?? 0) >= 1.5 && c.pctFromHigh52 != null && c.pctFromHigh52 >= -5)
+        // The published rule: within 1.5% of the 52-week high, up 2%+ today,
+        // RVOL 1.5×+, and not Extended (SAIL 3.4% / FROG 2.2% off were listed).
+        .filter(c => (c.pctChange ?? 0) >= 2 && (c.rvol ?? 0) >= 1.5 && c.pctFromHigh52 != null && c.pctFromHigh52 >= -1.5 && !extendedReason(c))
         .sort((a, b) => (b.pctChange as number) - (a.pctChange as number))
         .map(c => rowOf(c, `Up ${(c.pctChange as number).toFixed(1)}% on ${(c.rvol as number).toFixed(1)}× normal volume, ${Math.abs(c.pctFromHigh52 as number).toFixed(1)}% from its 52-week high.`)),
   },
