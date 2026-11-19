@@ -3135,14 +3135,15 @@ export function StockIntelligenceScreen() {
                   </div>
                 )}
 
-                {/* 7 interactive score buttons, then the Confluence box */}
-                <style>{`.si-sig{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.si-sig-cb{grid-column:span 5;display:grid;grid-template-columns:minmax(180px,260px) auto;gap:8px}@media (max-width:760px){.si-sig{grid-template-columns:repeat(3,minmax(0,1fr))}.si-sig-cb{grid-column:span 2;grid-template-columns:1fr}.si-sig-cb>button{grid-column:1/-1;height:32px}}`}</style>
+                {/* 7 interactive score buttons, then the Confluence box and the Evidence toggle, all on one row (they stack 3 to a row on phones) */}
+                <style>{`.si-sig{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) minmax(210px,2.6fr);gap:6px}.si-sig-cb{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.si-sig-card{padding:10px 8px !important}.si-sig-card>span:first-child{font-size:11px !important}.si-sig-cb>button{padding:0 10px !important;font-size:11px !important;white-space:nowrap}@media (max-width:760px){.si-sig-card{padding:12px !important}.si-sig-card>span:first-child{font-size:12px !important}.si-sig-cb>button{font-size:12px !important}.si-sig{grid-template-columns:repeat(3,minmax(0,1fr))}.si-sig-cb{grid-column:span 2;grid-template-columns:1fr}.si-sig-cb>button{grid-column:1/-1;height:32px}}`}</style>
                 <div className="si-sig">
                   {signalScores.map((scItem: SignalScoreItem) => {
                     const isSelected = selectedSignal === scItem.name;
                     return (
                       <button
                         key={scItem.name}
+                        className="si-sig-card"
                         onClick={() => setSelectedSignal(isSelected ? null : scItem.name)}
                         style={{
                           textAlign: "left",
