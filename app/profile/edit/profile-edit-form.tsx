@@ -9,6 +9,7 @@ import { apiPatch } from "../../iq/backend";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { updateProfileData } from "../../store/profile-slice";
 import { InvestorProfile, ProfileFields, emptyInvestorProfile, toProfilePatch } from "../profile-fields";
+import { SETTINGS_ACCOUNT_HREF } from "./profile-edit-shell";
 
 function getSaveErrorMessage(error: unknown) {
   if (error instanceof FirebaseError) return error.message;
@@ -24,7 +25,6 @@ export function ProfileEditForm() {
   const [profile, setProfile] = useState<InvestorProfile>(emptyInvestorProfile);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     if (savedProfile) {
@@ -55,7 +55,6 @@ export function ProfileEditForm() {
     //   return;
     // }
     setError("");
-    setSuccess("");
     setIsSaving(true);
     try {
       if (firebaseAuth.currentUser) {
@@ -63,7 +62,8 @@ export function ProfileEditForm() {
       }
       await apiPatch("/api/profile", toProfilePatch(profile));
       dispatch(updateProfileData({ ...profile, uid: user.uid, tier: savedProfile?.tier ?? "free" }));
-      setSuccess("Profile updated successfully.");
+      // Back to Settings, where the Pending chips are gone.
+      router.push(SETTINGS_ACCOUNT_HREF);
     } catch (saveError) {
       const msg = getSaveErrorMessage(saveError);
       setError(msg);
@@ -75,10 +75,8 @@ export function ProfileEditForm() {
 
   if (profileStatus === "loading" || (profileStatus === "idle" && !savedProfile)) {
     return (
-      <div className="card">
-        <div className="card-b" style={{ color: "var(--text-dim-solid)", fontSize: "0.8125rem" }}>
-          Loading profile details…
-        </div>
+      <div className="st-d" style={{ padding: "0 14px" }}>
+        Loading profile details…
       </div>
     );
   }
@@ -86,64 +84,46 @@ export function ProfileEditForm() {
   return (
     <>
       {/* Profile header */}
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div className="card-b" style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <img
-            alt={profile.name || "Profile"}
-            src={profile.profile_image || "/profile-avatar.svg"}
-            style={{
-              width: 56, height: 56, borderRadius: "50%",
-              objectFit: "cover", border: "2px solid var(--border-strong)", flexShrink: 0,
-            }}
-          />
-          <div>
-            <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
-              {profile.name || "Investor profile"}
-            </div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-              {profile.investmentExperience || "Investment profile"}
-            </div>
+      <div className="st-row" style={{ justifyContent: "flex-start", gap: 14 }}>
+        <img
+          alt={profile.name || "Profile"}
+          src={profile.profile_image || "/profile-avatar.svg"}
+          style={{
+            width: 56, height: 56, borderRadius: "50%",
+            objectFit: "cover", border: "2px solid var(--border-strong)", flexShrink: 0,
+          }}
+        />
+        <div>
+          <div className="st-t" style={{ fontSize: "1rem", fontFamily: "var(--f-display)" }}>
+            {profile.name || "Investor profile"}
           </div>
+          <div className="st-d">{profile.investmentExperience || "Investment profile"}</div>
         </div>
       </div>
 
       {/* Form */}
-      <div className="card">
-        <div className="card-h"><h3>Profile details</h3></div>
-        <div className="card-b">
-          <form onSubmit={e => e.preventDefault()}>
-            <ProfileFields emailReadOnly onChange={handleProfileChange} profile={profile} />
+      <form className="st-block" onSubmit={e => e.preventDefault()} style={{ marginTop: 6, borderTop: "1px solid var(--border-soft)", paddingTop: 16 }}>
+        <ProfileFields emailReadOnly onChange={handleProfileChange} profile={profile} />
 
-            {error && (
-              <div style={{
-                marginTop: 14, padding: "9px 13px", borderRadius: "var(--r-sm)",
-                background: "var(--down-dim)", border: "1px solid var(--down)",
-                fontSize: "0.8125rem", color: "var(--down)",
-              }}>
-                {error}
-              </div>
-            )}
-            {success && (
-              <div style={{
-                marginTop: 14, padding: "9px 13px", borderRadius: "var(--r-sm)",
-                background: "var(--up-dim)", border: "1px solid var(--up)",
-                fontSize: "0.8125rem", color: "var(--up)",
-              }}>
-                {success}
-              </div>
-            )}
+        {error && (
+          <div style={{
+            marginTop: 14, padding: "9px 13px", borderRadius: "var(--r-sm)",
+            background: "var(--down-dim)", border: "1px solid var(--down)",
+            fontSize: "0.8125rem", color: "var(--down)",
+          }}>
+            {error}
+          </div>
+        )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
-              <button type="button" className="iq-btn-ghost" onClick={() => router.push("/dashboard")}>
-                Cancel
-              </button>
-              <button type="button" className="iq-btn-primary" disabled={isSaving} onClick={handleSave}>
-                {isSaving ? "Saving…" : "Save changes"}
-              </button>
-            </div>
-          </form>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+          <button type="button" className="iq-btn-ghost" onClick={() => router.push(SETTINGS_ACCOUNT_HREF)}>
+            Cancel
+          </button>
+          <button type="button" className="iq-btn-primary" disabled={isSaving} onClick={handleSave}>
+            {isSaving ? "Saving…" : "Save changes"}
+          </button>
         </div>
-      </div>
+      </form>
     </>
   );
 }
