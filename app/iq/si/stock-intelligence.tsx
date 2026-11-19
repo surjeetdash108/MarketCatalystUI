@@ -4962,7 +4962,7 @@ export function StockIntelligenceScreen() {
                   >
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-text-hi, #ffffff)" }}>SAVE THIS TRADE?</div>
                     <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.55 }}>
-                      <b style={{ color: thBull ? "var(--up, #4ade80)" : "var(--down, #f87171)" }}>{thBull ? "Long" : "Short"}</b> {stock.t}, target <b style={{ color: "var(--up, #4ade80)" }}>{usd(tgtV)}</b>, invalidation <b style={{ color: "var(--down, #f87171)" }}>{usd(stopV)}</b> over <b style={{ color: "#4fb3ff" }}>{labHz}</b>. It will be saved in your Trade Tracker, and you will be taken back to the Trade Builder setup.
+                      <b style={{ color: thBull ? "var(--up, #4ade80)" : "var(--down, #f87171)" }}>{thBull ? "Long" : "Short"}</b> {stock.t}, target <b style={{ color: "var(--up, #4ade80)" }}>{usd(tgtV)}</b>, invalidation <b style={{ color: "var(--down, #f87171)" }}>{usd(stopV)}</b> over <b style={{ color: "#4fb3ff" }}>{labHz}</b>. This trade will be saved to your Trade Tracker.
                     </div>
                     <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
                       <button
