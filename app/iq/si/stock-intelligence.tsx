@@ -5130,8 +5130,6 @@ export function StockIntelligenceScreen() {
           const monRun = thesisRun(stock.t, savedThesis.dir, savedThesis.hz, monAdj, savedThesis.wO || undefined, siFacts);
           const monPx = monScenario === "break" ? (b2 ? savedThesis.stop * 0.985 : savedThesis.stop * 1.015) : stock.p;
           const monPriceBroken = b2 ? monPx <= savedThesis.stop : monPx >= savedThesis.stop;
-          // The weakest of the seven categories that have data.
-          const monWeakest = monRun.cats.filter((c: any) => c.ds.length > 0).sort((a: any, b: any) => a.score - b.score)[0];
           const monConfInvalid = monRun.conf != null && monRun.conf < 30;
           const monDelta = (monRun.conf != null && savedThesis.confAtSave != null) ? monRun.conf - savedThesis.confAtSave : 0;
           const monEntry = typeof savedThesis.entryPx === "number" && savedThesis.entryPx > 0 ? savedThesis.entryPx : null;
@@ -5333,10 +5331,6 @@ export function StockIntelligenceScreen() {
                         "Unavailable"
                       )}
                     </div>
-                  </div>
-                  <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>WEAKEST DRIVER</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: monWeakest ? sc(Math.round(monWeakest.score)) : "var(--si-text-hi, #e8eef4)" }}>{monWeakest ? `${monWeakest.k} ${Math.round(monWeakest.score)}` : "—"}</div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>ENTRY PRICE</div>
