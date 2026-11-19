@@ -2145,7 +2145,23 @@ export function StockIntelligenceScreen() {
   const mcConfidenceBand =
     mcConfidence == null ? null : mcConfidence >= 75 ? "High conviction" : mcConfidence >= 60 ? "Constructive" : mcConfidence >= 45 ? "Mixed" : "Weak";
 
-  type HeroStat = { k: string; v: string; col?: string; node?: React.ReactNode };
+  // How the number is worked out, with this stock's own scores and the weights actually applied.
+  const fmtNum = (n: number) => String(Math.round(n * 10) / 10);
+  const mcConfidenceInfo: [string, string][] = [
+    ["What it is:", "The seven signal scores combined into one 0–100 number (6-month, bullish view). Each score counts by its weight."],
+    ...overviewRun.cats.map((c): [string, string] => {
+      const name = String(SHORT[c.k] || c.label);
+      const label = name.charAt(0) + name.slice(1).toLowerCase();
+      return c.w > 0
+        ? [`${label} ${fmtNum(c.w)}%:`, `${Math.round(c.score)} × ${fmtNum(c.w)}% = ${fmtNum(c.pts)} pts`]
+        : [`${label}:`, "no data, left out"];
+    }),
+    ["Total:", `${overviewRun.conf != null ? fmtNum(overviewRun.conf) : "—"} pts, shown rounded.`],
+    ["Missing data:", "A signal with no data is left out and the other weights are scaled up to add to 100%."],
+    ["Bands:", "75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak."],
+  ];
+
+  type HeroStat = { k: string; v: string; col?: string; node?: React.ReactNode; info?: [string, string][] };
   const statsRow: HeroStat[] = [
     { k: "MARKET CAP", v: realMcap || "—", col: MCAP_BLUE },
     { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", col: MCAP_BLUE },
@@ -2166,8 +2182,9 @@ export function StockIntelligenceScreen() {
       k: "MC CONFIDENCE",
       v: mcConfidence == null ? "—" : `${mcConfidence} / 100`,
       col: mcConfidenceColor,
+      info: mcConfidenceInfo,
       node: (
-        <span title="The overall read across the signal scores, on a 0–100 scale: 75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak.">
+        <span>
           {mcConfidence ?? "—"}
           <span style={{ fontSize: 14, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
           {mcConfidenceBand && <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 700, marginLeft: 10 }}>{mcConfidenceBand}</span>}
@@ -2772,6 +2789,7 @@ export function StockIntelligenceScreen() {
                 >
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
                     {st.k}
+                    {st.info && <InfoTip lines={st.info} align="right" />}
                   </div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: st.col ?? "var(--si-text-hi, #e8eef4)", marginTop: 8, whiteSpace: "nowrap", lineHeight: 1.4 }}>
                     {st.node ?? st.v}
