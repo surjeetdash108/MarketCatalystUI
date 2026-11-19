@@ -17,7 +17,7 @@ import { useSI } from "../si/si-context";
 import type { CompanyDoc, IpoEventDoc } from "../types";
 import { StockLogo, DataState, cls, sign, fmtPrice } from "../utils";
 import {
-  COMP_INFO, DAY, KEYS, LABEL, LABEL_COLOR, MAX_PICKS, SCREENS, WEIGHTS, bearWhy, planOf,
+  COMP_INFO, DAY, KEYS, LABEL, LABEL_COLOR, MAX_PICKS, SCREENS, WEIGHTS, bearWhy, planOf, screenAction,
   type ActionKey, type Comp, type DisplayLabel, type ScreenRow, type Signal, type Trend,
 } from "../alpha-signals-model";
 import { POOL_SCREENER, type IComp, type IntradaySignal } from "../alpha-intraday";
@@ -271,6 +271,8 @@ export function AlphaSignals() {
   const rows = allRows.slice(0, topN);
   const curRow: ScreenRow | undefined = rows.find(r => r.ticker === sel) ?? rows[0];
   const curSig = curRow ? A.sigBy.get(curRow.ticker) : undefined;
+  // A Weakening stock shows its bearish-side action (the explainer's rules), others the bullish one.
+  const scrAct = curSig ? screenAction(curSig) : { key: "watch" as const, label: "Watch" as const, short: "Watch" as const, why: "", bear: false };
   // Live prices for the rows on screen — the same shared quotes Market Catalyst
   // shows; A.companies already carries every quote in that map.
   useLiveQuotes(rows.map(r => r.ticker));
@@ -529,7 +531,7 @@ export function AlphaSignals() {
                 <div className="alp-detail-b">
                   <div className="alp-meta">
                     <span className="k up">MarketCatalyst Emergence</span>
-                    <span className="k2">Action</span><Pill k={curSig.action.key} text={curSig.action.short} bear={false} />
+                    <span className="k2">Action</span><Pill k={scrAct.key} text={scrAct.short} bear={scrAct.bear} />
                     <span className="k2">Trend</span><SwingTag l={curSig.label} />
                     {curSig.c.week5ChangePct != null && (
                       <span className={`d mono ${cls(curSig.c.week5ChangePct)}`} title="5-session price change">{sign(curSig.c.week5ChangePct)} 5D</span>

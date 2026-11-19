@@ -7,13 +7,9 @@ const ctx = (companies: CompanyDoc[], extra: Partial<ScreenCtx> = {}): ScreenCtx
 const rows = (id: string, c: ScreenCtx) => SCREENS.find(s => s.id === id)!.rows(c);
 const stock = (o: Partial<CompanyDoc>): CompanyDoc => ({ ticker: "X", name: "X Corp", sector: "Technology", type: "CS", price: 50, pctChange: 1, avgVolume20: 2e6, marketCap: 5e9, ...o } as CompanyDoc);
 
-describe("decision 3: a strong score in a weakening trend is Watch, not Avoid", () => {
-  it("score 81 → Watch with the reason; a weak score stays Avoid", () => {
-    const c = stock({});
-    const hi = actionOf(c, 81, "Weakening", 100, 0);
-    assert.equal(hi.key, "watch");
-    assert.match(hi.why, /trend is deteriorating/);
-    assert.equal(actionOf(c, 40, "Weakening", 100, 0).key, "avoid");
+describe("decision 3 (superseded Nov 19): a weakening stock's screen action uses the bearish rules", () => {
+  it("covered by alpha-action-rules.spec.ts (screenAction → Watch for score > 45; no Avoid on the bearish side)", () => {
+    assert.equal(actionOf(stock({}), 81, "Weakening", 100, 0).key, "avoid"); // the published bullish rule
   });
 });
 

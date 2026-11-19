@@ -84,9 +84,9 @@ describe("bullish actions (§3.4)", () => {
     const c = co(o);
     return actionOf(c, score, trendOf(c), cov, NOW).key;
   };
-  it("Weakening → Avoid (Watch when the score is 75+); Losing momentum / Under pressure / Stable → Watch", () => {
+  it("Weakening → Avoid (bullish rules); Losing momentum / Under pressure / Stable → Watch", () => {
     assert.equal(act({ week5ChangePct: -4 }, 60), "avoid");
-    assert.equal(act({ week5ChangePct: -4 }, 90), "watch");
+    assert.equal(act({ week5ChangePct: -4 }, 90), "avoid");
     assert.equal(act({ week5ChangePct: 1, price: 85 }, 90), "watch");
     assert.equal(act({ week5ChangePct: 6, pctChange: -6 }, 90), "watch");
     assert.equal(act({ week5ChangePct: 0.5 }, 90), "watch");

@@ -410,12 +410,7 @@ const fmtDay = (iso: string) => {
 
 /** Bullish-side action (§3.4). */
 export function actionOf(c: CompanyDoc, score: number, trend: Trend, coverage: number, now: number): Action {
-  if (trend === "Weakening") {
-    // A strong score on a deteriorating chart is worth watching, not avoiding.
-    return score >= SWING_ACT
-      ? A("watch", `Score ${score} is strong, but the trend is deteriorating — wait for it to stabilise before acting.`)
-      : A("avoid", "Price action is deteriorating — wait for it to stabilise.");
-  }
+  if (trend === "Weakening") return A("avoid", "Price action is deteriorating — wait for it to stabilise.");
   if (trend === "Losing momentum") return A("watch", "Price is not above its 50-day average — wait for it to reclaim it.");
   if (trend === "Under pressure") return A("watch", "Down 5% or more today — wait for the close.");
   if (isRising(trend)) {
@@ -454,6 +449,16 @@ export function bearActionOf(c: CompanyDoc, score: number, trend: Trend, coverag
   if (num(c.marketCap) && c.marketCap < SMALL_CAP) return A("alert", "Market cap under $500M — squeeze and borrow risk.");
   if (isIlliquid(c)) return A("alert", "Thinly traded (under $5 or under $20M a day) — fills and stops are unreliable.");
   return A("act", "Downtrend is confirmed and the score is 30 or lower — the short setup is in play.");
+}
+
+/**
+ * The action a screen shows for a stock: a Weakening stock is on the bearish
+ * side, so it gets the bearish rules (Watch / Building / Setup active — never
+ * Avoid), as the Emergence explainer publishes; any other trend gets the
+ * bullish rules. `bear` marks which side's action it is (red pill).
+ */
+export function screenAction(s: Pick<Signal, "trend" | "action" | "bear">): Action & { bear: boolean } {
+  return s.trend === "Weakening" ? { ...s.bear, bear: true } : { ...s.action, bear: false };
 }
 
 /** Overlay tags shown beside the label (§3.4). */
