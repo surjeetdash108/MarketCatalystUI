@@ -2379,6 +2379,11 @@ export function StockIntelligenceScreen() {
         }
         /* ── Phone (≤760px): the stat columns stack under the name instead of crushing to one character a line ── */
         @media (max-width: 1300px) { .si-hero-stat > div:last-child { white-space: normal !important; overflow-wrap: anywhere; } }
+        /* Seven columns share the hero row now (market cap and P/E joined the stats), so on laptop widths the labels get a tighter setting and may wrap instead of running into the next column. */
+        @media (min-width: 761px) and (max-width: 1700px) {
+          .si-hero-stat { padding: 14px 10px !important; }
+          .si-hero-stat > div:first-child { white-space: normal !important; font-size: 12px !important; letter-spacing: 0.08em !important; line-height: 1.25; }
+        }
         @media (max-width: 760px) {
           .si-main { padding: 14px 12px 100px !important; }
           .si-hero { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
@@ -2731,10 +2736,10 @@ export function StockIntelligenceScreen() {
                 border: "1px solid var(--si-border, #1c2733)",
                 background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                 display: "grid",
-                gridTemplateColumns: "auto repeat(2, minmax(0, 1fr)) minmax(max-content, 1.3fr) minmax(max-content, 1.5fr)",
+                gridTemplateColumns: "auto repeat(4, minmax(0, 1fr)) minmax(max-content, 1.3fr) minmax(max-content, 1.5fr)",
               }}
             >
-              {/* Identity: logo, ticker, name and price, with market cap and P/E underneath */}
+              {/* Identity: logo, ticker, name and price */}
               <div
                 className="si-hero-id"
                 style={{ padding: "14px 20px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260, display: "flex", flexDirection: "column", justifyContent: "center", gap: 12 }}
@@ -2760,22 +2765,10 @@ export function StockIntelligenceScreen() {
                     </span>
                   </div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "center", gap: 28, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 10 }}>
-                  {statsRow.slice(0, 2).map((st) => (
-                    <div key={st.k} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
-                        {st.k}
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: st.col ?? "var(--si-text-hi, #e8eef4)", whiteSpace: "nowrap" }}>
-                        {st.node ?? st.v}
-                      </span>
-                    </div>
-                  ))}
-                </div>
               </div>
 
-              {/* Stats: revenue growth, EPS growth, 52-week range, MC confidence */}
-              {statsRow.slice(2).map((st, i, arr) => (
+              {/* Stats, one row: market cap, P/E, revenue growth, EPS growth, 52-week range, MC confidence */}
+              {statsRow.map((st, i, arr) => (
                 <div
                   key={st.k}
                   className="si-hero-stat"
