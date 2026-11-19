@@ -29,3 +29,9 @@ describe("Recent IPOs drop SPAC units and blank-check issuers", () => {
   });
 });
 
+describe("singular holder (Nov 19 Logic #4)", () => {
+  it("'1 more institutional holder'", () => {
+    const c = { ticker: "PBM", name: "PBM", sector: "Health Technology", type: "CS", price: 5, pctChange: 0, inst13FShares: 1_285_000, inst13FSharesChange: 285_000, inst13FHolders: 9, inst13FHoldersChange: 1, instAsOf: "Q3 2026" } as CompanyDoc;
+    assert.match(rows("inst", [c])[0].why, /^1 more institutional holder and /);
+  });
+});

@@ -925,7 +925,7 @@ export const SCREENS: Screen[] = [
           return { c, change, pct };
         })
         .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || (b.c.inst13FHoldersChange as number) - (a.c.inst13FHoldersChange as number))
-        .map(({ c, change, pct }) => rowOf(c, `${c.inst13FHoldersChange} more institutional holders and ${
+        .map(({ c, change, pct }) => rowOf(c, `${c.inst13FHoldersChange} more institutional ${c.inst13FHoldersChange === 1 ? "holder" : "holders"} and ${
           pct != null ? `${pct.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% more shares` : `${Math.round(change).toLocaleString("en-US")} more shares (almost none reported the prior quarter)`
         } vs. the prior quarter${c.instAsOf ? ` (${c.instAsOf})` : ""}.`));
     },
