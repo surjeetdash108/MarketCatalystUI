@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { firebaseAuth } from "../../firebase";
@@ -151,9 +151,9 @@ function ProfileRow({ label, value }: Readonly<{ label: string; value?: string |
 // ---- Layout: a section list on the left, the chosen section on the right, and a
 // search box that finds a setting by name. Every entry in SETTINGS_INDEX is a real
 // setting that exists below; add one here when a setting is added.
-type SectionKey = "account" | "appearance" | "notifications" | "plan" | "danger";
+export type SectionKey = "account" | "appearance" | "notifications" | "plan" | "danger";
 
-const SECTIONS: { key: SectionKey; label: string; sub: string }[] = [
+export const SECTIONS: { key: SectionKey; label: string; sub: string }[] = [
   { key: "account", label: "Account", sub: "Your profile and sign-in." },
   { key: "appearance", label: "Appearance", sub: "How MarketCatalyst looks." },
   { key: "notifications", label: "Notifications", sub: "Which alerts and emails we send you." },
@@ -174,7 +174,7 @@ const SETTINGS_INDEX: { section: SectionKey; title: string; desc: string; words:
 ];
 
 const ICON = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
-const SECTION_ICONS: Record<SectionKey, ReactNode> = {
+export const SECTION_ICONS: Record<SectionKey, ReactNode> = {
   account: <svg {...ICON}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>,
   appearance: <svg {...ICON}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>,
   notifications: <svg {...ICON}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" /></svg>,
@@ -182,7 +182,7 @@ const SECTION_ICONS: Record<SectionKey, ReactNode> = {
   danger: <svg {...ICON}><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>,
 };
 
-const SETTINGS_CSS = `
+export const SETTINGS_CSS = `
 .st-shell{border:1px solid var(--border);border-radius:var(--r-xl);background:var(--surface-1);overflow:hidden}
 .st-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border-soft)}
 .st-top h1{margin:0;font-size:1.05rem;font-weight:700;color:var(--text-hi)}
@@ -251,6 +251,13 @@ export function SettingsScreen() {
   const [showDelete, setShowDelete] = useState(false);
   const [section, setSection] = useState<SectionKey>("account");
   const [query, setQuery] = useState("");
+
+  // Coming back from a sub-page (Edit Profile) lands on the section it was opened from: /settings?section=plan.
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("section");
+    const match = SECTIONS.find(x => x.key === want);
+    if (match) setSection(match.key);
+  }, []);
 
   function scheduleRecap(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
