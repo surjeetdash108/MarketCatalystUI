@@ -1,5 +1,7 @@
 /** Mirrors backend's `ipos` collection (src/market-data/ipos.controller.ts) — GET /market-data/ipos. */
 export interface IpoEventDoc {
+  /** Vendor security type (Polygon: CS, ADRC, SP = SPAC units, UNIT, WARRANT…). */
+  securityType?: string | null;
   id: string;
   date: string;
   symbol: string | null;

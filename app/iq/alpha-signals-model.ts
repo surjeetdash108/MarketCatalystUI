@@ -763,7 +763,18 @@ const priced = (cs: CompanyDoc[]) => cs.filter(c => c.price != null);
 /** SIC 6770: blank-check companies (SPACs), typed as common stock by the vendor. */
 const SPAC_SIC = "6770";
 /** "Stock" screens list common stock and ADRs: no ETFs/ETNs, funds, preferreds, units or SPACs. */
-const stocks = (cs: CompanyDoc[]) => priced(cs).filter(c => isPickable(c) && String(c.sicCode ?? "") !== SPAC_SIC);
+/** Vendor types that are common equity: common stock, ADRs, ordinary shares. Unknown type passes. */
+const STOCK_TYPES = new Set(["CS", "ADRC", "OS"]);
+const isOtc = (c: CompanyDoc) => /\b(OTC|PNK|PINK)\b/i.test(c.exchange ?? "");
+const stocks = (cs: CompanyDoc[]) =>
+  priced(cs).filter(c =>
+    isPickable(c) && String(c.sicCode ?? "") !== SPAC_SIC && !isOtc(c)
+    // An allow-list: ETV (GLD), ETS (MSTY), SP (AOMD notes) slipped past the old deny-list.
+    && (!c.type || STOCK_TYPES.has(String(c.type).toUpperCase())));
+/** Blank-check issuers (SPACs) by name, for IPO rows that have no company doc yet. */
+const SPAC_NAME = /\bAcquisition\s+(Corp\.?|Corporation|Company|Co\.?|Inc\.?|Ltd\.?|Limited)(\s|$|,)/i;
+/** IPO security types that aren't common shares: SPAC units, units, warrants, rights. */
+const NON_STOCK_IPO = new Set(["SP", "UNIT", "WARRANT", "RIGHT"]);
 const sig = (ctx: ScreenCtx) => new Map(ctx.sigs.map(s => [s.c.ticker, s]));
 const compVal = (s: Signal | undefined, k: CompKey) => s?.comps.find(x => x.key === k)?.value ?? null;
 
@@ -933,6 +944,9 @@ export const SCREENS: Screen[] = [
       const cutoff = ctx.now - 730 * DAY;
       return ctx.ipos
         .filter(e => e.symbol && e.status === "history" && Date.parse(e.date) >= cutoff && Date.parse(e.date) <= ctx.now)
+        // Operating companies only: no SPAC units (BHAIU) or blank-check shares (TCXB).
+        .filter(e => !NON_STOCK_IPO.has(String(e.securityType ?? "").toUpperCase()) && !SPAC_NAME.test(e.name ?? "")
+          && String(byT.get(e.symbol as string)?.sicCode ?? "") !== SPAC_SIC)
         .sort((a, b) => b.date.localeCompare(a.date))
         .map(e => {
           const sym = e.symbol as string;
