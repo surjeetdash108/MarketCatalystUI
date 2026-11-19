@@ -867,11 +867,15 @@ export const SCREENS: Screen[] = [
   {
     id: "eps", label: "Earnings Acceleration", desc: "Strongest year-over-year earnings growth",
     src: "FMP · fundamentals-growth job",
-    rows: ({ companies }) =>
-      stocks(companies)
-        .filter(c => c.epsGrowthYoY != null && c.epsGrowthYoY >= 0.25)
-        .sort((a, b) => (b.epsGrowthYoY as number) - (a.epsGrowthYoY as number))
-        .map(c => rowOf(c, `Adjusted EPS ${signed((c.epsGrowthYoY as number) * 100, 0)} YoY${c.revenueGrowthYoY != null ? `, revenue ${signed(c.revenueGrowthYoY * 100, 0)} YoY` : ""}.`)),
+    rows: ({ companies }) => {
+      // EPS on the revenue figure's basis (FY reported, diluted) when stored;
+      // the adjusted series, labelled as such, until the doc is refreshed.
+      const eps = (c: CompanyDoc) => (num(c.epsDilutedGrowthYoY) ? c.epsDilutedGrowthYoY : c.epsGrowthYoY ?? null);
+      return stocks(companies)
+        .filter(c => { const e = eps(c); return e != null && e >= 0.25; })
+        .sort((a, b) => (eps(b) as number) - (eps(a) as number))
+        .map(c => rowOf(c, `${num(c.epsDilutedGrowthYoY) ? "EPS (diluted, FY)" : "Adjusted EPS"} ${signed((eps(c) as number) * 100, 0)} YoY${c.revenueGrowthYoY != null ? `, revenue ${signed(c.revenueGrowthYoY * 100, 0)} YoY` : ""}.`));
+    },
   },
   {
     id: "surp", label: "Fundamentals + Catalyst", desc: "Supportive fundamentals plus a catalyst",
