@@ -1148,7 +1148,9 @@ const STORY_COVERAGE_WEIGHT = 0.2;
  * for the latest few sessions if none of those picks covers them. Every other
  * unusual move is then pinned too (up to MAX_CHART_MARKERS in all), and the
  * five biggest of the pins are flagged `card`: the chart marks all the major
- * incidents, the cards under it show the extreme ones. Each is
+ * incidents, the cards under it show the extreme ones. Every earnings report in
+ * the window is also pinned and carded, on the session that reacted to it,
+ * whether or not it was a big move. Each is
  * labelled from real data: an FMP earnings report within 3 days (with its
  * actual beat/miss), else a headline that explains the move (pickMoveHeadline),
  * else just the move itself. Nothing is invented — no bars means no events.
@@ -1235,6 +1237,31 @@ export function getSixMonthMajorEvents(
   }
   const cardNums = new Set(pickExtremes(selected).map((m) => m.idx));
 
+  // Every earnings report in the window is a major catalyst whatever the stock did
+  // that day, so each one is pinned and gets a card, on top of the five extremes.
+  // The pin sits on the reaction session: the report day (before-open report) or the
+  // next session (after-close), whichever moved more. A pin already in that 0-3 day
+  // stretch is labelled as the earnings move below, so it is kept and promoted.
+  const firstBar = bars[0].t;
+  const lastBar = bars[bars.length - 1].t;
+  for (const r of reports ?? []) {
+    if (r.epsActual == null) continue;
+    const reportDay = Date.parse(`${r.date}T00:00:00Z`);
+    if (!Number.isFinite(reportDay) || reportDay < firstBar - DAY_MS || reportDay > lastBar) continue;
+    const dayOf = (m: MoveSession) => Date.parse(`${new Date(m.t).toISOString().slice(0, 10)}T00:00:00Z`);
+    const existing = selected.find((m) => dayOf(m) - reportDay >= 0 && dayOf(m) - reportDay <= 3 * DAY_MS);
+    if (existing) {
+      cardNums.add(existing.idx);
+      continue;
+    }
+    const reaction = moves.filter((m) => dayOf(m) >= reportDay).slice(0, 2).sort((a, b) => b.absRet - a.absRet || a.idx - b.idx)[0];
+    // A report with no session after it yet (reported after the last close) has nothing to pin.
+    if (!reaction || dayOf(reaction) - reportDay > 3 * DAY_MS) continue;
+    selected.push(reaction);
+    cardNums.add(reaction.idx);
+  }
+  selected.sort((a, b) => a.idx - b.idx);
+
   return selected.map((m, i) => {
     const dateStr = fmtMarketDate(m.t, { month: "short", day: "2-digit" });
     const fr = +(m.idx / (bars.length - 1)).toFixed(2);
@@ -1249,6 +1276,7 @@ export function getSixMonthMajorEvents(
     // moves (COST Sep 25) and claimed moves made before a report (NEE Jul 21).
     const moveDay = Date.parse(`${new Date(m.t).toISOString().slice(0, 10)}T00:00:00Z`);
     const rep = (reports ?? []).find((r) => {
+      if (r.epsActual == null) return false; // a quarter with no result yet is not a report day
       const d = Date.parse(`${r.date}T00:00:00Z`);
       return Number.isFinite(d) && moveDay - d >= 0 && moveDay - d <= 3 * 86_400_000;
     });

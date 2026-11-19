@@ -331,6 +331,38 @@ describe("the Why It Moved chart as a whole", () => {
     assert.ok(cards.every((e) => e.mv < -7.9), "the −5% day is a pin but not an extreme");
     assert.equal(events.find((e) => !e.card)?.num, 6, "pins keep their chart number, so card numbers can skip");
   });
+
+  it("every earnings report in the window is pinned with a card, even on a quiet day", () => {
+    const old = { 5: -0.08, 15: -0.08, 25: -0.08, 35: -0.08, 45: -0.08 };
+    const bars = series(60, { ...old, 21: 0.012 });
+    const reports = [{ date: iso(20), fiscalYear: 2026, fiscalPeriod: "Q2", epsActual: 1.2, epsEstimate: 1.1 }];
+    const events = getSixMonthMajorEvents("NVDA", stock, bars, [], [], reports);
+    const er = events.filter((e) => e.category === "Earnings");
+    assert.equal(er.length, 1);
+    assert.equal(er[0].iso, iso(21), "pinned on the session that reacted (after-close report)");
+    assert.equal(er[0].card, true, "so the chart draws it");
+    assert.match(er[0].label, /Q2 2026 earnings · EPS beat/);
+    assert.equal(events.filter((e) => e.card).length, 6, "the five extremes plus the report");
+    assert.equal(events.length, 6);
+  });
+
+  it("a report that already coincides with a big move is not pinned twice", () => {
+    const old = { 5: -0.08, 15: -0.08, 25: -0.08, 35: -0.08, 45: -0.08 };
+    const reports = [{ date: iso(25), fiscalYear: 2026, fiscalPeriod: "Q2", epsActual: 1.2, epsEstimate: 1.3 }];
+    const events = getSixMonthMajorEvents("NVDA", stock, series(60, old), [], [], reports);
+    assert.equal(events.length, 5);
+    assert.equal(events.filter((e) => e.category === "Earnings").length, 1);
+    assert.match(events.find((e) => e.category === "Earnings")!.label, /EPS miss/);
+  });
+
+  it("reports outside the window, or with no actual yet, get no pin", () => {
+    const reports = [
+      { date: "2026-01-10", fiscalYear: 2025, fiscalPeriod: "Q4", epsActual: 1, epsEstimate: 1 },
+      { date: iso(20), fiscalYear: 2026, fiscalPeriod: "Q3", epsActual: null, epsEstimate: 1 },
+    ];
+    const events = getSixMonthMajorEvents("NVDA", stock, series(60, {}), [], [], reports);
+    assert.equal(events.filter((e) => e.category === "Earnings").length, 0);
+  });
 });
 
 describe("isSolicitation", () => {
