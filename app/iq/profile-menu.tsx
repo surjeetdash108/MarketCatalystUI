@@ -128,7 +128,7 @@ export function ProfileMenu() {
             </button>
           )}
           <button className="pd-item" onClick={() => go("/requests")}>
-            <span className="pd-icon">💡</span> Feature Requests
+            <span className="pd-icon">💡</span> Request a new feature
           </button>
           <div className="pd-divider" />
           <button className="pd-item danger" onClick={() => { setOpen(false); void signOutToLogin(); }}>
