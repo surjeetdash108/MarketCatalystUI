@@ -2,8 +2,9 @@
 
 import type { ChartEarnings } from "./chart-earnings";
 export type { ChartEarnings };
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { backendUrl } from "./backend";
+import { resolveLogo, peekLogoObjectUrl } from "./logo-store";
 import { useAppSelector } from "../store/hooks";
 
 // ---- TEMPORARY data-source attribution tag ----
@@ -308,19 +309,28 @@ export function useTickerLogo(sym: string) {
   const isKnownMissing = knownMissingLogos.has(s);
   const isKnownLoaded = knownLoadedLogos.has(s);
 
+  // Backend /live/logo checks Polygon -> FMP -> Parqet with server-side caching
+  // and returns 204 No Content when unavailable (preventing browser 404 network errors).
+  const logoUrl = backendUrl(`/live/logo?ticker=${encodeURIComponent(s)}&v=${LOGO_VERSION}`);
+
   const [loaded, setLoaded] = useState(isKnownLoaded);
   const [failed, setFailed] = useState(isKnownMissing);
   const [prevSym, setPrevSym] = useState(s);
+  // The image bytes come from our own browser-side album (logo-store.ts), not
+  // the HTTP cache: Hosting's `Vary: cookie` made the HTTP cache revalidate
+  // (a 304 per logo) whenever a cookie changed. `blobSrc` is that stored copy;
+  // `direct` is the fallback when the album is unavailable (plain <img src>).
+  const [blobSrc, setBlobSrc] = useState<string | undefined>(() => peekLogoObjectUrl(logoUrl));
+  const [direct, setDirect] = useState(false);
+  const [node, setNode] = useState<HTMLImageElement | null>(null);
 
   if (prevSym !== s) {
     setPrevSym(s);
     setLoaded(knownLoadedLogos.has(s));
     setFailed(knownMissingLogos.has(s));
+    setBlobSrc(peekLogoObjectUrl(logoUrl));
+    setDirect(false);
   }
-
-  // Backend /live/logo checks Polygon -> FMP -> Parqet with server-side caching
-  // and returns 204 No Content when unavailable (preventing browser 404 network errors).
-  const src = isKnownMissing ? "" : backendUrl(`/live/logo?ticker=${encodeURIComponent(s)}&v=${LOGO_VERSION}`);
 
   // A 204 ("no logo") fires the <img>'s onError, not onLoad, so onError is the
   // normal path for a logo-less ticker and must be remembered across reloads
@@ -337,9 +347,50 @@ export function useTickerLogo(sym: string) {
     setFailed(false);
   }, [s]);
 
+  // Look the logo up in the album (or fetch + store it) once the <img> is near
+  // the viewport, which keeps the old `loading="lazy"` behaviour: off-screen
+  // rows don't trigger a lookup or a request.
+  useEffect(() => {
+    if (isKnownMissing || blobSrc || direct || !node) return;
+    let cancelled = false;
+    const start = () => {
+      void resolveLogo(logoUrl, LOGO_VERSION).then((r) => {
+        if (cancelled) return;
+        if (r.kind === "blob") setBlobSrc(r.url);
+        else if (r.kind === "missing") handleFailure();
+        else setDirect(true);
+      });
+    };
+    if (typeof IntersectionObserver === "undefined") {
+      start();
+      return () => {
+        cancelled = true;
+      };
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          start();
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    io.observe(node);
+    return () => {
+      cancelled = true;
+      io.disconnect();
+    };
+  }, [isKnownMissing, blobSrc, direct, node, logoUrl, handleFailure]);
+
+  const src = isKnownMissing ? undefined : (blobSrc ?? (direct ? logoUrl : undefined));
+
   const ref = useCallback(
     (el: HTMLImageElement | null) => {
-      if (!el || !el.complete) return;
+      setNode(el);
+      // No src yet (still looking the logo up) reports complete=true with
+      // naturalWidth 0, which must not be mistaken for "no logo".
+      if (!el || !el.complete || !el.getAttribute("src")) return;
       if (el.naturalWidth > 0) {
         handleSuccess();
       } else {
