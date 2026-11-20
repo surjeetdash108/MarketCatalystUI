@@ -256,11 +256,56 @@ const cs = (n: number) => Math.round(n * CHART_SCALE);
 // Session-level caches so repeated renders across screens resolve synchronously in 0ms
 /** Bumped when the backend changes which logo it serves (browsers cache logos for 7 days): v2 = no white-on-transparent logos. */
 const LOGO_VERSION = "2";
-const knownMissingLogos = new Set<string>();
 const knownLoadedLogos = new Set<string>();
+
+/**
+ * Tickers the backend has no logo for (it answers 204). Remembered across page
+ * loads in localStorage for a day, so a reload doesn't send one request per
+ * logo-less ticker just to be told "none" again. A day matches the backend's
+ * 1-hour "no logo" answer closely enough, and a newly covered ticker shows up
+ * the next day (or immediately when LOGO_VERSION is bumped, which changes the key).
+ */
+const MISSING_LOGOS_KEY = `mc.logo.missing.v${LOGO_VERSION}`;
+const MISSING_LOGOS_TTL_MS = 24 * 60 * 60 * 1000;
+const knownMissingLogos = new Set<string>();
+let missingLogosRestored = false;
+let missingLogosSaveTimer: ReturnType<typeof setTimeout> | undefined;
+
+function restoreMissingLogos() {
+  if (missingLogosRestored || typeof window === "undefined") return;
+  missingLogosRestored = true;
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(MISSING_LOGOS_KEY) || "{}") as Record<string, number>;
+    const now = Date.now();
+    for (const [sym, at] of Object.entries(saved)) {
+      if (typeof at === "number" && now - at < MISSING_LOGOS_TTL_MS) knownMissingLogos.add(sym);
+    }
+  } catch {
+    // Private window / blocked storage / bad JSON: fall back to per-session memory.
+  }
+}
+
+function rememberMissingLogo(sym: string) {
+  knownMissingLogos.add(sym);
+  if (typeof window === "undefined") return;
+  // Batched: a screen of 50 logo-less rows fails 50 times in one tick.
+  clearTimeout(missingLogosSaveTimer);
+  missingLogosSaveTimer = setTimeout(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(MISSING_LOGOS_KEY) || "{}") as Record<string, number>;
+      const now = Date.now();
+      for (const [s, at] of Object.entries(saved)) if (now - at >= MISSING_LOGOS_TTL_MS) delete saved[s];
+      for (const s of knownMissingLogos) if (!(s in saved)) saved[s] = now;
+      window.localStorage.setItem(MISSING_LOGOS_KEY, JSON.stringify(saved));
+    } catch {
+      // Storage unavailable or full: the in-memory set still works for this session.
+    }
+  }, 500);
+}
 
 export function useTickerLogo(sym: string) {
   const s = (sym || "").toUpperCase().trim();
+  restoreMissingLogos();
   const isKnownMissing = knownMissingLogos.has(s);
   const isKnownLoaded = knownLoadedLogos.has(s);
 
@@ -278,8 +323,11 @@ export function useTickerLogo(sym: string) {
   // and returns 204 No Content when unavailable (preventing browser 404 network errors).
   const src = isKnownMissing ? "" : backendUrl(`/live/logo?ticker=${encodeURIComponent(s)}&v=${LOGO_VERSION}`);
 
-  const handleFailure = useCallback(() => {
-    knownMissingLogos.add(s);
+  // `persist` only for a clean "no logo" answer (204: loaded, zero width). A
+  // network error is not evidence the ticker has no logo, so it stays session-only.
+  const handleFailure = useCallback((persist = true) => {
+    if (persist) rememberMissingLogo(s);
+    else knownMissingLogos.add(s);
     setFailed(true);
   }, [s]);
 
@@ -318,7 +366,7 @@ export function useTickerLogo(sym: string) {
           handleFailure();
         }
       },
-      onError: handleFailure,
+      onError: () => handleFailure(false),
     } as const,
   };
 }
