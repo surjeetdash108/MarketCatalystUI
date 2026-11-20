@@ -24,6 +24,23 @@ function formatIpoPrice(low: number | null, high: number | null): string {
   return `$${(low ?? high)!.toFixed(2)}`;
 }
 
+/** Calendar price cell. The feed keeps the filed range after an IPO prices, so
+ *  a deal that priced above or below it (ANT: $83 vs $70–78) still read as the
+ *  range. The backend stores the range midpoint as the offer until a final price
+ *  exists, so an offer that differs from the midpoint is the real priced figure:
+ *  show it, with the filed range beside it. */
+function IpoPriceCell({ low, high, offer }: { low: number | null; high: number | null; offer: number | null }) {
+  const range = formatIpoPrice(low, high);
+  if (offer == null || offer <= 0 || low == null || high == null || low === high) return <>{range}</>;
+  if (Math.abs(offer - (low + high) / 2) <= 0.005) return <>{range}</>;
+  return (
+    <>
+      <b style={{ color: "var(--text-hi)" }}>${offer.toFixed(2)}</b>
+      <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>range {range}</div>
+    </>
+  );
+}
+
 interface IpoRow {
   /** Stable unique doc id — used as the React key. `s` (symbol) is NOT unique:
    *  every pre-symbol IPO carries "—", so keying on it collides. */
@@ -512,7 +529,7 @@ export function IPOsScreen() {
                     </td>
                     <td>{e.date}</td>
                     <td>{e.exchange || "—"}</td>
-                    <td className="num">{formatIpoPrice(e.priceLow, e.priceHigh)}</td>
+                    <td className="num"><IpoPriceCell low={e.priceLow} high={e.priceHigh} offer={e.offerPrice} /></td>
                     <td>
                       <span className={`pill ${e.status === "priced" || e.status === "history" ? "up" : e.status === "withdrawn" ? "down" : "amc"}`}>
                         {ipoStatusLabel(e.status)}
