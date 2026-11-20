@@ -8565,6 +8565,17 @@ table.tbl tr:hover td {
   padding: 0;
 }
 
+/* The top bar is z-index 100 (so its profile/notification dropdowns clear the
+   search row), which painted over the top ~98px of this drawer and hid its
+   header and ✕ close button. Lift the drawer, and the scrim that precedes it,
+   above the top bar; the nav rail (200) stays on top as before. */
+.stock-side-drawer {
+  z-index: 101;
+}
+.scrim:has(+ .stock-side-drawer) {
+  z-index: 100;
+}
+
 /* Wide variant of the centred .drawer popover. Used by the dashboard's Most
    Searched cards, which render the entire stock detail screen inline rather
    than linking out to it — the default 700px is far too narrow for that
