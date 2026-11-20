@@ -5328,7 +5328,7 @@ export function StockIntelligenceScreen() {
                       </div>
                     )}
                     {monSinceEntry != null && (
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: (b2 ? monSinceEntry >= 0 : monSinceEntry <= 0) ? UP : DN }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: monSinceEntry >= 0 ? UP : DN }}>
                         {pct(monSinceEntry)} since entry
                       </div>
                     )}
