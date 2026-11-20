@@ -18,7 +18,11 @@ describe("Why it moved chart", () => {
   it("pins are numbered, only the five biggest moves get one", () => {
     assert.match(chart, /events\.filter\(\(ev\) => ev\.card !== false\)\.map\(\(ev, idx\) =>/);
     assert.match(chart, /num: idx \+ 1,/);
-    assert.match(chart, /\{ev\.num\}\s*<\/text>/);
+    // Earnings pins read "E" so they stand out; every other pin shows its number.
+    assert.match(chart, /\{ev\.category === "Earnings" \? "E" : ev\.num\}\s*<\/text>/);
+  });
+  it("an earnings pin's dialog is headed E, not its number, to match the pin", () => {
+    assert.match(chart, /activeHover\.category === "Earnings" \? "E" : `#\$\{activeHover\.num\}`/);
   });
   it("hover opens the dialog; a click pins it; Escape and a click on the chart close it", () => {
     assert.match(chart, /onMouseEnter=\{\(\) => enterPin\(ev\.num\)\}/);
