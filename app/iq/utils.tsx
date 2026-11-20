@@ -260,13 +260,12 @@ const knownLoadedLogos = new Set<string>();
 
 /**
  * Tickers the backend has no logo for (it answers 204). Remembered across page
- * loads in localStorage for a day, so a reload doesn't send one request per
- * logo-less ticker just to be told "none" again. A day matches the backend's
- * 1-hour "no logo" answer closely enough, and a newly covered ticker shows up
- * the next day (or immediately when LOGO_VERSION is bumped, which changes the key).
+ * loads in localStorage for 12 hours, so a reload doesn't send one request per
+ * logo-less ticker just to be told "none" again. A newly covered ticker shows up
+ * within 12 hours (or immediately when LOGO_VERSION is bumped, which changes the key).
  */
 const MISSING_LOGOS_KEY = `mc.logo.missing.v${LOGO_VERSION}`;
-const MISSING_LOGOS_TTL_MS = 24 * 60 * 60 * 1000;
+const MISSING_LOGOS_TTL_MS = 12 * 60 * 60 * 1000;
 const knownMissingLogos = new Set<string>();
 let missingLogosRestored = false;
 let missingLogosSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -323,11 +322,12 @@ export function useTickerLogo(sym: string) {
   // and returns 204 No Content when unavailable (preventing browser 404 network errors).
   const src = isKnownMissing ? "" : backendUrl(`/live/logo?ticker=${encodeURIComponent(s)}&v=${LOGO_VERSION}`);
 
-  // `persist` only for a clean "no logo" answer (204: loaded, zero width). A
-  // network error is not evidence the ticker has no logo, so it stays session-only.
-  const handleFailure = useCallback((persist = true) => {
-    if (persist) rememberMissingLogo(s);
-    else knownMissingLogos.add(s);
+  // A 204 ("no logo") fires the <img>'s onError, not onLoad, so onError is the
+  // normal path for a logo-less ticker and must be remembered across reloads
+  // (the first version skipped it and every reload re-asked ~340ms per ticker).
+  // A real network error is remembered too, but only for MISSING_LOGOS_TTL_MS.
+  const handleFailure = useCallback(() => {
+    rememberMissingLogo(s);
     setFailed(true);
   }, [s]);
 
@@ -366,7 +366,7 @@ export function useTickerLogo(sym: string) {
           handleFailure();
         }
       },
-      onError: () => handleFailure(false),
+      onError: handleFailure,
     } as const,
   };
 }
