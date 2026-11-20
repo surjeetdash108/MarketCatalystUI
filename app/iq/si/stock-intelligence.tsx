@@ -453,7 +453,7 @@ function SixMonthAreaChart({
                 <circle cx={ev.x} cy={ev.y} r={on ? 17 : 11} fill={on ? "rgba(169,198,227,0.55)" : "rgba(34,197,94,0.18)"} stroke={on ? "#ffffff" : "var(--up, #22c55e)"} strokeWidth="1" filter={on ? "url(#siPinGlow)" : undefined} />
                 <circle cx={ev.x} cy={ev.y} r="9" fill={on ? "var(--si-accent, #5980a6)" : "var(--si-card-solid, #080b10)"} stroke={on ? "#ffffff" : "var(--si-accent-soft, #7fa8d0)"} strokeWidth="2" filter={on ? "url(#siPinGlow)" : undefined} />
                 <text x={ev.x} y={ev.y + 3.5} textAnchor="middle" fill={on ? "#ffffff" : "var(--si-accent-soft, #a9c6e3)"} fontSize="10" fontWeight="800" fontFamily="'JetBrains Mono', monospace" style={{ pointerEvents: "none" }}>
-                  {ev.num}
+                  {ev.category === "Earnings" ? "E" : ev.num}
                 </text>
               </g>
             );
@@ -464,7 +464,7 @@ function SixMonthAreaChart({
         {activeHover && dialogPos && (
           <div
             role="dialog"
-            aria-label={`Catalyst #${activeHover.num}`}
+            aria-label={activeHover.category === "Earnings" ? "Earnings catalyst" : `Catalyst #${activeHover.num}`}
             onMouseEnter={() => enterPin(activeHover.num)}
             onMouseLeave={leavePin}
             onClick={(e) => e.stopPropagation()}
@@ -499,7 +499,7 @@ function SixMonthAreaChart({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", whiteSpace: "nowrap" }}>
-                  #{activeHover.num} · {activeHover.date}
+                  {activeHover.category === "Earnings" ? "E" : `#${activeHover.num}`} · {activeHover.date}
                 </span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 5px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "var(--si-text-hi, #ffffff)", borderRadius: 2 }}>
                   {activeHover.category.toUpperCase()}
@@ -5328,7 +5328,7 @@ export function StockIntelligenceScreen() {
                       </div>
                     )}
                     {monSinceEntry != null && (
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: (b2 ? monSinceEntry >= 0 : monSinceEntry <= 0) ? UP : DN }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: monSinceEntry >= 0 ? UP : DN }}>
                         {pct(monSinceEntry)} since entry
                       </div>
                     )}

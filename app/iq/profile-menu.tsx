@@ -20,8 +20,9 @@ export async function signOutToLogin() {
  * The profile avatar and its menu (My Profile, Settings, … Logout). One
  * component for every product — Market Catalyst's topbar and the Stock
  * Intelligence, Money Flow and Strategy Lab headers — so the menu and sign-out
- * behave the same everywhere. The menu is portaled to document.body and opens
- * under the avatar, whatever the height of the header it sits in.
+ * behave the same everywhere. The menu is portaled to the app's themed .iq-root
+ * wrapper (document.body when there is none) and opens under the avatar,
+ * whatever the height of the header it sits in.
  */
 export function ProfileMenu() {
   const router = useRouter();
@@ -73,6 +74,11 @@ export function ProfileMenu() {
   }, [open]);
 
   const go = (href: string) => { setOpen(false); router.push(href); };
+
+  // The theme's colours (light or dark) are defined on the app's .iq-root wrapper, so the menu has
+  // to open inside it. Portaled to document.body it sat outside the theme and was always dark.
+  const menuHost = (): HTMLElement =>
+    (wrapRef.current?.closest(".iq-root") as HTMLElement | null) ?? document.body;
 
   return (
     <div className="profile-dropdown-wrap" ref={wrapRef}>
@@ -135,7 +141,7 @@ export function ProfileMenu() {
             <span className="pd-icon">↩</span> Logout
           </button>
         </div>,
-        document.body,
+        menuHost(),
       )}
     </div>
   );
