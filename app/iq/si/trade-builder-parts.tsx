@@ -3,22 +3,22 @@
 import { useEffect } from "react";
 import { CATS_T, DN, STEEL, UP, thesisWeights } from "./data";
 
-/** The one-sentence explanations under the three Trade Builder steps, and what happens after a run. */
+/** The one-line explanations under the three Trade Builder steps, and what happens after a run. */
 const STEP_HELP: [string, string, string][] = [
   [
     "01",
     "Direction",
-    "Bullish builds a long trade, bearish a short. A bearish run flips every driver score, so a high number always means the evidence backs the side you picked.",
+    "Bullish is a long trade, bearish a short; a bearish run flips every driver score.",
   ],
   [
     "02",
     "Horizon",
-    "How long you expect to hold, from 1 to 9 months. The horizon decides which drivers matter most: short trades lean on price action and catalysts, long trades on the business and its valuation.",
+    "How long you expect to hold, 1 to 9 months; it decides which drivers matter most.",
   ],
   [
     "03",
     "Mode",
-    "Normal uses the engine's own weights, fixed. Advanced lets you drag each weight and set your own price target, so you can test your view against the engine's.",
+    "Normal keeps the engine's weights; Advanced lets you edit them and set your own target.",
   ],
 ];
 
@@ -33,15 +33,14 @@ export function TradeBuilderGuide({ done }: { done: boolean[] }) {
   const current = done.findIndex((d) => !d);
   return (
     <div style={{ maxWidth: 780, width: "100%", margin: "0 auto 40px", display: "flex", flexDirection: "column", gap: 22 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {STEP_HELP.map(([num, title, body], i) => (
-          <div key={num} style={{ padding: "4px 2px", opacity: done[i] ? 0.4 : i === current ? 1 : 0.75, transition: "opacity 220ms ease" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <div key={num} style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: 14, rowGap: 2, padding: "2px 2px", opacity: done[i] ? 0.4 : i === current ? 1 : 0.75, transition: "opacity 220ms ease" }}>
+            <span style={{ display: "inline-flex", alignItems: "baseline", gap: 10, minWidth: 120 }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-accent, #5980a6)" }}>{num}</span>
               <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-text-hi, #ffffff)" }}>{title.toUpperCase()}</span>
-            </div>
-            <div style={{ height: 1, background: "var(--si-border, #1c2733)", margin: "8px 0" }} />
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-hi, #ffffff)", opacity: 0.85, lineHeight: 1.55 }}>{body}</div>
+            </span>
+            <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-hi, #ffffff)", opacity: 0.85, lineHeight: 1.55 }}>{body}</span>
           </div>
         ))}
       </div>
