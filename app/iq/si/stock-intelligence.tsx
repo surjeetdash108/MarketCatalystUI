@@ -3150,9 +3150,6 @@ export function StockIntelligenceScreen() {
                         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: scItem.color, lineHeight: 1 }}>
                           {scItem.val}
                         </span>
-                        <span style={{ height: 3, background: "var(--si-card-tert, #1c2733)", display: "block" }}>
-                          <span style={{ display: "block", height: 3, width: scItem.widthPct, background: scItem.color }} />
-                        </span>
                       </button>
                     );
                   })}
@@ -3162,11 +3159,6 @@ export function StockIntelligenceScreen() {
                       <span style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6, lineHeight: 1 }}>
                         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 40, fontWeight: 700, color: confluenceColor }}>{confluenceCount}</span>
                         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>/ 7</span>
-                      </span>
-                      <span style={{ display: "flex", gap: 3, alignSelf: "stretch" }}>
-                        {[0, 1, 2, 3, 4, 5, 6].map((n) => (
-                          <span key={n} style={{ flex: 1, height: 3, background: n < confluenceCount ? confluenceColor : "var(--si-card-tert, #1c2733)" }} />
-                        ))}
                       </span>
                     </div>
                     <button
