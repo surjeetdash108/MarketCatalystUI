@@ -72,12 +72,28 @@ export function canAccessModule(module: AppModule, ent: Entitlements | null | un
 /** Toggle width: 530px for MC + SI + MF + SL, 650px with Alpha Signals. */
 const WIDTH = 530;
 const WIDTH_AS = 650;
-/** From this viewport width the toggle is pinned to one spot on every module. */
-const PIN_MIN = 1024;
+/**
+ * The toggle is pinned to the exact centre of the window only when there is room on both sides of
+ * it: the logo, HOME and a search icon on the left (about 430px) and the action buttons on the right
+ * (about 430px with "Watching" and the profile menu). Narrower than that, a centred toggle runs over
+ * HOME, the search box and the buttons, so it stays in the header's own flow instead, where the
+ * buttons wrap to a second row and the toggle takes the free space and scrolls if it still doesn't fit.
+ */
+const PIN_SIDES = 860;
 
 const pinCss = (width: number) => `
+.mod-switch-pin { min-width: 0; max-width: 100%; }
 .mod-switch-pin [role="group"]::-webkit-scrollbar{display:none}
-@media (min-width: ${PIN_MIN}px) {
+/* Not pinned: the search box gives way to a search icon before it crowds the toggle. */
+@media (max-width: ${width + PIN_SIDES - 1}px) {
+  div.si-nav-search.si-nav-search { flex: 0 1 220px !important; min-width: 40px !important; }
+}
+.si-nav-search > div:first-child { overflow: hidden; box-sizing: border-box; transition: width 120ms ease; cursor: text; }
+.si-nav-search input { min-width: 0; }
+.si-nav-search:hover > div:first-child,
+.si-nav-search:focus-within > div:first-child { width: 220px; position: relative; z-index: 960; }
+.si-nav-search:focus-within > div:nth-child(2) { right: auto !important; width: 220px; z-index: 961 !important; }
+@media (min-width: ${width + PIN_SIDES}px) {
   .si-main-scroll .mod-switch-pin,
   .sl-main-scroll .mod-switch-pin,
   .mf-main-scroll .mod-switch-pin,
@@ -93,11 +109,6 @@ const pinCss = (width: number) => `
      the toggle, and opens to its full 220px over the toggle while hovered or focused.
      The doubled class beats the inline-style rule that lives later in the document. */
   div.si-nav-search.si-nav-search { width: clamp(40px, calc(50vw - ${width / 2 + 12 + 378}px), 220px) !important; }
-  .si-nav-search > div:first-child { overflow: hidden; box-sizing: border-box; transition: width 120ms ease; cursor: text; }
-  .si-nav-search input { min-width: 0; }
-  .si-nav-search:hover > div:first-child,
-  .si-nav-search:focus-within > div:first-child { width: 220px; position: relative; z-index: 960; }
-  .si-nav-search:focus-within > div:nth-child(2) { right: auto !important; width: 220px; z-index: 961 !important; }
 }
 .app .subbar .mod-switch-pin {
   position: static !important;
@@ -181,7 +192,8 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
           style={{
             position: "relative",
             width,
-            maxWidth: "calc(100vw - 20px)",
+            maxWidth: "min(100%, calc(100vw - 20px))",
+            minWidth: 0,
             height: 34,
             borderRadius: 99,
             border: "1px solid var(--si-border-sec, #2a3a4a)",
