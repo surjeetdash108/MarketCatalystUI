@@ -440,7 +440,7 @@ export function thesisWeights(dir: "Bull" | "Bear", hz: string) {
         ? { BUS: 30, EARN: 20, TECH: 10, CAT: 5, VAL: 20, POS: 5, MAC: 10 }
         : hz === "3M"
           ? { BUS: 20, EARN: 20, TECH: 25, CAT: 15, VAL: 5, POS: 5, MAC: 10 }
-          : { BUS: 25, EARN: 20, TECH: 15, CAT: 10, VAL: 15, POS: 5, MAC: 10 };
+          : { BUS: 20, EARN: 20, TECH: 20, CAT: 10, VAL: 15, POS: 5, MAC: 10 };
   w = { ...w };
   if (dir === "Bear") {
     w.VAL += 5;

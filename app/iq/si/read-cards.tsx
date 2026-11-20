@@ -42,7 +42,7 @@ export function highlightSignedPercents(text: string | null | undefined): ReactN
 }
 
 /** Small "i" button that shows how a card is calculated on hover, focus or tap. */
-export function InfoTip({ lines }: { lines: [string, string][] }) {
+export function InfoTip({ lines, align = "left" }: { lines: [string, string][]; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
   return (
     <span
@@ -84,9 +84,10 @@ export function InfoTip({ lines }: { lines: [string, string][] }) {
           style={{
             position: "absolute",
             top: 26,
-            left: -8,
+            ...(align === "right" ? { right: -8 } : { left: -8 }),
             zIndex: 20,
             width: 300,
+            whiteSpace: "normal",
             padding: "12px 14px",
             border: "1px solid var(--si-border-sec, #2a3a4a)",
             background: "var(--si-card, #0c1118)",
