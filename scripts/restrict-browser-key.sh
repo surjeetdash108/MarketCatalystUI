@@ -75,8 +75,14 @@ plan() {
 
 apply() {
   backup
+  # Google refuses to drop an API the key used in the last 7 days. On
+  # 2026-11-20 that was geocoding-backend: 2 calls (Nov 13, Nov 18), both 403,
+  # from no code of ours — someone else using the public key, which is what
+  # this restriction stops. SKIP_USAGE_CHECK=1 overrides that check.
+  local usage=()
+  [[ "${SKIP_USAGE_CHECK:-0}" == "1" ]] && usage=(--no-check-existing-usage)
   # shellcheck disable=SC2046
-  gcloud services api-keys update "$KEY_ID" --project "$PROJECT" \
+  gcloud services api-keys update "$KEY_ID" --project "$PROJECT" "${usage[@]}" \
     --allowed-referrers="$(referrer_csv)" $(api_flags)
   echo "Applied. Wait ~5 minutes, then run: $0 verify  (and the manual checklist)."
 }
