@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Restrict the Firebase browser API key to our websites and the 4 APIs they use.
+# Restrict the Firebase browser API key to our websites and the 5 APIs they use.
 #
 #   scripts/restrict-browser-key.sh plan      show the change, touch nothing (default)
 #   scripts/restrict-browser-key.sh backup    save the key's current settings (no key string)
@@ -13,6 +13,9 @@
 # APIs: the only ones this key called successfully in the 30 days to 2026-11-20
 # (Cloud Monitoring, serviceruntime request_count by credential):
 #   securetoken (8,986)  identitytoolkit (5,348)  firebase (3,612)  firebaseinstallations (397)
+# plus firestore: Money Flow reads money_flow/latest directly (firebase/firestore/lite
+# appends ?key=<apiKey> to every request). firestore.rules keep every other
+# collection closed, so allowing the API exposes nothing else.
 # Referrers: every origin that loads the Firebase web SDK with this key.
 #   app.marketcatalyst.ai         MarketCatalystUI (also its authDomain, /__/auth handler)
 #   marketcatalyst.web.app        Hosting site "marketcatalyst" default domain
@@ -21,7 +24,11 @@
 #                                 default Hosting site; .firebaseapp.com is the website's authDomain
 #   marketcatalyst.ai, www.marketcatalyst.ai, *.hosted.app URL
 #                                 MarketCatalystWebsite (App Hosting, us-east4) — /admin/login
-#   localhost / 127.0.0.1         local development (drop with NO_LOCALHOST=1)
+#   localhost / 127.0.0.1         local development on ANY port (drop with NO_LOCALHOST=1).
+#                                 "http://localhost:*/*" does NOT match a port (it blocked
+#                                 localhost:3000 on 2026-11-20); the bare host forms below do,
+#                                 verified on 3000, 3001, 5173, 8080, no port, while
+#                                 localhost.evil.example / evil.localhost stay blocked.
 set -euo pipefail
 
 PROJECT="market-catalyst-502415"
@@ -39,7 +46,11 @@ REFERRERS=(
   "https://marketcatalystwebsite--market-catalyst-502415.us-east4.hosted.app/*"
 )
 if [[ "${NO_LOCALHOST:-0}" != "1" ]]; then
-  REFERRERS+=("http://localhost:*/*" "http://127.0.0.1:*/*")
+  REFERRERS+=(
+    "http://localhost:3000/*" "http://localhost:3001/*"
+    "http://127.0.0.1:3000/*" "http://127.0.0.1:3001/*"
+    "localhost" "127.0.0.1" "localhost:*" "127.0.0.1:*"
+  )
 fi
 
 APIS=(
@@ -47,6 +58,7 @@ APIS=(
   securetoken.googleapis.com
   firebaseinstallations.googleapis.com
   firebase.googleapis.com
+  firestore.googleapis.com
 )
 
 referrer_csv() { local IFS=,; echo "${REFERRERS[*]}"; }
@@ -104,17 +116,30 @@ verify() {
   check() { # label expected actual
     if [[ "$3" == "$2" ]]; then echo "  ok    $1 ($3 $(reason))"; else echo "  FAIL  $1: expected $2, got $3 $(reason)"; fail=1; fi
   }
+  local allowed=("https://app.marketcatalyst.ai/" "https://marketcatalyst.ai/" "https://market-catalyst-502415.firebaseapp.com/")
+  if [[ "${NO_LOCALHOST:-0}" != "1" ]]; then
+    allowed+=("http://localhost:3000/" "http://localhost:3001/" "http://localhost:5173/" "http://127.0.0.1:8080/")
+  fi
   echo "Auth from allowed origins (expect 400 = key accepted, wrong password):"
-  for r in "https://app.marketcatalyst.ai/" "https://marketcatalyst.ai/" "https://market-catalyst-502415.firebaseapp.com/"; do
+  for r in "${allowed[@]}"; do
     code=$(signin_status "$r" "$key"); check "$r" 400 "$code"
   done
   echo "Refused origins (expect 403):"
   code=$(signin_status "" "$key"); check "no Referer (scripts, curl)" 403 "$code"
-  code=$(signin_status "https://evil.example/" "$key"); check "https://evil.example/" 403 "$code"
-  echo "API no longer allowed (expect 403):"
+  for r in "https://evil.example/" "http://localhost.evil.example/" "http://evil.localhost:3000/"; do
+    code=$(signin_status "$r" "$key"); check "$r" 403 "$code"
+  done
+  echo "An API outside the list (expect 403):"
+  code=$(curl -s -o /tmp/rk.$$ -w "%{http_code}" -H "Referer: https://app.marketcatalyst.ai/" \
+    "https://www.googleapis.com/youtube/v3/videos?part=id&id=x&key=$key")
+  check "YouTube Data API with the key" 403 "$code"
+  echo "Firestore: key accepted, data still behind firestore.rules (expect 403 signed out):"
   code=$(curl -s -o /tmp/rk.$$ -w "%{http_code}" -H "Referer: https://app.marketcatalyst.ai/" \
     "https://firestore.googleapis.com/v1/projects/$PROJECT/databases/mc-regional/documents/companies/AAPL?key=$key")
-  check "Firestore REST with the key" 403 "$code"
+  check "companies/AAPL signed out" 403 "$code"
+  code=$(curl -s -o /tmp/rk.$$ -w "%{http_code}" -H "Referer: https://app.marketcatalyst.ai/" \
+    "https://firestore.googleapis.com/v1/projects/$PROJECT/databases/mc-regional/documents/money_flow/latest?key=$key")
+  check "money_flow/latest signed out" 403 "$code"
   rm -f /tmp/rk.$$
   echo
   if [[ $fail == 0 ]]; then echo "Automated checks passed."; else echo "Some checks FAILED — consider: $0 rollback"; fi
