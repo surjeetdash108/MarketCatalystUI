@@ -724,31 +724,31 @@ export function StockIntelligenceScreen() {
 
   // Live technical bars for the Technicals tab (matches MC Overview)
   const { bars: realBars, asOf: barsAsOf, loading: barsLoading } = useIntervalBars(
-    currentTicker || "NVDA",
+    currentTicker || "", // no stock picked (SI home) → no request
     barInterval
   );
 
   // 6-Month bars for Why It Moved tab (matches stock function 6M area chart)
   const { bars: sixMonthBars, loading: sixMonthLoading } = useBackendBars(
-    currentTicker || "NVDA",
+    currentTicker || "", // no stock picked (SI home) → no request
     "6M"
   );
 
   // Real bars for Overview Price History chart across selected timeframe (1D, 5D, 1M, 3M, 6M, 1Y, 5Y)
   const { bars: overviewBars, loading: overviewBarsLoading } = useBackendBars(
-    currentTicker || "NVDA",
+    currentTicker || "", // no stock picked (SI home) → no request
     range
   );
 
   // 1-Year daily bars for chart key moments & context (matching MC stock function)
   const { bars: yearBars } = useBackendBars(
-    currentTicker || "NVDA",
+    currentTicker || "", // no stock picked (SI home) → no request
     "1Y"
   );
 
   // Chart earnings with EPS estimate/actual beat/miss markers (matching MC stock function)
   const chartEarnings: ChartEarnings[] = useMemo(() => {
-    const sym = currentTicker || "NVDA";
+    const sym = currentTicker || "";
     const symEvents = (liveEarningsList ?? []).filter((e) => e.ticker === sym);
     return buildChartEarnings(financialsDoc, symEvents, etTodayIso());
   }, [financialsDoc, liveEarningsList, currentTicker]);

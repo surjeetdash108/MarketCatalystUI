@@ -219,6 +219,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Money Flow board, saved every market minute by the worker's
+    // money-flow-snapshot job (gzipped JSON). The ONE market-data document the
+    // browser reads directly, so Money Flow opens in ~1–2 s whether or not a
+    // backend instance is awake. Same gate as the backend route: Money Flow is
+    // a Pro feature (PLAN_GROUPS in feature-map.generated.ts); staff, and
+    // everyone signed in while SUBSCRIPTIONS_ENABLED is off. A user the rule
+    // refuses (e.g. a plan claim not refreshed yet) falls back to
+    // GET /live/money-flow, which serves the same saved board.
+    match /money_flow/latest {
+      allow read:  if canReadOnPlan('pro');
+      allow write: if false;  // Admin SDK only
+    }
+
     // Options chain reference data — real strikes/expirations + delayed
     // last close/volume per contract (Polygon). Bid/ask, IV, greeks, and
     // open interest are NOT here — confirmed 403 on the current Polygon

@@ -76,7 +76,50 @@ describe("collections no browser reads deny every client read (generated section
     const rules = fs.readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8");
     const block = rules.slice(rules.indexOf("BEGIN GENERATED: feature map"), rules.indexOf("END GENERATED: feature map"));
     for (const [c] of GATED) if (!block.includes(`match /${c}/{d=**} { allow read, write: if false; }`)) throw new Error(c);
-    if (/canReadOnPlan\('(starter|pro|elite)'\)/.test(rules.replace(/function canReadOnPlan[\s\S]*?\n    }/, ""))) throw new Error("a hand-written plan gate remains");
+    // The one allowed plan gate: the saved Money Flow board. It must match the
+    // catalog's minimum plan for Money Flow, so it cannot drift from the backend.
+    const mfRule = rules.match(/match \/money_flow\/latest \{\s*allow read:\s*if canReadOnPlan\('(starter|pro|elite)'\);/);
+    if (!mfRule) throw new Error("money_flow/latest gate missing");
+    const featureMap = fs.readFileSync(new URL("../../app/iq/feature-map.generated.ts", import.meta.url), "utf8");
+    const planGroups = JSON.parse(featureMap.match(/export const PLAN_GROUPS = (\{[\s\S]*?\}) as const;/)[1]);
+    const minimum = ["starter", "pro", "elite"].find((p) => planGroups[p].includes("moneyFlow"));
+    if (mfRule[1] !== minimum) throw new Error(`money_flow/latest gate is '${mfRule[1]}', catalog minimum is '${minimum}'`);
+    const withoutAllowed = rules.replace(/function canReadOnPlan[\s\S]*?\n    }/, "").replace(mfRule[0], "");
+    if (/canReadOnPlan\('(starter|pro|elite)'\)/.test(withoutAllowed)) throw new Error("a hand-written plan gate remains");
+  });
+});
+
+describe("money_flow/latest: the saved Money Flow board, read directly by the browser", () => {
+  const read = (who) => getDoc(doc(who, "money_flow", "latest"));
+  beforeEach(async () => {
+    await seed(true);
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "money_flow", "latest"), { gz: "x", builtAt: 1 });
+      await setDoc(doc(ctx.firestore(), "money_flow", "other"), { x: 1 });
+    });
+  });
+  it("subscriptions on: Pro, Elite and verified staff read it; Starter, no plan and signed-out don't", async () => {
+    await assertSucceeds(read(as("pro")));
+    await assertSucceeds(read(as("elite")));
+    await assertSucceeds(read(asClaims({ staff: true, email_verified: true })));
+    await assertFails(read(as("starter")));
+    await assertFails(read(as()));
+    await assertFails(read(asClaims({ staff: true, email_verified: false })));
+    await assertFails(read(env.unauthenticatedContext().firestore()));
+  });
+  it("subscriptions off: every signed-in user reads it (the backend gates nothing either)", async () => {
+    await seed(false);
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "money_flow", "latest"), { gz: "x", builtAt: 1 });
+    });
+    await assertSucceeds(read(as()));
+    await assertFails(read(env.unauthenticatedContext().firestore()));
+  });
+  it("only the latest board: no other document, no listing, no client writes", async () => {
+    await assertFails(getDoc(doc(as("elite"), "money_flow", "other")));
+    await assertFails(getDocs(collection(as("elite"), "money_flow")));
+    await assertFails(setDoc(doc(as("elite"), "money_flow", "latest"), { gz: "hacked" }));
+    await assertFails(setDoc(doc(asClaims({ staff: true, email_verified: true }), "money_flow", "latest"), { gz: "hacked" }));
   });
 });
 

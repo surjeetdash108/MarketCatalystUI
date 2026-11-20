@@ -61,6 +61,7 @@ import { moneyDayPossessive } from "../market-status";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiGet } from "../backend";
 import { createBarsPrefetcher } from "../money-flow/prefetch-bars";
+import { useMoneyFlowBoard } from "../money-flow/useMoneyFlowBoard";
 import { PopFullChart } from "../money-flow/full-chart";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
@@ -70,9 +71,6 @@ import { StockLogo } from "../utils";
 
 const prefetchBars = createBarsPrefetcher((path, opts) => apiGet(path, opts));
 
-/** Board refresh: rebuilds and polls every 15s to keep rankings fresh. */
-const BOARD_POLL_MS = 15_000;
-
 interface BarsResponse {
   bars: Array<{ t: number; o: number; h: number; l: number; c: number; v: number; vw: number | null }>;
 }
@@ -81,9 +79,10 @@ export function MoneyFlowScreen() {
   const { openIndex } = useIQActions();
   const { exitToMC, enterSI } = useSI();
 
-  // The whole board — flows, movers, levels, scores — from GET /live/money-flow.
-  const { data: rawBoard, loading: boardLoading, error: boardError } =
-    useApiResource<MoneyFlowBoard>("/live/money-flow", BOARD_POLL_MS);
+  // The whole board — flows, movers, levels, scores. Saved by the worker every
+  // market minute and read from the fastest source (useMoneyFlowBoard): this
+  // browser's last copy, Firestore money_flow/latest, then GET /live/money-flow.
+  const { data: rawBoard, error: boardError } = useMoneyFlowBoard<MoneyFlowBoard>();
   // One sector label everywhere: the stocks' and the sector list's (withSectorLabels).
   const board = useMemo(() => (rawBoard ? withSectorLabels(rawBoard) : null), [rawBoard]);
 
@@ -257,12 +256,21 @@ export function MoneyFlowScreen() {
 
   const boardWrapRef = useRef<HTMLDivElement>(null);
 
-  // Subscribe all stocks on board to live quotes for after-hours pricing
+  // Subscribe all stocks on board to live quotes: tile prices follow the live
+  // quote during the session (the board itself is rebuilt once a minute) and
+  // show the extended-hours trade after the close.
   const allBoardTickers = useMemo(() => onBoard.map((s) => s.t), [onBoard]);
   const liveQuotes = useLiveQuotes(allBoardTickers);
   const isAfterHours = mkt.phase === "after";
 
   const getDisplayQuote = (stock: BoardStock) => {
+    if (mkt.phase === "open") {
+      const q = liveQuotes.get(stock.t);
+      const live = q && Number.isFinite(q.price) && Number.isFinite(q.pctChange) && (q.price as number) > 0;
+      const price = live ? (q.price as number) : stock.price;
+      const pct = live ? (q.pctChange as number) : stock.pctChange;
+      return { priceStr: formatCurrency(price), pctStr: formatPct(pct), isUp: pct >= 0, isAH: false };
+    }
     if (!isAfterHours) {
       return {
         priceStr: formatCurrency(stock.price),
