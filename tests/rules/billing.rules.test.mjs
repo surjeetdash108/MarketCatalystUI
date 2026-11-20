@@ -3,9 +3,12 @@
 import { describe, it, before, after, beforeEach } from "node:test";
 import fs from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 
 const BILLING = ["config", "email_verifications", "email_verification_ips", "refund_claims", "customers", "subscriptions", "payments", "subscription_events", "promo_codes", "promo_redemptions", "promo_attempts", "retention_offers", "stripe_events", "checkout_sessions", "launch_offers", "admin_audit", "fake_billing_subscriptions", "fake_billing_invoices", "fake_billing_checkouts", "fake_billing_customers"];
+// Market data every screen reads through the backend. These used to allow any
+// signed-in account; now no client identity may read them.
+const MARKET_CLOSED = ["companies", "tickers", "ohlcv_bars", "earnings_events", "news", "analyst_actions", "macro_events", "market_movers", "market_movers_history", "recaps", "market_indices", "market_indices_history", "sectors", "sectors_history", "ipos", "dividends", "insider_transactions", "options_chains"];
 const GATED = [
   ["earnings_summaries", "s1", "starter"],
   ["fund_holdings", "cik1", "starter"],
@@ -26,8 +29,7 @@ async function seed(flag) {
     const db = ctx.firestore();
     for (const c of BILLING) await setDoc(doc(db, c, "alice"), { userId: "alice", uid: "alice" });
     for (const [c, id] of GATED) await setDoc(doc(db, c, id), { x: 1 });
-    await setDoc(doc(db, "news", "n1"), { x: 1 });
-    await setDoc(doc(db, "recaps", "r1"), { x: 1 });
+    for (const c of MARKET_CLOSED) await setDoc(doc(db, c, "d1"), { x: 1 });
     if (flag !== undefined) await setDoc(doc(db, "feature_flags", "default"), { flags: { SUBSCRIPTIONS_ENABLED: flag } });
   });
 }
@@ -55,12 +57,18 @@ describe("collections no browser reads deny every client read (generated section
           await assertFails(getDoc(doc(asClaims({ staff: true, email_verified: true }), c, id)));
         });
       }
-      it("ungated collections stay readable when signed in (news, recaps)", async () => {
-        await assertSucceeds(getDoc(doc(as(), "news", "n1")));
-        await assertSucceeds(getDoc(doc(as(), "recaps", "r1")));
-      });
+      for (const c of MARKET_CLOSED) {
+        it(`${c}: no client read on any plan (or none), staff included; reads go through the backend`, async () => {
+          for (const p of [undefined, "starter", "pro", "elite"]) {
+            await assertFails(getDoc(doc(as(p), c, "d1")));
+            await assertFails(getDocs(collection(as(p), c)));
+          }
+          await assertFails(getDoc(doc(asClaims({ staff: true, email_verified: true }), c, "d1")));
+          await assertFails(setDoc(doc(as("elite"), c, "d1"), { hacked: true }));
+        });
+      }
       it("signed-out users read nothing", async () => {
-        await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "recaps", "r1")));
+        await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "recaps", "d1")));
       });
     });
   }
@@ -76,10 +84,10 @@ describe("staff full access (claim set by the backend for a verified allowlisted
   for (const flag of [true, false]) {
     describe(`SUBSCRIPTIONS_ENABLED ${flag ? "on" : "off"}`, () => {
       beforeEach(() => seed(flag));
-      it("verified staff read signed-in market data (news, recaps); denied collections stay denied", async () => {
+      it("verified staff can't read market data from the client either (they use the app, like everyone)", async () => {
         const staff = asClaims({ staff: true, email_verified: true });
-        await assertSucceeds(getDoc(doc(staff, "news", "n1")));
-        await assertSucceeds(getDoc(doc(staff, "recaps", "r1")));
+        await assertFails(getDoc(doc(staff, "news", "d1")));
+        await assertFails(getDoc(doc(staff, "recaps", "d1")));
         for (const [c, id] of GATED) await assertFails(getDoc(doc(staff, c, id)));
       });
     });
