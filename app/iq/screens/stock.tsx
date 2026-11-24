@@ -2779,7 +2779,7 @@ export function StockScreen({
                 ))}
               </dl>
             );
-            return (
+            return (<>
               <div className="card">
                 <div className="card-h">
                   <h3>Key statistics</h3>
@@ -2791,7 +2791,20 @@ export function StockScreen({
                   {col(companyPart)}
                 </div>
               </div>
-            );
+              {!isEtf && (
+                <div className="card">
+                  <div className="card-h"><h3>Stock splits</h3><VendorTag v={["fmp", "polygon"]} /></div>
+                  {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 5).map(x => (
+                    <div key={x.executionDate} className="sd-row">
+                      <span className="grow num">{x.executionDate}</span>
+                      <span className="num">{x.splitFrom}:{x.splitTo}</span>
+                    </div>
+                  )) : (
+                    <div className="sd-note" style={{ paddingBottom: 14 }}>No splits on record.</div>
+                  )}
+                </div>
+              )}
+            </>);
           })()}
 
           {activeTab === "analysis" && (<>
@@ -3269,17 +3282,6 @@ export function StockScreen({
                   })()}
                 </div>
 
-                <div className="card">
-                  <div className="card-h"><h3>Stock splits</h3><VendorTag v={["fmp", "polygon"]} /></div>
-                  {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 5).map(x => (
-                    <div key={x.executionDate} className="sd-row">
-                      <span className="grow num">{x.executionDate}</span>
-                      <span className="num">{x.splitFrom}:{x.splitTo}</span>
-                    </div>
-                  )) : (
-                    <div className="sd-note" style={{ paddingBottom: 14 }}>No splits on record.</div>
-                  )}
-                </div>
               </div>
               </div>
             )
