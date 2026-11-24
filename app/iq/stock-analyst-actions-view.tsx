@@ -163,7 +163,6 @@ export function StockAnalystActionsView({
     <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
     {(rows.length > 0 || rated > 0) && (
       <div className="card" style={{ width: "100%" }}>
-        <div className="card-h"><h3>Analyst summary<span className="sd-unit">what the Street is recommending for {sym}</span></h3><VendorTag v="fmp" /></div>
         <div className="card-b">
           <div style={{ fontSize: ".95rem", fontWeight: 700, color: lineTone, marginBottom: 12 }}>{line}</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
