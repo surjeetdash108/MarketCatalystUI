@@ -162,89 +162,6 @@ function EarningsAnnouncementsTab() {
   );
 }
 
-// ── Biggest % tab (T074) ──────────────────────────────────────────────────
-// Briefing.com-style SCANX digest: today's top gainers and losers, grouped by
-// sector. The backend (market-scan.service.ts) rebuilds it on demand when the
-// stored copy is older than 2h, so the tab re-reads it on that same cadence.
-interface ScanItem { ticker: string; name: string | null; pctChange: number | null; price?: number | null }
-interface ScanSectorGroup { sector: string; items: ScanItem[] }
-interface BiggestPctScan { generatedAt: string; gainers: ScanSectorGroup[]; losers: ScanSectorGroup[] }
-
-const BIGGEST_PCT_REFRESH_MS = 2 * 60 * 60 * 1000;
-
-/** Scan time on the market clock, labelled ET like the rest of the app. */
-const scanTimeET = (iso?: string) =>
-  iso ? `${new Date(iso).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET` : "";
-
-/** Biggest % tab — own component so the fetch only runs while the tab is open. */
-function BiggestPctTab() {
-  const { data, loading } = useApiResource<BiggestPctScan>("/live/scan/biggest-pct", BIGGEST_PCT_REFRESH_MS);
-  const { openStockDetail } = useIQActions();
-  const [side, setSide] = useState<"gainers" | "losers">("gainers");
-  const groups = (data?.[side] ?? []).filter(g => g.items.length > 0);
-  const count = (gs?: ScanSectorGroup[]) => (gs ?? []).reduce((n, g) => n + g.items.length, 0);
-  const sideTickers = groups.flatMap(g => g.items.map(i => i.ticker));
-  const color = side === "gainers" ? "var(--up)" : "var(--down)";
-  return (
-    <div style={{ padding: "14px 18px 18px" }}>
-      <div className="card">
-        <div className="card-h">
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <h3>Today&apos;s biggest % gainers / losers</h3><VendorTag v={["fmp", "polygon"]} />
-          </div>
-          {data?.generatedAt && (
-            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-              as of {scanTimeET(data.generatedAt)} · refreshes every 2h
-            </span>
-          )}
-        </div>
-        <div className="card-b" style={{ maxHeight: "none", padding: "14px 18px 18px" }}>
-          {!data ? (
-            <DataState loading={loading} label="Generating the scan…" />
-          ) : (
-            <>
-              <div className="tabs" role="tablist" aria-label="Gainers or losers" style={{ display: "inline-flex", marginBottom: 14 }}>
-                {([["gainers", "Gainers", "var(--up)"], ["losers", "Losers", "var(--down)"]] as const).map(([k, label, col]) => {
-                  const on = side === k;
-                  return (
-                    <button key={k} type="button" role="tab" aria-selected={on}
-                      className={`tab${on ? " on" : ""}`} onClick={() => setSide(k)}
-                      style={on ? { color: col, fontWeight: 700 } : undefined}>
-                      {label} <span style={{ opacity: .6, fontWeight: 500 }}>{count(data[k])}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {groups.length === 0 ? (
-                <DataState loading={false} label="No movers in this scan yet." />
-              ) : groups.map(g => (
-                <div key={g.sector} style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: ".66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)", marginBottom: 6 }}>
-                    {g.sector} <span style={{ opacity: .6, fontWeight: 500 }}>{g.items.length}</span>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {g.items.map(i => (
-                      <button key={i.ticker} type="button"
-                        onClick={() => openStockDetail(i.ticker, sideTickers)}
-                        title={i.name ?? i.ticker}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px 4px 6px", borderRadius: 8, cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--border-soft)", color: "inherit", fontSize: ".76rem" }}>
-                        <StockLogo sym={i.ticker} size={18} />
-                        <b style={{ color: "var(--text-hi)" }}>{i.ticker}</b>
-                        {i.price != null && <span style={{ color: "var(--text-dim-solid)" }}>{fmt(i.price)}</span>}
-                        {i.pctChange != null && <span style={{ color, fontWeight: 600 }}>{sign(i.pctChange)}</span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Market-cap tiers derived from companies.marketCap (raw USD). Used to filter
 // the feed by the size of the company each news item is about.
 const CAP_TIERS = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
@@ -919,7 +836,7 @@ export function CommentaryScreen() {
   // gone nothing on this screen reads them, so the two requests go too rather
   // than loading data that is never rendered. The macro-regime read still has a
   // home on the Macro & VIX screen.
-  const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Announcement, 2 = Weekly, 3 = Monthly, 4 = Biggest %
+  const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Announcement, 2 = Weekly, 3 = Monthly
   const wire = useNewsWire(mainTab === 0);
   // Results companies have declared (today + yesterday), as news-shaped rows from
   // the stored earnings data — so an earnings release lands in the stream even
@@ -1102,7 +1019,6 @@ export function CommentaryScreen() {
         <div className="tabs">
           <button className={`tab${mainTab === 0 ? " on" : ""}`} style={mainTab === 0 ? SEL_TAB : undefined} onClick={() => setMainTab(0)}>News</button>
           <button className={`tab${mainTab === 1 ? " on" : ""}`} style={mainTab === 1 ? SEL_TAB : undefined} onClick={() => setMainTab(1)}>Announcement</button>
-          <button className={`tab${mainTab === 4 ? " on" : ""}`} style={mainTab === 4 ? SEL_TAB : undefined} onClick={() => setMainTab(4)}>Biggest %</button>
           <button className={`tab${mainTab === 2 ? " on" : ""}`} style={mainTab === 2 ? SEL_TAB : undefined} onClick={() => setMainTab(2)}>Weekly Summary</button>
           <button className={`tab${mainTab === 3 ? " on" : ""}`} style={mainTab === 3 ? SEL_TAB : undefined} onClick={() => setMainTab(3)}>Monthly Summary</button>
         </div>
@@ -1291,7 +1207,6 @@ export function CommentaryScreen() {
       </>)}
 
       {mainTab === 1 && <EarningsAnnouncementsTab />}
-      {mainTab === 4 && <BiggestPctTab />}
       {mainTab === 2 && <GlanceTab period="weekly" heading="Weekly summary" />}
       {mainTab === 3 && <GlanceTab period="monthly" heading="Monthly summary" />}
 
