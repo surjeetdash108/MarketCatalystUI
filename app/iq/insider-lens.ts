@@ -11,18 +11,17 @@ export type LensMode = "any" | "all";
 export const DEFAULT_LENS = "notable";
 
 /**
- * The selection after clicking `key`. Chips toggle, in the order they were picked.
- * "Most notable" lists every stock, so it never combines with a narrower lens:
- * picking it clears the others, and picking a narrower one drops it. Clearing
- * the last chip returns to "Most notable" rather than an empty selection.
+ * The selection after clicking `key`. Every chip, "Most notable" included,
+ * toggles on and off independently, in the order picked, so any mix can be
+ * combined with "any" / "all". Clearing the last chip returns to "Most notable"
+ * rather than an empty selection.
  */
 export function toggleLens(selected: string[], key: string): string[] {
-  if (key === DEFAULT_LENS) return [DEFAULT_LENS];
   if (selected.includes(key)) {
     const rest = selected.filter(k => k !== key);
     return rest.length > 0 ? rest : [DEFAULT_LENS];
   }
-  return [...selected.filter(k => k !== DEFAULT_LENS), key];
+  return [...selected, key];
 }
 
 /**

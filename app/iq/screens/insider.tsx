@@ -328,6 +328,21 @@ function statsFor(t: string, rs: TradeItem[], f: F13Tuple | undefined): CompanyS
   };
 }
 
+/**
+ * Insiders vs funds on one stock: both buying / both selling (confluence) or
+ * pulling opposite ways (divergence). Shown as a tag next to the ticker, in
+ * the list and in the detail header.
+ */
+function alignmentOf(s: CompanyStats): { text: string; short: string; color: string } | null {
+  const isNetBuy = s.buyV > s.offV && s.buys.length > 0;
+  const isNetSell = s.offV > s.buyV && s.off.length > 0;
+  if (isNetBuy && s.net > 0) return { text: "Confluence: insiders and funds are both buying", short: "◆ Both buying", color: UP };
+  if (isNetSell && s.net < 0) return { text: "Confluence: insiders and funds are both selling", short: "◆ Both selling", color: DN };
+  if (isNetBuy && s.net <= -2) return { text: "Divergence: insiders buying while funds distribute", short: "◆ Divergence", color: AMB };
+  if (isNetSell && s.net >= 2) return { text: "Divergence: insiders selling into fund accumulation", short: "◆ Divergence", color: AMB };
+  return null;
+}
+
 export function InsiderScreen() {
   const { openStockFull } = useIQActions();
 
@@ -661,16 +676,8 @@ export function InsiderScreen() {
       ? `${s.add.toLocaleString()} filers added vs ${s.trim.toLocaleString()} trimmed; ${s.newPos.toLocaleString()} opened new stakes, ${s.exits.toLocaleString()} sold out.${topBuyer ? ` Largest buyer: ${topBuyer}.` : ""}`
       : "No 13F rollup is available for this ticker yet.";
 
-    const agree =
-      isNetBuy && s.net > 0
-        ? ["Confluence: insiders and funds are both buying", UP]
-        : isNetSell && s.net < 0
-        ? ["Confluence: insiders and funds are both selling", DN]
-        : isNetBuy && s.net <= -2
-        ? ["Divergence: insiders buying while funds distribute", AMB]
-        : isNetSell && s.net >= 2
-        ? ["Divergence: insiders selling into fund accumulation", AMB]
-        : null;
+    const align = alignmentOf(s);
+    const agree = align ? [align.text, align.color] : null;
 
     // Build trade markers along the chart curve
     const rangePx = maxPrice - minPrice || 1;
@@ -1243,6 +1250,7 @@ export function InsiderScreen() {
                 logoFg: "#e8eef4",
               };
               const [tag, tagColor, tagBg] = tagOf(s);
+              const rowAlign = alignmentOf(s);
               // With several lenses on, a row shows the figure of the first-picked lens that has it.
               const [metricText, metricSub, metricColor] = formatMetric(
                 s,
@@ -1329,6 +1337,14 @@ export function InsiderScreen() {
                       >
                         {tag}
                       </span>
+                      {rowAlign && (
+                        <span
+                          title={rowAlign.text}
+                          style={{ fontSize: 10.5, fontWeight: 800, color: rowAlign.color, whiteSpace: "nowrap" }}
+                        >
+                          {rowAlign.short}
+                        </span>
+                      )}
                     </div>
                     <span
                       style={{
@@ -1441,7 +1457,24 @@ export function InsiderScreen() {
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flexShrink: 0 }}>
-                <span style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.1, color: "var(--text-pure)" }}>{deepDive.t}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.1, color: "var(--text-pure)" }}>{deepDive.t}</span>
+                  {deepDive.hasAlign && (
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        padding: "3px 8px",
+                        borderRadius: 6,
+                        border: `1px dashed ${deepDive.alignColor}`,
+                        color: deepDive.alignColor,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ◆ {deepDive.alignText}
+                    </span>
+                  )}
+                </span>
                 <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-pure-dim)", whiteSpace: "nowrap" }}>{deepDive.name}</span>
               </div>
               <div
@@ -1595,24 +1628,6 @@ export function InsiderScreen() {
                 </div>
               </div>
             </div>
-
-            {/* Optional Confluence / Divergence Banner */}
-            {deepDive.hasAlign && (
-              <div
-                style={{
-                  margin: "8px 20px 0",
-                  padding: "8px 14px",
-                  borderRadius: 8,
-                  background: "var(--surface-2)",
-                  border: `1px dashed ${deepDive.alignColor}`,
-                  color: deepDive.alignColor,
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                }}
-              >
-                ◆ {deepDive.alignText}
-              </div>
-            )}
 
             {/* 6M Price Chart with Form 4 Trade Markers */}
             <div style={{ padding: "16px 20px 8px", display: "flex", flexDirection: "column", gap: 8 }}>

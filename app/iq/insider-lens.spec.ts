@@ -6,8 +6,8 @@ const row = (t: string) => ({ t });
 const ts = (rows: { t: string }[]) => rows.map(r => r.t);
 
 describe("toggleLens", () => {
-  it("starts on Most notable, and picking a narrower lens replaces it", () => {
-    assert.deepEqual(toggleLens([DEFAULT_LENS], "ibuy"), ["ibuy"]);
+  it("starts on Most notable, and picking another lens adds to it", () => {
+    assert.deepEqual(toggleLens([DEFAULT_LENS], "ibuy"), [DEFAULT_LENS, "ibuy"]);
   });
   it("adds more lenses in the order they were picked", () => {
     assert.deepEqual(toggleLens(["ibuy"], "acc"), ["ibuy", "acc"]);
@@ -19,8 +19,9 @@ describe("toggleLens", () => {
   it("turning off the last lens goes back to Most notable, never to nothing", () => {
     assert.deepEqual(toggleLens(["acc"], "acc"), [DEFAULT_LENS]);
   });
-  it("Most notable lists everything, so picking it clears the others", () => {
-    assert.deepEqual(toggleLens(["ibuy", "acc"], DEFAULT_LENS), [DEFAULT_LENS]);
+  it("Most notable combines like any other lens", () => {
+    assert.deepEqual(toggleLens(["ibuy", "acc"], DEFAULT_LENS), ["ibuy", "acc", DEFAULT_LENS]);
+    assert.deepEqual(toggleLens([DEFAULT_LENS, "ibuy"], DEFAULT_LENS), ["ibuy"]);
   });
 });
 
