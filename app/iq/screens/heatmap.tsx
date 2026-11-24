@@ -171,13 +171,6 @@ function HeatmapInner() {
   const [frame, setFrame] = useState<HmFrame>("1D");
   const [sizeBy, setSizeBy] = useState<SizeBy>("cap");
   const [find, setFind] = useState("");
-  const [colorBlind, setColorBlindState] = useState<boolean>(() => {
-    try { return localStorage.getItem("iq-heatmap-cb") === "1"; } catch { return false; }
-  });
-  const setColorBlind = (v: boolean) => {
-    setColorBlindState(v);
-    try { localStorage.setItem("iq-heatmap-cb", v ? "1" : "0"); } catch { /* storage unavailable */ }
-  };
 
   useEffect(() => {
     if (!moreModal) return;
@@ -340,7 +333,7 @@ function HeatmapInner() {
 
   /** Builds one tile; `zoom` is the single-sector map, which packs smaller labels. */
   const tile = (s: HmStock, r: LRect, cw: number, ch: number, zoom: boolean) => {
-    const hc = heatTile(s.chg, colorBlind);
+    const hc = heatTile(s.chg);
     const showText = zoom ? cw >= Math.max(13, s.sym.length * 4) && ch >= 10 : Math.min(cw, ch) > 16 && cw > 20;
     const fs = tileFontRem(cw, ch);
     const hit = query !== "" && s.sym.includes(query);
@@ -361,7 +354,7 @@ function HeatmapInner() {
   /** The "+N more" tile: the stocks too small to label, coloured by their average move. */
   const moreTile = (sector: string, more: HmStock[], r: LRect) => {
     const avg = avgChg(more);
-    const hc = heatTile(avg, colorBlind);
+    const hc = heatTile(avg);
     const fs = Math.min(tileFontRem(r.w, r.h), 1);
     const hitMore = query !== "" && more.some(st => st.sym.includes(query));
     // The longest wording that fits the tile (mono type: about 0.6em a character).
@@ -422,21 +415,8 @@ function HeatmapInner() {
           <h1 className="hm2-h1">Market Heatmap</h1>
           <p className="hm2-sub">{subtitle}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", minHeight: 35 }}>
           <VendorTag v={["fmp", "polygon"]} />
-          <label className="hm2-search">
-            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-            <input
-              type="search"
-              value={find}
-              onChange={e => setFind(e.target.value)}
-              onKeyDown={e => { if (e.key === "Escape") setFind(""); }}
-              placeholder="Highlight a ticker"
-              aria-label="Highlight a ticker on the map"
-              maxLength={10}
-            />
-            {find && <button type="button" className="clr" aria-label="Clear" onClick={() => setFind("")}>×</button>}
-          </label>
         </div>
       </div>
 
@@ -467,16 +447,27 @@ function HeatmapInner() {
         {!isOverall && (
           <button type="button" className="hm2-back" onClick={() => setSelectedSector("Overall")}>← All sectors</button>
         )}
-      </div>
-
-      <div className="hm2-legend">
+        {/* Colour legend sits on the same row as the Sector picker. */}
         <div className="hm2-scale" aria-hidden>
-          <div className="hm2-bar" style={{ background: heatGradient(colorBlind) }} />
+          <div className="hm2-bar" style={{ background: heatGradient() }} />
           <div className="hm2-ticks">{["−3%", "−2%", "−1%", "0%", "+1%", "+2%", "+3%"].map(t => <span key={t}>{t}</span>)}</div>
         </div>
-        <label className="hm2-cb">
-          <input type="checkbox" checked={colorBlind} onChange={e => setColorBlind(e.target.checked)} />
-          Color-blind palette
+      </div>
+
+      {/* Ticker highlight sits under the filters. */}
+      <div className="hm2-find-row">
+        <label className="hm2-search">
+          <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          <input
+            type="search"
+            value={find}
+            onChange={e => setFind(e.target.value)}
+            onKeyDown={e => { if (e.key === "Escape") setFind(""); }}
+            placeholder="Highlight a ticker"
+            aria-label="Highlight a ticker on the map"
+            maxLength={10}
+          />
+          {find && <button type="button" className="clr" aria-label="Clear" onClick={() => setFind("")}>×</button>}
         </label>
       </div>
 
