@@ -3080,7 +3080,6 @@ export function StockScreen({
                 const tone = lead.netValue > 0 ? "var(--up)" : lead.netValue < 0 ? "var(--down)" : "var(--text-hi)";
                 return (
                   <div className="card" style={{ width: "100%" }}>
-                    <div className="card-h"><h3>Insider summary<span className="sd-unit">open-market trades only (Form 4 codes P / S)</span></h3></div>
                     <div className="card-b">
                       <div style={{ fontSize: ".95rem", fontWeight: 700, color: tone, marginBottom: 10 }}>{lead.verdict}</div>
                       <table className="sd-ftab" style={{ width: "100%" }}>
