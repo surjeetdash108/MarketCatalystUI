@@ -1996,9 +1996,6 @@ export function StockScreen({
                   <span className="v">{l[1]}</span>
                 </div>
               ))}
-              <div style={{ marginTop: 10, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                Source: rs-rating.job, technical-indicators.job, a year of daily bars · informational purposes only, not investment advice.
-              </div>
 
               {/* ── AI read — technicals + news synthesised by OpenRouter,
                   appended below the deterministic rows. The raw headline list
@@ -2744,7 +2741,7 @@ export function StockScreen({
                 })() },
             ];
             const tradingRows: Row[] = [
-              { k: "Volume",        v: sessionVol != null ? Math.round(sessionVol).toLocaleString("en-US") : null },
+              { k: "Today's volume", v: sessionVol != null ? Math.round(sessionVol).toLocaleString("en-US") : null },
               { k: "Open",          v: dayBar ? px(dayBar.o) : null },
               { k: "Previous close", v: prevClose != null ? px(prevClose) : null },
               { k: "Day's range",   v: dayBar ? `${px(dayBar.l)} – ${px(dayBar.h)}` : null },
@@ -2753,20 +2750,20 @@ export function StockScreen({
                   ? <><span className={offHigh52Shown != null && offHigh52Shown < 0 ? "down" : undefined}>{offHigh52Shown != null ? offHigh52Shown.toFixed(1) + "%" : "—"}</span>
                       {" / "}<span className="up">{offLow52Shown != null ? "+" + offLow52Shown.toFixed(1) + "%" : "—"}</span></>
                   : null },
-              { k: "Analysts",      v: consensusDoc?.consensus
+              { k: "Analysts consensus", v: consensusDoc?.consensus
                   ? <span style={{ color: consensusTone(consensusDoc.consensus) }}>{consensusDoc.consensus}</span>
                   : null },
               { k: "Price target",  v: target != null ? px(target) : null,
                 delta: targetUp != null ? { txt: pct(targetUp), up: targetUp >= 0 } : null },
-              { k: "Earnings date", v: erDate !== "—" ? <>{fmtDate(erDate)}{!isErConfirmed && <span className="pill" style={{ marginLeft: 6, fontSize: ".65rem", padding: "1px 5px", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Estimated</span>}</> : null },
+              { k: "Next earnings date", v: erDate !== "—" ? <>{fmtDate(erDate)}{!isErConfirmed && <span className="pill" style={{ marginLeft: 6, fontSize: ".65rem", padding: "1px 5px", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Estimated</span>}</> : null },
             ];
             // Three parts of seven rows, side by side: valuation and payout,
             // trading, then the company and what analysts think of it.
             const byKey = new Map([...fundamentalRows, ...tradingRows].map(r => [r.k, r] as const));
             const part = (...keys: string[]) => keys.map(k => byKey.get(k)).filter((r): r is Row => r != null);
-            const valuationPart = part("Market cap", "P/E ratio", "EPS (TTM)", "Dividend (fwd)", "Ex-dividend date", "Beta", "Earnings date");
-            const tradingPart = part("Volume", "Avg volume (20D)", "Open", "Previous close", "Day's range", "52-week range", "Off 52W high / low");
-            const companyPart = part("Sector", "Industry", "CEO", "Employees", "Listing date", "Analysts", "Price target");
+            const valuationPart = part("Market cap", "P/E ratio", "EPS (TTM)", "Dividend (fwd)", "Ex-dividend date", "Beta", "Next earnings date");
+            const tradingPart = part("Today's volume", "Avg volume (20D)", "Open", "Previous close", "Day's range", "52-week range", "Off 52W high / low");
+            const companyPart = part("Sector", "Industry", "CEO", "Employees", "Listing date", "Analysts consensus", "Price target");
             const col = (rows: Row[]) => (
               <dl className="sd-kv">
                 {rows.map(r => (
@@ -2832,9 +2829,6 @@ export function StockScreen({
                     <span className="v">{l[1]}</span>
                   </div>
                 ))}
-              </div>
-              <div className="sd-foot">
-                Source: rs-rating.job, technical-indicators.job, a year of daily bars · informational only, not investment advice.
               </div>
             </div>
 
@@ -3086,7 +3080,6 @@ export function StockScreen({
                 const tone = lead.netValue > 0 ? "var(--up)" : lead.netValue < 0 ? "var(--down)" : "var(--text-hi)";
                 return (
                   <div className="card" style={{ width: "100%" }}>
-                    <div className="card-h"><h3>Insider summary<span className="sd-unit">open-market trades only (Form 4 codes P / S)</span></h3></div>
                     <div className="card-b">
                       <div style={{ fontSize: ".95rem", fontWeight: 700, color: tone, marginBottom: 10 }}>{lead.verdict}</div>
                       <table className="sd-ftab" style={{ width: "100%" }}>

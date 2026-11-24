@@ -960,7 +960,7 @@ export function InsiderScreen() {
           </span>
           <span style={{ color: "var(--text-pure)" }}>·</span>
           <span style={{ color: "var(--text-pure)" }}>
-            <span style={{ color: "var(--text-pure)", fontWeight: 700 }}>{totalBuysCount}</span> open-market buys ({rangeDays}D)
+            <span style={{ color: "var(--text-pure)", fontWeight: 700 }}>{totalBuysCount}</span> open-market buys ({rangeDays} D)
           </span>
           {headerLead && (<>
             <span style={{ color: "var(--text-pure)" }}>·</span>
@@ -1135,12 +1135,12 @@ export function InsiderScreen() {
                     borderRadius: 6,
                     cursor: "pointer",
                     border: "none",
-                    color: on ? "var(--text-pure)" : "var(--text-pure-dim)",
-                    background: on ? "var(--surface-3)" : "transparent",
+                    color: on ? "var(--on-brand)" : "var(--text-pure-dim)",
+                    background: on ? UP : "transparent",
                     transition: "all 120ms ease",
                   }}
                 >
-                  {d}D
+                  {d} D
                 </button>
               );
             })}
@@ -1595,7 +1595,7 @@ export function InsiderScreen() {
                       color: "var(--text-pure)",
                     }}
                   >
-                    INSIDERS · {rangeDays}D
+                    INSIDERS · {rangeDays} D
                   </span>
                   <div style={{ marginLeft: "auto", display: "flex", gap: 3 }}>
                     {deepDive.iDots.map((d, idx) => (
