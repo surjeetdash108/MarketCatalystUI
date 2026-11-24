@@ -11,6 +11,7 @@ import type { InsiderTxDoc, CompanyDoc, OwnershipDoc } from "../types";
 import { useApiResource } from "../hooks/useApiResource";
 import type { Stock13FResponse } from "../stock-13f-view";
 import { etTodayIso, fmtMarketDate } from "../calendar-range";
+import { periodLabel, quarterCoverage } from "../thirteen-f-period";
 import { DEFAULT_LENS, combineLenses, lensSources, lensTitle, toggleLens, type LensMode } from "../insider-lens";
 
 // ---- Constants & Theme Colors (matches 13F & Insider standalone HTML) ----
@@ -385,8 +386,21 @@ export function InsiderScreen() {
     increasedPositions?: number | null;
     reducedPositions?: number | null;
     closedPositions?: number | null;
+    year?: number | null;
+    quarter?: number | null;
   }>("/market-data/institutional-ownership");
   const { data: liveCompanies } = useApiList<CompanyDoc>("/market-data/companies");
+
+  // 13F quarters in the rollups (newest first) and each ticker's own quarter,
+  // instead of a quarter typed into the page.
+  const f13Coverage = useMemo(() => quarterCoverage(instOwnRaw), [instOwnRaw]);
+  const f13PeriodByTicker = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of instOwnRaw) {
+      if (d.ticker && d.year != null && d.quarter != null) m.set(d.ticker.toUpperCase().trim(), periodLabel(d.year, d.quarter));
+    }
+    return m;
+  }, [instOwnRaw]);
 
   // Tracked universe: companies universe plus tickers with insider trades or 13F rollup.
   const allTickers = useMemo(() => {
@@ -948,14 +962,34 @@ export function InsiderScreen() {
           <span style={{ color: "var(--text-pure)" }}>
             <span style={{ color: "var(--text-pure)", fontWeight: 700 }}>{totalBuysCount}</span> open-market buys ({rangeDays}D)
           </span>
+          {headerLead && (<>
+            <span style={{ color: "var(--text-pure)" }}>·</span>
+            <span style={{ color: "var(--text-pure)" }}>
+              Top signal:{" "}
+              <button
+                type="button"
+                onClick={() => setFocusTicker(headerLead.t)}
+                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", color: "var(--text-pure)", fontWeight: 700, textDecoration: "underline dotted" }}
+              >
+                {headerLead.t} {tagOf(headerLead)[0]}
+              </button>
+            </span>
+          </>)}
           <span style={{ color: "var(--text-pure)" }}>·</span>
-          <span style={{ color: "var(--text-pure)" }}>
-            Top signal:{" "}
-            <span style={{ color: "var(--text-pure)", fontWeight: 700 }}>{headerLead?.t || "INTC"}</span>{" "}
-            <span style={{ color: "var(--text-pure)", fontWeight: 700 }}>{headerLead ? tagOf(headerLead)[0] : "Cluster buy"}</span>
-          </span>
-          <span style={{ color: "var(--text-pure)" }}>·</span>
-          <span style={{ color: "var(--text-pure)" }}>13F Q2-26 filed Aug 14</span>
+          {f13Coverage.length === 0 ? (
+            <span style={{ color: "var(--text-pure)" }}>13F rollups not loaded yet</span>
+          ) : (
+            <a
+              href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=13F-HR"
+              target="_blank"
+              rel="noreferrer"
+              title={`13F filings are due 45 days after quarter end. Stocks move to the new quarter as their rollup refreshes: ${f13Coverage.map(c => `${c.label} ${c.count.toLocaleString()}`).join(", ")}. Opens the latest 13F filings on SEC EDGAR.`}
+              style={{ color: "var(--text-pure)", textDecoration: "underline dotted" }}
+            >
+              13F {f13Coverage[0].label} (due {f13Coverage[0].deadline})
+              {f13Coverage.length > 1 && ` · ${f13Coverage[0].count.toLocaleString()} of ${f13Coverage.reduce((n, c) => n + c.count, 0).toLocaleString()} stocks updated, rest on ${f13Coverage[1].label}`}
+            </a>
+          )}
           <span
             style={{
               fontFamily: "'JetBrains Mono', monospace",
@@ -1606,7 +1640,7 @@ export function InsiderScreen() {
                       color: "var(--text-pure)",
                     }}
                   >
-                    FUNDS · 13F Q2-26
+                    FUNDS · 13F{f13PeriodByTicker.get(deepDive.t) ? ` ${f13PeriodByTicker.get(deepDive.t)}` : ""}
                   </span>
                   <span
                     style={{
