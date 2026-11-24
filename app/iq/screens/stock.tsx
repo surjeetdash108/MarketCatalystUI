@@ -1975,7 +1975,7 @@ export function StockScreen({
           {/* AI Technical Analysis */}
           <div className="ai-block">
             <div className="card-h">
-              <h3 className="ai-c">◆ AI Technical Analysis</h3>
+              <h3 className="ai-c">AI Technical Analysis</h3>
               <VendorTag v={["fmp", "polygon"]} />
             </div>
             <div className="card-b" style={{ maxHeight: "none" }}>
@@ -2005,7 +2005,7 @@ export function StockScreen({
                   since it's model-generated / untrusted. ── */}
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
                 <div style={{ fontSize: ".66rem", fontWeight: 700, color: "var(--ai)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span>◆ AI Read</span>
+                  <span>AI Read</span>
                   {aiAnalysis?.ok && (
                     <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", color: "var(--text-dim-solid)", textTransform: "none", letterSpacing: 0 }}>
                       {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}
@@ -2808,7 +2808,7 @@ export function StockScreen({
           {activeTab === "analysis" && (<>
             <div className="ai-block sd-ai">
               <div className="card-h">
-                <h3 className="ai-c">◆ AI technical analysis</h3>
+                <h3 className="ai-c">AI technical analysis</h3>
                 <VendorTag v={["fmp", "polygon"]} />
               </div>
               <div className="card-b" style={{ maxHeight: "none" }}>
@@ -2834,7 +2834,7 @@ export function StockScreen({
 
             <div className="ai-block sd-ai">
               <div className="card-h">
-                <h3 className="ai-c">◆ AI Read</h3>
+                <h3 className="ai-c">AI Read</h3>
                 {aiAnalysis?.ok && (
                   <span className="pill" style={{ fontSize: ".58rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
                     {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}
