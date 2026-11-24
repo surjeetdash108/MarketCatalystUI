@@ -825,6 +825,48 @@ function GlanceTab({ period, heading }: { period: "weekly" | "monthly"; heading:
   );
 }
 
+/** MarketCatalyst's own Live Feed posts (admin console → Content pipeline), pinned atop Intraday commentary. */
+interface McFeedPost {
+  id: string;
+  header: string;
+  summary: string;
+  bullets: { label: string; text: string }[];
+  tickers: string[];
+  createdAt: string;
+}
+
+function McFeedPosts({ posts, onTicker }: { posts: McFeedPost[]; onTicker: (sym: string) => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 0 12px", borderBottom: "1px solid var(--border-soft)", marginBottom: 6 }}>
+      {posts.map(p => (
+        <article key={p.id} style={{ border: "1px solid var(--border-soft)", borderRadius: 10, padding: "12px 14px", background: "var(--surface-2)", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: ".62rem", fontWeight: 800, letterSpacing: ".05em", padding: "2px 7px", borderRadius: 4, background: "var(--brand)", color: "var(--on-brand)" }}>MARKETCATALYST</span>
+            {p.tickers.map(t => (
+              <button key={t} type="button" onClick={() => onTicker(t)} title={`Show ${t} stories`}
+                style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 700, padding: "2px 7px", borderRadius: 5, border: "1px solid var(--border-soft)", background: "transparent", color: "var(--brand)", cursor: "pointer" }}>
+                ${t}
+              </button>
+            ))}
+            <span style={{ marginLeft: "auto", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{etTimeLabel(p.createdAt)}</span>
+          </div>
+          <div style={{ fontSize: ".92rem", fontWeight: 700, color: "var(--text-hi)", lineHeight: 1.35 }}>{p.header}</div>
+          {p.summary && <p style={{ margin: 0, fontSize: ".84rem", fontStyle: "italic", lineHeight: 1.55, color: "var(--text-hi)" }}>{p.summary}</p>}
+          {p.bullets.length > 0 && (
+            <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
+              {p.bullets.map((b, i) => (
+                <li key={i} style={{ fontSize: ".82rem", lineHeight: 1.5, color: "var(--text-dim-solid)" }}>
+                  {b.label && <b style={{ color: "var(--text-hi)", fontStyle: "italic" }}>{b.label} </b>}{b.text}
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export function CommentaryScreen() {
   const router = useRouter();
   const { openStockDetail } = useIQActions();
@@ -843,6 +885,8 @@ export function CommentaryScreen() {
   // when no outlet or 8-K row carries it. Polled once a minute while News is open.
   const { data: earningsRows } = useApiResource<NewsArticleDoc[]>(mainTab === 0 ? "/live/earnings-wire" : null, 60_000);
   const [activeTab,     setActiveTab]     = useState(0);
+  // MarketCatalyst's own posts, pinned atop Intraday commentary (All).
+  const { data: mcFeed } = useApiResource<McFeedPost[]>(mainTab === 0 && activeTab === 0 ? "/api/live-feed" : null, 30_000);
   // Intraday commentary is paged, FEED_PAGE_SIZE stories at a time.
   const [feedPage, setFeedPage] = useState(0);
   const feedBodyRef = useRef<HTMLDivElement>(null);
@@ -987,6 +1031,12 @@ export function CommentaryScreen() {
   if (prevFeedKey !== feedKey) { setPrevFeedKey(feedKey); setFeedPage(0); }
   const pw = pageWindow(feed.length, feedPage);
   const pageFeed = feed.slice(pw.from, pw.to);
+  // Pinned posts follow the search box too (header, summary, bullets, tickers).
+  const mcShown = (mcFeed ?? []).filter(p => {
+    if (!q) return true;
+    const hay = [p.header, p.summary, ...p.bullets.map(b => `${b.label} ${b.text}`), ...p.tickers].join(" ").toLowerCase();
+    return hay.includes(q.replace(/^\$/, ""));
+  });
   const goPage = (p: number) => { setFeedPage(p); setOpenId(null); feedBodyRef.current?.scrollTo({ top: 0 }); };
 
   // LIVE %change for the tickers actually rendered in the feed, via the app-wide
@@ -1161,6 +1211,9 @@ export function CommentaryScreen() {
               {feedLabel.badge}
             </div>
             <div ref={feedBodyRef} className="card-b" style={{ paddingTop: 2, flex: 1, minHeight: 0, overflowY: "auto" }}>
+              {activeTab === 0 && feedPage === 0 && mcShown.length > 0 && (
+                <McFeedPosts posts={mcShown} onTicker={sym => setSearch(sym)} />
+              )}
               {feed.length === 0 ? (
                 <DataState loading={liveNewsLoading} label={
                   q 

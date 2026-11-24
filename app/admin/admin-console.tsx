@@ -8,6 +8,17 @@ import { buildAdminDataset, fetchAdminBlogs, ADMIN_DATA_KEY, ADMIN_EMAIL } from 
 import type { ConsoleBlogRow } from "./admin-data";
 import { createOpsBridge, isOpsMessage } from "./admin-ops-bridge";
 
+/** Backend errors arrive as a JSON body string; show its `message` (e.g. "Pulse needs a header and a body."). */
+function apiErrorText(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  try {
+    const msg = (JSON.parse(raw) as { message?: unknown }).message;
+    if (typeof msg === "string" && msg.trim()) return msg.trim();
+    if (Array.isArray(msg) && msg.length) return msg.map(String).join(" ");
+  } catch { /* not JSON */ }
+  return raw || "Something went wrong.";
+}
+
 /**
  * Admin console gate. The console itself is the exact static HTML at
  * /admin/console.html (design + static data preserved verbatim), embedded in an
@@ -338,6 +349,36 @@ export function AdminConsole() {
         }
         const action = d.type === "admin:pulseSave" ? "save" : d.type === "admin:pulseDelete" ? "delete" : "list";
         reply({ type: "admin:pulseResult", action, ok, ...(error ? { error } : {}), ...(posts ? { posts } : {}) });
+        return;
+      }
+      /* ── Content pipeline (Blog / Pulse / Live Feed) ───────────────────────
+         Submit, list, preview, approve, send back, retry — all through the
+         AdminGuard'd /api/admin/content API. Only the console iframe may ask. */
+      if (typeof d.type === "string" && d.type.startsWith("admin:content")) {
+        if (e.source !== iframeRef.current?.contentWindow || e.origin !== window.location.origin) return;
+        const action =
+          d.type === "admin:contentList" ? "list" :
+          d.type === "admin:contentGet" ? "get" :
+          d.type === "admin:contentSubmit" ? "submit" :
+          d.type === "admin:contentApprove" ? "approve" :
+          d.type === "admin:contentSendBack" ? "sendBack" :
+          d.type === "admin:contentRetry" ? "retry" : null;
+        if (!action) return;
+        const reply = (m: Record<string, unknown>) =>
+          iframeRef.current?.contentWindow?.postMessage({ type: "admin:contentResult", action, ...m }, window.location.origin);
+        const id = encodeURIComponent(String(d.id ?? "").replace(/[^A-Za-z0-9_-]/g, ""));
+        try {
+          let data: unknown;
+          if (action === "list") data = await apiGet("/api/admin/content");
+          else if (action === "get") data = await apiGet(`/api/admin/content/${id}`);
+          else if (action === "submit") data = await apiPost("/api/admin/content", d.body ?? {});
+          else if (action === "approve") data = await apiPost(`/api/admin/content/${id}/approve`, {});
+          else if (action === "sendBack") data = await apiPost(`/api/admin/content/${id}/send-back`, { note: String(d.note ?? "") });
+          else data = await apiPost(`/api/admin/content/${id}/retry`, {});
+          reply({ ok: true, data });
+        } catch (err) {
+          reply({ ok: false, error: apiErrorText(err) });
+        }
         return;
       }
       if (d.type === "admin:blogDelete") {
