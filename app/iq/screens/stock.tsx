@@ -3,6 +3,7 @@
 import { StockCatalystSummary } from "../mover-news-modal";
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { fmtDate, etTodayIso } from "../calendar-range";
+import { summarizeInsiders, compactUsd } from "../insider-summary";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
@@ -3064,6 +3065,43 @@ export function StockScreen({
               <EtfHoldingsView symbol={sym} />
             ) : (
               <div className="sd-hold" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {allSymInsiderTxns.length > 0 && (() => {
+                const today = etTodayIso();
+                const windows = [summarizeInsiders(allSymInsiderTxns, today, 30), summarizeInsiders(allSymInsiderTxns, today, 90)];
+                const lead = windows[0].buys + windows[0].sells > 0 ? windows[0] : windows[1];
+                const tone = lead.netValue > 0 ? "var(--up)" : lead.netValue < 0 ? "var(--down)" : "var(--text-hi)";
+                return (
+                  <div className="card" style={{ width: "100%" }}>
+                    <div className="card-h"><h3>Insider summary<span className="sd-unit">open-market trades only (Form 4 codes P / S)</span></h3></div>
+                    <div className="card-b">
+                      <div style={{ fontSize: ".95rem", fontWeight: 700, color: tone, marginBottom: 10 }}>{lead.verdict}</div>
+                      <table className="sd-ftab" style={{ width: "100%" }}>
+                        <thead>
+                          <tr><th></th><th>Buys</th><th>Sells</th><th>Bought</th><th>Sold</th><th>Net</th><th>Insiders buying / selling</th></tr>
+                        </thead>
+                        <tbody>
+                          {windows.map(w => (
+                            <tr key={w.days}>
+                              <td>Last {w.days} days</td>
+                              <td>{w.buys}</td>
+                              <td>{w.sells}</td>
+                              <td className="up">{compactUsd(w.buyValue)}</td>
+                              <td className="down">{compactUsd(w.sellValue)}</td>
+                              <td className={w.netValue > 0 ? "up" : w.netValue < 0 ? "down" : undefined}>{w.netValue > 0 ? "+" : ""}{compactUsd(w.netValue)}</td>
+                              <td>{w.buyers} / {w.sellers}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {windows[1].largest && (
+                        <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                          Largest trade (90 days): {windows[1].largest.owner} {windows[1].largest.side === "buy" ? "bought" : "sold"} {compactUsd(windows[1].largest.value)} on {fmtDate(windows[1].largest.date)}.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="card" style={{ width: "100%" }}>
                 <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
