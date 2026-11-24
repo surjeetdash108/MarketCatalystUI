@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { CandleChart, ChartSelect, IntervalMenu, CHART_TYPE_OPTIONS, DataState, Spark, StockLogo, VendorTag, type BarInterval, type ChartEarnings } from "./utils";
 import type { OHLCBar } from "./candle-chart";
@@ -8,6 +8,8 @@ import { ExpandBtn } from "./shell";
 import { useApiResource } from "./hooks/useApiResource";
 import { useBackendBars, useIntervalBars } from "./hooks/useBackendBars";
 import { useLiveTick, type UseLiveTickResult } from "./hooks/useLiveTick";
+import { useLiveQuotes } from "./live-quotes-context";
+import { latestSessionDate } from "./market-status";
 import { useHeadlineQuote, QuoteHeadline } from "./quote-headline";
 import { useChartEarnings } from "./hooks/useChartEarnings";
 import { useKeyMoments } from "./key-moments";
@@ -229,6 +231,17 @@ export function StockChart({
   // An empty symbol keeps useLiveTick from opening a second stream.
   const ownLive = useLiveTick(data.live ? "" : sym);
   const { tick } = data.live ?? ownLive;
+  // Outside the regular session the chart's last candle takes the quote's official
+  // close (the figure the header shows), not a late print and not a stored bar that
+  // may have been saved mid-session. Same shared poll the header reads.
+  const quote = useLiveQuotes(sym ? [sym] : []).get(sym.toUpperCase());
+  const sessionIso = latestSessionDate();
+  const official = useMemo(
+    () => quote && quote.marketStatus != null && quote.marketStatus !== "open" && quote.regularClose != null && quote.regularClose > 0
+      ? { close: quote.regularClose, high: quote.dayHigh, low: quote.dayLow, sessionIso }
+      : null,
+    [quote?.marketStatus, quote?.regularClose, quote?.dayHigh, quote?.dayLow, sessionIso], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   // Earnings dates also load while the earnings markers are hidden, so key
   // moments can still label a report-day move as one.
   const ownEarnings = useChartEarnings(sym, data.earnings === undefined && (showEarnings || showMoments));
@@ -250,6 +263,7 @@ export function StockChart({
       sym={sym} tf={interval} interval={interval} chartType={chartType.toLowerCase()}
       realBars={realBars} loading={loading} px={px} height={height}
       live={tick ? { price: tick.price, high: tick.high, low: tick.low, at: tick.at } : null}
+      official={official}
       earnings={showEarnings ? chartEarnings : []}
       moments={keyMoments}
       toolbarStart={<>

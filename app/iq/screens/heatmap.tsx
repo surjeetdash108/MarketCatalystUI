@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { sign, fmt, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
 import { tilePctLabel } from "../heatmap-label";
-import { heatTile, heatGradient, framePct, asOfLabel, squarify, packStocks, tileFontRem, MORE_KEY, type HmFrame, type LRect } from "../heatmap-design";
+import { heatTile, heatGradient, framePct, dayMovePct, asOfLabel, floorWeights, sectorHeaderPlan, squarify, packStocks, tileFontRem, MORE_KEY, type HeaderPlan, type HmFrame, type LRect } from "../heatmap-design";
 import { useApiList } from "../hooks/useApiList";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useLiveQuotes, QUOTE_DELAY_LABEL } from "../live-quotes-context";
@@ -32,7 +32,13 @@ const FRAME_TITLES: Record<HmFrame, string> = {
 };
 type SizeBy = "cap" | "volume";
 
-const HEADER_H = 26;
+/**
+ * Smallest area (px²) a sector block is given, about 100 x 100: a two-row name, its
+ * move and a few stocks. Measured on the real sectors: at 1289x475 the narrowest
+ * block goes from 38px to 82px while the four biggest sectors keep 69% of the map
+ * against 74% by pure market cap.
+ */
+const SECTOR_MIN_AREA = 10000;
 /** Gap kept right of and below each sector (matches .hm2-sec padding). */
 const SEC_PAD = 2;
 const APPROX_W = 1100;
@@ -122,6 +128,18 @@ const Tile = memo(function Tile(p: TileProps) {
   );
 });
 
+/** One row of the hover card's sector list. Memoised: a sector can have 250+ rows and the highlight moves with the cursor. */
+const PeerRow = memo(function PeerRow(p: { sym: string; mcap: number; chg: number | null; hi: boolean; onPick: (sym: string) => void }) {
+  return (
+    <div className={`hpop-row${p.hi ? " hpop-row-hi" : ""}`} onClick={() => p.onPick(p.sym)}>
+      <StockLogo sym={p.sym} size={16} />
+      <span className="hpop-sym">{p.sym}</span>
+      <span className="hpop-mcap">{capFmt(p.mcap)}</span>
+      <span className={`hpop-chg ${p.chg == null ? "" : p.chg >= 0 ? "up" : "down"}`}>{p.chg == null ? "—" : sign(p.chg)}</span>
+    </div>
+  );
+});
+
 function HeatmapInner() {
   // Clicking a tile opens the stock in a slide-in drawer (same as Movers),
   // rather than navigating away to the full stock page.
@@ -202,6 +220,10 @@ function HeatmapInner() {
 
   // The map's data: per stock the move for the chosen time frame and the weight
   // that sizes it. A stock with nothing to size it by is left off (zero area).
+  // The session the page is "as of". Outside the session the 1D tile is THAT
+  // session's move (see dayMovePct), not the extended-hours print the quote
+  // carries: before the open nearly every quote and stored change is 0.00%.
+  const sessionIso = latestSessionDate();
   const { groups, bySym } = useMemo(() => {
     const out: HmGroup[] = [];
     const lookup = new Map<string, { stock: HmStock; sector: string }>();
@@ -210,7 +232,7 @@ function HeatmapInner() {
       for (const [sym, mcap, storedPct] of g.items) {
         const lq = liveQuotes.get(sym);
         const c = companyBySym.get(sym);
-        const day = lq?.pctChange ?? storedPct ?? null;
+        const day = dayMovePct(lq, storedPct, c?.week5Closes, sessionIso, mkt.phase);
         const price = lq?.price ?? c?.price ?? null;
         const shares = lq?.dayVolume ?? c?.dayVolume ?? null;
         const vol = shares != null && shares > 0 && price != null && price > 0 ? (shares * price) / 1e9 : null;
@@ -233,7 +255,7 @@ function HeatmapInner() {
     }
     out.sort((a, b) => b.weight - a.weight);
     return { groups: out, bySym: lookup };
-  }, [baseSectorList, liveQuotes, companyBySym, frame, sizeBy]);
+  }, [baseSectorList, liveQuotes, companyBySym, frame, sizeBy, sessionIso, mkt.phase]);
 
   const membersShown = groups.reduce((n, g) => n + g.stocks.length, 0);
   const activeSector = selectedSector !== "Overall" ? (groups.find(g => g.name === selectedSector) ?? null) : null;
@@ -260,26 +282,41 @@ function HeatmapInner() {
   // fill what is left under its header strip. Stocks too small to read are
   // bundled into one "+N more" tile per sector. Needs the map's measured size.
   const layout = useMemo(() => {
-    const sectorRect = new Map(squarify(groups.map(g => ({ key: g.name, weight: g.weight })), 0, 0, box.w, box.h).map(r => [r.key, r]));
+    // No sector is drawn smaller than about 100x100px (capped at 3% of the map on a
+    // small screen), so even the tail of small sectors has room for its name.
+    const minShare = Math.min(0.03, SECTOR_MIN_AREA / Math.max(1, box.w * box.h));
+    const floored = floorWeights(groups.map(g => g.weight), minShare);
+    const sectorRect = new Map(squarify(groups.map((g, i) => ({ key: g.name, weight: floored[i] })), 0, 0, box.w, box.h).map(r => [r.key, r]));
+    // Each sector's header is sized to its block, so a narrow one shows its whole
+    // name (the move goes under it) instead of "CONS…"; the stocks fill what is left.
+    const plans = new Map<string, HeaderPlan>();
     const packs = new Map(groups.map(g => {
       const r = sectorRect.get(g.name);
-      return [g.name, r
-        ? packStocks(g.stocks, r.w - SEC_PAD, r.h - SEC_PAD - HEADER_H, OVERALL_MIN_TILE, OVERALL_MIN_MORE)
-        : packStocks([], 0, 0, OVERALL_MIN_TILE, OVERALL_MIN_MORE)];
+      if (!r) return [g.name, packStocks([], 0, 0, OVERALL_MIN_TILE, OVERALL_MIN_MORE)] as const;
+      const plan = sectorHeaderPlan(r.w, r.h, g.name, g.pct == null ? "—" : sign(g.pct));
+      plans.set(g.name, plan);
+      return [g.name, packStocks(g.stocks, r.w - SEC_PAD, Math.max(0, r.h - SEC_PAD - plan.h), OVERALL_MIN_TILE, OVERALL_MIN_MORE)] as const;
     }));
-    return { sectorRect, packs };
+    return { sectorRect, packs, plans };
   }, [groups, box.w, box.h]);
 
   // Hover card. Not interactive, so it needs no leave delay.
-  const [hover, setHover] = useState<{ sym: string; x: number; y: number } | null>(null);
+  const [hover, setHover] = useState<{ sym: string; cx: number; cy: number } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelHover = useCallback(() => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }, []);
+  // The card is interactive (scroll it, click a row), so leaving a tile only
+  // starts a short delay that moving onto the card cancels.
+  const hideHover = useCallback(() => {
+    cancelHover();
+    hoverTimer.current = setTimeout(() => setHover(null), 200);
+  }, [cancelHover]);
   const onEnter = useCallback((e: React.MouseEvent, sym: string) => {
-    const W = 260;
-    const x = e.clientX + 16 + W > window.innerWidth ? e.clientX - W - 16 : e.clientX + 16;
-    const y = Math.max(8, Math.min(e.clientY - 20, window.innerHeight - 200));
-    setHover({ sym, x, y });
-  }, []);
-  const onLeave = useCallback(() => setHover(null), []);
-  const onPick = useCallback((sym: string) => { setHover(null); setSelectedSym(sym); }, []);
+    cancelHover();
+    setHover({ sym, cx: e.clientX, cy: e.clientY });
+  }, [cancelHover]);
+  const onLeave = hideHover;
+  const onPick = useCallback((sym: string) => { cancelHover(); setHover(null); setSelectedSym(sym); }, [cancelHover]);
+  useEffect(() => cancelHover, [cancelHover]);
 
   const query = find.trim().toUpperCase();
 
@@ -351,7 +388,11 @@ function HeatmapInner() {
   const hov = hover ? bySym.get(hover.sym) : undefined;
   const hovCo = hover ? companyBySym.get(hover.sym) : undefined;
   const hovQ = hover ? liveQuotes.get(hover.sym) : undefined;
-  const hovPrice = hovQ?.price ?? hovCo?.price ?? null;
+  // Outside the session the card shows the regular close, to match the tile's
+  // move and the "as of close" line, not an extended-hours print.
+  const hovPrice =
+    (hovQ && hovQ.marketStatus != null && hovQ.marketStatus !== "open" ? hovQ.regularClose : null) ??
+    hovQ?.price ?? hovCo?.price ?? null;
   const hovDay = hovQ?.dayVolume ?? hovCo?.dayVolume ?? null;
   const hovVsAvg = hovDay != null && hovCo?.avgVolume20 ? hovDay / hovCo.avgVolume20 : (hovCo?.rvol ?? null);
 
@@ -449,13 +490,17 @@ function HeatmapInner() {
             {groups.map(g => {
               const lr = layout.sectorRect.get(g.name);
               const pack = layout.packs.get(g.name);
-              if (!lr || !pack) return null;
+              const plan = layout.plans.get(g.name);
+              if (!lr || !pack || !plan) return null;
               return (
                 <div key={g.name} className="hm2-sec" style={{ left: lr.x, top: lr.y, width: lr.w, height: lr.h }}>
                   <div className="hm2-sec-in">
-                    <button type="button" className="hm2-sec-h" onClick={() => setSelectedSector(g.name)} title={`Zoom in on ${g.name}`}>
-                      <span className="name">{g.name}</span>
-                      <span className={`pct ${g.pct == null ? "" : g.pct >= 0 ? "up" : "down"}`}>{g.pct == null ? "—" : sign(g.pct)}</span>
+                    <button type="button" className={`hm2-sec-h${plan.inline ? "" : " stack"}`} style={{ height: plan.h }}
+                      onClick={() => setSelectedSector(g.name)} title={`Zoom in on ${g.name}`}>
+                      <span className="name" style={plan.inline ? undefined : { WebkitLineClamp: plan.nameLines }}>{g.name}</span>
+                      {plan.showPct && (
+                        <span className={`pct ${g.pct == null ? "" : g.pct >= 0 ? "up" : "down"}`}>{g.pct == null ? "—" : sign(g.pct)}</span>
+                      )}
                     </button>
                     <div className="hm2-sec-body">
                       {pack.visible.map(s => {
@@ -478,22 +523,39 @@ function HeatmapInner() {
       <p className="hm2-note">Click a sector name to zoom in. Hover any tile for details, click it to open the stock.</p>
       </div>
 
-      {/* ── Hover card ── */}
-      {hover && hov && (
-        <div className="hm2-tip" style={{ left: hover.x, top: hover.y }}>
-          <div className="top">
-            <span className="s">{hover.sym}</span>
-            <span className={hov.stock.chg == null ? "" : hov.stock.chg >= 0 ? "up" : "down"}>{hov.stock.chg == null ? "—" : sign(hov.stock.chg)}</span>
+      {/* ── Hover card: the hovered stock, then every stock in its sector ── */}
+      {hover && hov && (() => {
+        const peers = (groups.find(g => g.name === hov.sector)?.stocks ?? []).slice().sort((a, b) => b.mcap - a.mcap);
+        const maxH = Math.min(160 + 34 + peers.length * 27, window.innerHeight - 16);
+        const x = hover.cx + 14 + 318 > window.innerWidth ? hover.cx - 326 : hover.cx + 14;
+        const y = Math.max(8, Math.min(hover.cy - 10, window.innerHeight - maxH - 8));
+        const chg = hov.stock.chg;
+        return (
+          <div className="dash-pop"
+            style={{ left: x, top: y, width: 310, cursor: "default", maxHeight: `${window.innerHeight - y - 8}px`, overflowY: "auto" }}
+            onMouseEnter={cancelHover} onMouseLeave={hideHover}>
+            <div className="dp-head" style={{ cursor: "pointer" }} onClick={() => onPick(hover.sym)}>
+              <StockLogo sym={hover.sym} size={28} />
+              <span className="dp-sym">{hover.sym}</span>
+              <span className={`pill ${chg == null ? "" : chg >= 0 ? "up" : "dn"}`} style={{ marginLeft: "auto" }}>{chg == null ? "—" : sign(chg)}</span>
+            </div>
+            <div className="dp-row"><span>Mkt Cap</span><b>{capFmt(hov.stock.mcap)}</b></div>
+            <div className="dp-row"><span>Price</span><b>{hovPrice != null ? `$${fmt(hovPrice)}` : <NotAvailable />}</b></div>
+            <div className="dp-row"><span>RVOL</span><b className={hovVsAvg != null && hovVsAvg >= 2 ? "up" : ""}>{hovVsAvg != null ? `${hovVsAvg.toFixed(1)}×` : <NotAvailable />}</b></div>
+            <div className="dp-row"><span>RS Rating</span><b>{hovCo?.rsRating != null ? `${hovCo.rsRating}/99` : <NotAvailable />}</b></div>
+            {peers.length > 0 && (
+              <>
+                <div className="hpop-label" style={isOverall ? undefined : { cursor: "default" }}
+                  onClick={isOverall ? () => { cancelHover(); setHover(null); setSelectedSector(hov.sector); } : undefined}>
+                  <span>{hov.sector}</span>
+                  {isOverall && <span className="link" style={{ fontSize: ".62rem" }}>Open sector heatmap →</span>}
+                </div>
+                {peers.map(p => <PeerRow key={p.sym} sym={p.sym} mcap={p.mcap} chg={p.chg} hi={p.sym === hover.sym} onPick={onPick} />)}
+              </>
+            )}
           </div>
-          <div className="sub">{[hovCo?.name, hov.sector].filter(Boolean).join(" · ")}</div>
-          <dl>
-            <div><dt>Price</dt><dd>{hovPrice != null ? `$${fmt(hovPrice)}` : <NotAvailable />}</dd></div>
-            <div><dt>Market cap</dt><dd>{capFmt(hov.stock.mcap)}</dd></div>
-            <div><dt>Volume vs avg</dt><dd>{hovVsAvg != null ? `${hovVsAvg.toFixed(1)}×` : <NotAvailable />}</dd></div>
-          </dl>
-          <div className="foot">Click to open stock details</div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Bundled small-cap stocks modal */}
       {moreModal && (
@@ -573,7 +635,8 @@ function HeatmapInner() {
                 gap: 6,
               }}
             >
-              {[...moreModal.stocks].sort((a, b) => b.weight - a.weight).map(({ sym, mcap, chg }) => {
+              {/* Re-read each row from the live map: `moreModal` is a copy taken at click time, and its moves would otherwise freeze while the tiles behind keep updating. */}
+              {moreModal.stocks.map(s => bySym.get(s.sym)?.stock ?? s).sort((a, b) => b.weight - a.weight).map(({ sym, mcap, chg }) => {
                 const comp = companies.find((x) => x.ticker === sym);
                 return (
                   <div

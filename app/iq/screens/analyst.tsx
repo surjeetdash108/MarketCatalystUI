@@ -1168,14 +1168,7 @@ export function AnalystScreen() {
                   WATCHLIST
                 </span>
               </div>
-              <div style={{ display: "flex", gap: 6, overflow: "hidden" }}>
-                {summaryMetrics.watchCalls.slice(0, 4).map(c => (
-                  <span key={c.id} style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: c.dir >= 0 ? G : R }}>
-                    {c.t}
-                  </span>
-                ))}
-                {summaryMetrics.watchCalls.length === 0 && <span style={{ fontSize: 12, color: TEXT_MUTED }}>No actions on watched stocks</span>}
-              </div>
+              {summaryMetrics.watchCalls.length === 0 && <div style={{ fontSize: 12, color: TEXT_MUTED }}>No actions on watched stocks</div>}
 
               {/* Tooltip Popup */}
               {activeTip === "watch" && summaryMetrics.watchCalls.length > 0 && (

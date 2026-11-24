@@ -69,6 +69,13 @@ export interface LiveQuote {
    * exactly the after-hours move. Null when the feed (FMP) has no session split.
    */
   regularClose: number | null;
+  /**
+   * The move (%) of the latest COMPLETED regular session. Pre-market `pctChange`
+   * is the pre-market print against the close (0.00 for most stocks), so a
+   * surface that is "as of the last close" reads this instead. Null while the
+   * regular session runs; absent from servers that predate it.
+   */
+  lastSessionPct?: number | null;
   /** When the vendor last updated this quote (epoch ms); null when unknown. */
   updatedAt: number | null;
   /** Latest session's open / high / low / volume, from the same vendor quote as `price`. */
@@ -188,6 +195,7 @@ interface SnapshotRow {
   marketStatus?: string | null;
   previousClose?: number | null;
   regularClose?: number | null;
+  lastSessionChangePct?: number | null;
   vendorUpdatedAt?: number | null;
   open?: number | null;
   dayHigh?: number | null;
@@ -288,6 +296,7 @@ export function LiveQuotesProvider({ children }: { children: ReactNode }) {
               marketStatus: q.marketStatus ?? null,
               previousClose: q.previousClose ?? null,
               regularClose: q.regularClose ?? null,
+              lastSessionPct: q.lastSessionChangePct ?? null,
               updatedAt: q.vendorUpdatedAt ?? null,
               open: q.open ?? null,
               dayHigh: q.dayHigh ?? null,

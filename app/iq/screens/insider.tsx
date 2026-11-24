@@ -11,6 +11,7 @@ import type { InsiderTxDoc, CompanyDoc, OwnershipDoc } from "../types";
 import { useApiResource } from "../hooks/useApiResource";
 import type { Stock13FResponse } from "../stock-13f-view";
 import { etTodayIso, fmtMarketDate } from "../calendar-range";
+import { DEFAULT_LENS, combineLenses, lensSources, lensTitle, toggleLens, type LensMode } from "../insider-lens";
 
 // ---- Constants & Theme Colors (matches 13F & Insider standalone HTML) ----
 const UP = "var(--up, #3fd68a)";
@@ -331,7 +332,10 @@ export function InsiderScreen() {
   const { openStockFull } = useIQActions();
 
   // Screen State
-  const [activeListKey, setActiveListKey] = useState("notable");
+  // The lens chips are multi-select: several can be on at once, in the order picked.
+  const [activeListKeys, setActiveListKeys] = useState<string[]>([DEFAULT_LENS]);
+  // With 2+ lenses on: a stock on ANY of them, or on ALL of them.
+  const [lensMode, setLensMode] = useState<LensMode>("any");
   const [searchQuery, setSearchQuery] = useState("");
   const [focusTicker, setFocusTicker] = useState<string>("");
   const [rangeDays, setRangeDays] = useState<number>(90);
@@ -525,24 +529,31 @@ export function InsiderScreen() {
     return ["—", ago ? "Quiet · " + ago : "Quiet", "var(--text-pure-dim)"];
   };
 
-  // Filtered List for Left Column
-  const currentListDef = useMemo(() => {
-    return LISTS.find((l) => l.k === activeListKey) || LISTS[0];
-  }, [activeListKey]);
+  // Filtered List for Left Column: the selected lenses, combined.
+  const selectedDefs = useMemo(() => {
+    const defs = activeListKeys.map((k) => LISTS.find((l) => l.k === k)).filter((d): d is ListDef => !!d);
+    return defs.length > 0 ? defs : [LISTS[0]];
+  }, [activeListKeys]);
+  const multiLens = selectedDefs.length > 1;
 
   const searchQ = searchQuery.trim().toUpperCase();
+
+  const combined = useMemo(
+    () => combineLenses(selectedDefs.map((d) => d.pick(allStats)), lensMode),
+    [selectedDefs, allStats, lensMode],
+  );
 
   const filteredStatsList = useMemo(() => {
     const list = searchQ
       ? allStats.filter(
           (s) => s.t.startsWith(searchQ) || (companiesMap.get(s.t)?.name || "").toUpperCase().includes(searchQ)
         )
-      : currentListDef.pick(allStats);
+      : combined.rows;
     if (focusStats && focusStats.t) {
       return list.map((s) => (s.t === focusStats.t ? focusStats : s));
     }
     return list;
-  }, [searchQ, allStats, companiesMap, currentListDef, focusStats]);
+  }, [searchQ, allStats, companiesMap, combined, focusStats]);
 
   // Ensure focus ticker is valid
   useEffect(() => {
@@ -965,12 +976,13 @@ export function InsiderScreen() {
         }}
       >
         {LISTS.map((l) => {
-          const isActive = !searchQ && l.k === activeListKey;
+          const isActive = !searchQ && activeListKeys.includes(l.k);
           return (
             <button
               key={l.k}
+              aria-pressed={isActive}
               onClick={() => {
-                setActiveListKey(l.k);
+                setActiveListKeys((cur) => toggleLens(cur, l.k));
                 setSearchQuery("");
               }}
               style={{
@@ -1000,6 +1012,51 @@ export function InsiderScreen() {
             </button>
           );
         })}
+
+        {/* With two or more lenses on: a stock on any of them, or on all of them */}
+        {!searchQ && multiLens && (
+          <div
+            role="group"
+            aria-label="Match any or all of the selected lenses"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              padding: 2,
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              background: "var(--surface-1)",
+            }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: "var(--text-pure)", padding: "0 6px 0 8px" }}>
+              MATCH
+            </span>
+            {(["any", "all"] as const).map((m) => {
+              const on = lensMode === m;
+              return (
+                <button
+                  key={m}
+                  aria-pressed={on}
+                  onClick={() => setLensMode(m)}
+                  title={m === "any" ? "Stocks on at least one selected lens" : "Only stocks on every selected lens"}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: on ? 800 : 600,
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    border: "none",
+                    color: on ? "var(--text-pure)" : "var(--text-pure-dim)",
+                    background: on ? "var(--surface-3)" : "transparent",
+                    transition: "all 120ms ease",
+                  }}
+                >
+                  {m === "any" ? "Any" : "All"}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Insider Window Selector */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1084,8 +1141,11 @@ export function InsiderScreen() {
               padding: "14px 16px 10px",
             }}
           >
-            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-pure)" }}>
-              {searchQ ? "Search results" : currentListDef.label}
+            <div
+              title={searchQ ? undefined : selectedDefs.map((d) => d.label).join(" + ")}
+              style={{ fontSize: 15, fontWeight: 800, color: "var(--text-pure)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              {searchQ ? "Search results" : lensTitle(selectedDefs.map((d) => d.label))}
             </div>
             <span
               style={{
@@ -1098,7 +1158,7 @@ export function InsiderScreen() {
                 color: "var(--warn)",
               }}
             >
-              {searchQ ? "ALL" : currentListDef.src}
+              {searchQ ? "ALL" : lensSources(selectedDefs.map((d) => d.src))}
             </span>
             <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "var(--text-pure-dim)" }}>
               {filteredStatsList.length} stocks
@@ -1162,7 +1222,13 @@ export function InsiderScreen() {
               </span>
             </div>
             <div style={{ fontSize: 11.5, color: "var(--text-pure-dim)", fontWeight: 500, lineHeight: 1.4 }}>
-              {searchQ ? "Showing insider + 13F read for every match." : currentListDef.hint}
+              {searchQ
+                ? "Showing insider + 13F read for every match."
+                : !multiLens
+                ? selectedDefs[0].hint
+                : lensMode === "any"
+                ? `Stocks on any of the ${selectedDefs.length} selected lenses — those on the most lenses first.`
+                : `Only stocks on all ${selectedDefs.length} selected lenses at once.`}
             </div>
           </div>
 
@@ -1177,9 +1243,10 @@ export function InsiderScreen() {
                 logoFg: "#e8eef4",
               };
               const [tag, tagColor, tagBg] = tagOf(s);
+              // With several lenses on, a row shows the figure of the first-picked lens that has it.
               const [metricText, metricSub, metricColor] = formatMetric(
                 s,
-                searchQ ? "ins" : currentListDef.m
+                searchQ ? "ins" : selectedDefs[combined.via.get(s.t) ?? 0].m
               );
               const isSelected = effectiveFocus === s.t;
 
@@ -1311,7 +1378,11 @@ export function InsiderScreen() {
             })}
             {filteredStatsList.length === 0 && (
               <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-pure-dim)", fontWeight: 500 }}>
-                No company matches “{searchQuery}”.
+                {searchQ
+                  ? <>No company matches “{searchQuery}”.</>
+                  : multiLens && lensMode === "all"
+                  ? "No stock is on all of these lenses at once. Try Match: Any, or turn one off."
+                  : `No stocks on this list in the last ${rangeDays} days.`}
               </div>
             )}
           </div>
