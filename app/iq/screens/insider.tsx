@@ -174,18 +174,6 @@ const LISTS: ListDef[] = [
     pick: (S) => S.filter((s) => s.hasF13 && s.newPos > 0).sort((a, b) => b.newPos - a.newPos),
     m: "new",
   },
-  {
-    k: "agree",
-    label: "Insiders + funds agree",
-    dot: AMB,
-    src: "FORM 4 + 13F",
-    hint: "Insiders and institutions moving the same direction — the highest-confluence setups.",
-    pick: (S) =>
-      S.filter(
-        (s) => s.hasF13 && ((s.buyV > s.offV && s.iS >= 3 && s.net > 0) || (s.offV > s.buyV && s.iS <= -3 && s.net < 0))
-      ).sort((a, b) => Math.abs(b.iS) - Math.abs(a.iS)),
-    m: "agree",
-  },
 ];
 
 interface CompanyStats {
@@ -331,16 +319,16 @@ function statsFor(t: string, rs: TradeItem[], f: F13Tuple | undefined): CompanyS
 
 /**
  * Insiders vs funds on one stock: both buying / both selling (confluence) or
- * pulling opposite ways (divergence). Shown as a tag next to the ticker, in
- * the list and in the detail header.
+ * pulling opposite ways (divergence). The list marks it with a coloured ◆ (the
+ * sentence is its tooltip); the detail panel spells it out above the two verdict cards.
  */
-function alignmentOf(s: CompanyStats): { text: string; short: string; color: string } | null {
+function alignmentOf(s: CompanyStats): { text: string; color: string } | null {
   const isNetBuy = s.buyV > s.offV && s.buys.length > 0;
   const isNetSell = s.offV > s.buyV && s.off.length > 0;
-  if (isNetBuy && s.net > 0) return { text: "Confluence: insiders and funds are both buying", short: "◆ Both buying", color: UP };
-  if (isNetSell && s.net < 0) return { text: "Confluence: insiders and funds are both selling", short: "◆ Both selling", color: DN };
-  if (isNetBuy && s.net <= -2) return { text: "Divergence: insiders buying while funds distribute", short: "◆ Divergence", color: AMB };
-  if (isNetSell && s.net >= 2) return { text: "Divergence: insiders selling into fund accumulation", short: "◆ Divergence", color: AMB };
+  if (isNetBuy && s.net > 0) return { text: "Confluence: insiders and funds are both buying", color: UP };
+  if (isNetSell && s.net < 0) return { text: "Confluence: insiders and funds are both selling", color: DN };
+  if (isNetBuy && s.net <= -2) return { text: "Divergence: insiders buying while funds distribute", color: AMB };
+  if (isNetSell && s.net >= 2) return { text: "Divergence: insiders selling into fund accumulation", color: AMB };
   return null;
 }
 
@@ -548,7 +536,6 @@ export function InsiderScreen() {
     if (mode === "sell") return ["−" + fm(s.offV), s.off.length + " off-plan · " + ago, DN];
     if (mode === "f13") return [fp(s.net) + " shs", (s.netFunds > 0 ? "+" : "") + s.netFunds + " net funds", s.net >= 0 ? UP : DN];
     if (mode === "new") return [s.newPos + " new", s.exits + " exits", "#8fa6ff"];
-    if (mode === "agree") return [s.buyV > s.offV && s.iS > 0 ? "Both buying" : "Both selling", "funds " + fp(s.net), s.buyV > s.offV && s.iS > 0 ? UP : DN];
     if (s.buyV > s.offV && s.iS > 0) {
       return ["+" + fm(s.buyV), s.buyers + " buyer" + (s.buyers > 1 ? "s" : "") + " · " + ago, UP];
     }
@@ -1329,27 +1316,32 @@ export function InsiderScreen() {
                       >
                         {tag}
                       </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
                       {rowAlign && (
                         <span
+                          role="img"
                           title={rowAlign.text}
-                          style={{ fontSize: 11.5, fontWeight: 800, color: rowAlign.color, whiteSpace: "nowrap" }}
+                          aria-label={rowAlign.text}
+                          style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 800, lineHeight: 1, color: rowAlign.color }}
                         >
-                          {rowAlign.short}
+                          ◆
                         </span>
                       )}
+                      <span
+                        style={{
+                          minWidth: 0,
+                          fontSize: 12.5,
+                          fontWeight: 500,
+                          color: "var(--text-pure-dim)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {comp.name}
+                      </span>
                     </div>
-                    <span
-                      style={{
-                        fontSize: 12.5,
-                        fontWeight: 500,
-                        color: "var(--text-pure-dim)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {comp.name}
-                    </span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
                     <span
@@ -1449,24 +1441,7 @@ export function InsiderScreen() {
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flexShrink: 0 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1, color: "var(--text-pure)" }}>{deepDive.t}</span>
-                  {deepDive.hasAlign && (
-                    <span
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        padding: "3px 8px",
-                        borderRadius: 6,
-                        border: `1px dashed ${deepDive.alignColor}`,
-                        color: deepDive.alignColor,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ◆ {deepDive.alignText}
-                    </span>
-                  )}
-                </span>
+                <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1, color: "var(--text-pure)" }}>{deepDive.t}</span>
                 <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-pure-dim)", whiteSpace: "nowrap" }}>{deepDive.name}</span>
               </div>
               <div
@@ -1522,6 +1497,25 @@ export function InsiderScreen() {
                 Open stock page →
               </button>
             </div>
+
+            {/* Insiders vs funds, in words: sits above the two cards it compares. */}
+            {deepDive.hasAlign && (
+              <div style={{ padding: "14px 20px 0" }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    border: `1px dashed ${deepDive.alignColor}`,
+                    color: deepDive.alignColor,
+                  }}
+                >
+                  ◆ {deepDive.alignText}
+                </span>
+              </div>
+            )}
 
             {/* Dual Verdict Cards */}
             <div
