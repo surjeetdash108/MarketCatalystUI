@@ -40,8 +40,15 @@ export function hasListed(e: IpoLike, livePrice: number | null, today: string): 
   return e.status === "history" || e.currentPrice != null || (livePrice != null && livePrice > 0);
 }
 
-/** The status to show: "history" (Listed) once it trades, whatever the stored feed status says. */
+/**
+ * The status to show: "history" (Listed) once it trades, whatever the stored
+ * feed status says; "not_listed" when its date has passed and it never started
+ * trading (postponed deals such as SEAM, rescheduled four times in Nov 2026),
+ * so a past date doesn't read "Pending".
+ */
 export function displayStatus(e: IpoLike, livePrice: number | null, today: string): string {
   if (e.status === "withdrawn") return "withdrawn";
-  return hasListed(e, livePrice, today) ? "history" : (e.status ?? "pending");
+  if (hasListed(e, livePrice, today)) return "history";
+  if (e.date && e.date < today && ["pending", "new", "expected", "priced", "filed"].includes(e.status ?? "pending")) return "not_listed";
+  return e.status ?? "pending";
 }

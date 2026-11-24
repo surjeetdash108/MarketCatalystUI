@@ -79,6 +79,7 @@ const IPO_STATUS_LABEL: Record<string, string> = {
   filed: "Filed",
   expected: "Expected",
   withdrawn: "Withdrawn",
+  not_listed: "Not listed yet",
 };
 const ipoStatusLabel = (s: string): string =>
   IPO_STATUS_LABEL[s] ?? s.replace(/_/g, " ");

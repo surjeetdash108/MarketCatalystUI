@@ -13,7 +13,9 @@ describe("IPO rows", () => {
   });
 
   it("keeps pending until it trades, and never lists a future date", () => {
-    assert.equal(displayStatus({ symbol: "ABC", date: "2026-11-19", status: "pending" }, null, today), "pending");
+    assert.equal(displayStatus({ symbol: "ABC", date: "2026-11-24", status: "pending" }, null, today), "pending");
+    // Date passed, never traded (postponed): not "Pending".
+    assert.equal(displayStatus({ symbol: "SEAM", date: "2026-11-10", status: "pending" }, null, today), "not_listed");
     assert.equal(hasListed({ symbol: "ABC", date: "2026-11-30", status: "pending" }, 10, today), false);
   });
 
