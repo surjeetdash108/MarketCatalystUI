@@ -12,7 +12,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import type { Stock13FResponse } from "../stock-13f-view";
 import { etTodayIso, fmtMarketDate } from "../calendar-range";
 import { periodLabel, quarterCoverage } from "../thirteen-f-period";
-import { DEFAULT_LENS, combineLenses, lensSources, lensTitle, toggleLens, type LensMode } from "../insider-lens";
+import { DEFAULT_LENS, combineLenses, toggleLens, type LensMode } from "../insider-lens";
 
 // ---- Constants & Theme Colors (matches 13F & Insider standalone HTML) ----
 const UP = "var(--up, #3fd68a)";
@@ -1173,43 +1173,10 @@ export function InsiderScreen() {
             overflow: "hidden",
           }}
         >
-          {/* Header */}
+          {/* Search Input */}
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "14px 16px 10px",
-            }}
-          >
-            <div
-              title={searchQ ? undefined : selectedDefs.map((d) => d.label).join(" + ")}
-              style={{ fontSize: 16, fontWeight: 800, color: "var(--text-pure)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            >
-              {searchQ ? "Search results" : lensTitle(selectedDefs.map((d) => d.label))}
-            </div>
-            <span
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 11,
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "var(--warn-dim, rgba(245,181,68,.12))",
-                color: "var(--warn)",
-              }}
-            >
-              {searchQ ? "ALL" : lensSources(selectedDefs.map((d) => d.src))}
-            </span>
-            <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 600, color: "var(--text-pure-dim)" }}>
-              {filteredStatsList.length} stocks
-            </span>
-          </div>
-
-          {/* Search Input & Hint */}
-          <div
-            style={{
-              padding: "0 16px 12px",
+              padding: "14px 16px 12px",
               borderBottom: "1px solid var(--border-soft)",
               display: "flex",
               flexDirection: "column",
@@ -1261,15 +1228,6 @@ export function InsiderScreen() {
               >
                 /
               </span>
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--text-pure-dim)", fontWeight: 500, lineHeight: 1.4 }}>
-              {searchQ
-                ? "Showing insider + 13F read for every match."
-                : !multiLens
-                ? selectedDefs[0].hint
-                : lensMode === "any"
-                ? `Stocks on any of the ${selectedDefs.length} selected lenses — those on the most lenses first.`
-                : `Only stocks on all ${selectedDefs.length} selected lenses at once.`}
             </div>
           </div>
 
