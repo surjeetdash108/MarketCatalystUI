@@ -120,9 +120,94 @@ function candleIsOpen(lastT: number, iv: BarInterval, at: number): boolean {
   if (len != null) {
     return etSessionDate(lastT) === etSessionDate(at) && at < lastT + len;
   }
+  return sameCalendarCandle(lastT, iv, at);
+}
+
+/** Whether `at` falls in the same 1D / 1W / 1M candle as the one stamped `lastT` (by ET date). */
+function sameCalendarCandle(lastT: number, iv: BarInterval, at: number): boolean {
   if (iv === "1D") return etSessionDate(lastT) === etSessionDate(at);
   if (iv === "1W") return etWeekStart(lastT) === etWeekStart(at);
   return etSessionDate(lastT).slice(0, 7) === etSessionDate(at).slice(0, 7); // 1M
+}
+
+/**
+ * The latest COMPLETED regular session's official figures, for use once the
+ * session is over (after the close, overnight, pre-market). `sessionIso` is that
+ * session's ET date.
+ */
+export type OfficialClose = { close: number; high: number | null; low: number | null; sessionIso: string };
+
+type LiveInput = { price: number; high: number | null; low: number | null; at?: number | null };
+
+/**
+ * The bars to draw: the stored ones with the live quote folded onto the newest.
+ *
+ *  - A tick inside the regular session folds onto the candle that is still
+ *    forming. Unconditionally overlaying it rewrote a completed candle (pre-
+ *    market, the last bar is the PREVIOUS session) and could flip its colour.
+ *  - Outside it nothing from the tick is used (an after-hours print is not part
+ *    of the day's candle). Instead the session's OFFICIAL close, high and low go
+ *    onto the daily-and-up candle of that session. Stored daily bars are saved
+ *    once and can hold a half-finished candle (AAPL: close 348.37 saved at 11:35
+ *    ET against the official 349.08), so without this the candle only matches the
+ *    header if the bars happened to be re-fetched after the close.
+ *
+ * No synthetic bar is ever added: if the stored bars have no candle for the
+ * session (NVDA's ended on Friday), nothing is folded onto an earlier candle.
+ */
+export function foldLiveOntoBars(
+  base: OHLCBar[],
+  live: LiveInput | null | undefined,
+  interval: BarInterval | undefined,
+  official: OfficialClose | null | undefined,
+): OHLCBar[] {
+  if (base.length < 2) return base;
+  const last = base[base.length - 1];
+
+  if (live && live.price > 0) {
+    const c = live.price;
+    if (interval) {
+      // Placed by the tick's OWN time: a delayed tick belongs to the candle it
+      // traded in. Without one (REST-poll path) nothing is folded — the next
+      // bars refetch brings the candle current.
+      if (live.at != null && candleIsOpen(last.t, interval, live.at)) {
+        // live.high/low are the SESSION's extremes: they fit inside a 1D/1W/1M
+        // candle, but would stretch a 5-minute one to the whole day's range.
+        const dayRange = !isIntradayInterval(interval);
+        const h = Math.max(last.h, c, dayRange ? (live.high ?? c) : c);
+        const l = Math.min(last.l, c, dayRange ? (live.low ?? c) : c);
+        return [...base.slice(0, -1), { ...last, c, h, l }];
+      }
+    } else if (live.at != null && inRegularHours(live.at) && etSessionDate(last.t) === etSessionDate(live.at)) {
+      const h = Math.max(last.h, live.high ?? c, c);
+      const l = Math.min(last.l, live.low ?? c, c);
+      return [...base.slice(0, -1), { ...last, c, h, l }];
+    }
+  }
+
+  return foldOfficialClose(base, last, interval, official);
+}
+
+function foldOfficialClose(
+  base: OHLCBar[],
+  last: OHLCBar,
+  interval: BarInterval | undefined,
+  official: OfficialClose | null | undefined,
+): OHLCBar[] {
+  if (!official || !(official.close > 0)) return base;
+  // Daily-and-up candles only; intraday candles are exactly the bars the backend stored.
+  const prev = base[base.length - 2];
+  const daily = interval ? !isIntradayInterval(interval) : last.t - prev.t >= 20 * 3_600_000;
+  if (!daily) return base;
+  // Midday ET on the session's date: inside that day whether Eastern is UTC-5 or UTC-4.
+  const sessionAt = Date.parse(`${official.sessionIso}T17:00:00Z`);
+  if (!Number.isFinite(sessionAt) || !sameCalendarCandle(last.t, interval ?? "1D", sessionAt)) return base;
+  const c = official.close;
+  const okRange = official.high != null && official.low != null && official.high >= official.low && official.low > 0;
+  const h = Math.max(last.h, c, okRange ? (official.high as number) : c);
+  const l = Math.min(last.l, c, okRange ? (official.low as number) : c);
+  if (last.c === c && last.h === h && last.l === l) return base;
+  return [...base.slice(0, -1), { ...last, c, h, l }];
 }
 
 const fmtDay = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: ET });
@@ -1280,6 +1365,8 @@ type CandleChartProps = {
   loading?: boolean;
   /** Latest live (delayed) quote, folded onto the newest bar while that bar is still forming. */
   live?: { price: number; high: number | null; low: number | null; at?: number | null } | null;
+  /** The last completed session's official close/high/low, set while the market is not in its regular session; see foldLiveOntoBars. */
+  official?: OfficialClose | null;
   /** Reported quarters to mark on the chart. Omit (or pass []) to hide them. */
   earnings?: ChartEarnings[];
   /** Unusual moves to mark (daily-and-up bars only), each with its explaining news. */
@@ -1327,7 +1414,7 @@ export function CandleChart(props: CandleChartProps) {
 }
 
 function CandleChartInner({
-  sym, tf, interval, chartType = "candles", realBars, live, earnings = [], moments = NO_MOMENTS, hideHudOhlc, onBarHover,
+  sym, tf, interval, chartType = "candles", realBars, live, official, earnings = [], moments = NO_MOMENTS, hideHudOhlc, onBarHover,
   height, toolbarStart, toolbarEnd, smc,
 }: CandleChartProps) {
   const prefs = useChartPrefs();
@@ -1344,33 +1431,12 @@ function CandleChartInner({
   const { bars: poolBars } = useBackendBars(sym, POOL_TF, isDailyTf && tf !== POOL_TF);
   const baseBars = isDailyTf ? (tf === POOL_TF ? realBars : (poolBars ?? realBars)) : realBars;
 
-  const data = useMemo(() => {
-    const base = baseBars && baseBars.length > 1 ? baseBars : [];
-    if (!(live && live.price > 0 && base.length > 1)) return base;
-    // Fold the live price onto the newest bar ONLY while that bar is still
-    // forming. Unconditionally overlaying it rewrote a completed candle (pre-
-    // market, the last bar is the PREVIOUS session) and could flip its colour.
-    // No synthetic bar is ever added: a live quote has no honest open.
-    const last = base[base.length - 1];
-    const c = live.price;
-    if (interval) {
-      // Placed by the tick's OWN time: a delayed tick belongs to the candle it
-      // traded in. Without one (REST-poll path) nothing is folded — the next
-      // bars refetch brings the candle current.
-      if (live.at == null || !candleIsOpen(last.t, interval, live.at)) return base;
-      // live.high/low are the SESSION's extremes: they fit inside a 1D/1W/1M
-      // candle, but would stretch a 5-minute one to the whole day's range.
-      const dayRange = !isIntradayInterval(interval);
-      const h = Math.max(last.h, c, dayRange ? (live.high ?? c) : c);
-      const l = Math.min(last.l, c, dayRange ? (live.low ?? c) : c);
-      return [...base.slice(0, -1), { ...last, c, h, l }];
-    }
-    // Same rule as above: an after-hours print is not part of the day's candle.
-    if (live.at == null || !inRegularHours(live.at) || etSessionDate(last.t) !== etSessionDate(live.at)) return base;
-    const h = Math.max(last.h, live.high ?? c, c);
-    const l = Math.min(last.l, live.low ?? c, c);
-    return [...base.slice(0, -1), { ...last, c, h, l }];
-  }, [baseBars, live, interval]);
+  // The live tick (regular hours) or the session's official close (otherwise)
+  // folded onto the newest candle; see foldLiveOntoBars.
+  const data = useMemo(
+    () => foldLiveOntoBars(baseBars && baseBars.length > 1 ? baseBars : [], live, interval, official),
+    [baseBars, live, interval, official],
+  );
 
   const n = data.length;
   /** Typical bar spacing: decides intraday vs daily labels, VWAP anchoring and earnings markers. */

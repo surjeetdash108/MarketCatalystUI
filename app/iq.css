@@ -4518,13 +4518,6 @@ table.tbl tr:hover td {
   flex-shrink: 0;
 }
 
-.hpop-bar {
-  display: block;
-  height: 3px;
-  border-radius: 2px;
-  flex-shrink: 0;
-  min-width: 2px;
-}
 
 /* heatmap hover popup */
 .heat-pop {
@@ -8544,11 +8537,15 @@ table.tbl tr:hover td {
   padding: 0;
 }
 
-/* The "View all" drawers (Industry Group Rank, Peers, Key levels…) are rendered
-   inside the stock drawer, so the rule above zeroed their body padding too and
-   pinned the rank numbers to the drawer's left edge. Restore the normal inset. */
-.stock-side-drawer .side-drawer .drawer-b {
-  padding: 18px 20px 32px;
+/* The "View all" drawers (Sector Momentum Intraday, Peers, Key levels…) are rendered
+   inside the stock screen, so the rules that zero a stock wrapper's body padding
+   (`.stock-side-drawer .drawer-b` above and `.drawer.wide .drawer-b` below) zeroed
+   theirs too and pinned the rank numbers and the % column to the drawer's edges.
+   The stock opened from the Dashboard sits in `.drawer.wide`, which the first
+   version of this fix missed. Restore an inset, a little wider than the header's. */
+.stock-side-drawer .side-drawer .drawer-b,
+.drawer.wide .side-drawer .drawer-b {
+  padding: 18px 28px 32px;
 }
 
 /* The top bar is z-index 100 (so its profile/notification dropdowns clear the
@@ -14299,6 +14296,10 @@ h6.sd-sec {
 .iq-root .hm2-sec-h .pct { flex: none; font-family: var(--f-mono); font-size: .7rem; font-weight: 700; color: var(--text-dim-solid); }
 .iq-root .hm2-sec-h .pct.up { color: var(--up); }
 .iq-root .hm2-sec-h .pct.down { color: var(--down); }
+/* Narrow block: the move sits under the name and a long name wraps (heatmap-design.ts sectorHeaderPlan sizes the strip). */
+.iq-root .hm2-sec-h.stack { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 0 4px; }
+.iq-root .hm2-sec-h.stack .name { display: -webkit-box; -webkit-box-orient: vertical; max-width: 100%; white-space: normal; overflow: hidden; overflow-wrap: anywhere; line-height: 13px; font-size: .66rem; letter-spacing: .03em; }
+.iq-root .hm2-sec-h.stack .pct { line-height: 13px; font-size: .66rem; }
 .iq-root .hm2-sec-body { position: relative; flex: 1; min-height: 0; }
 
 .iq-root .hm2-tile { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; padding: 2px; cursor: pointer; box-shadow: inset 0 0 0 1px var(--bg); transition: opacity .12s; }
@@ -14314,15 +14315,6 @@ h6.sd-sec {
 .iq-root .hm2-empty .d { max-width: 460px; font-size: .8rem; line-height: 1.55; color: var(--text-dim-solid); }
 .iq-root .hm2-note { margin: 8px 0 24px; font-size: .78rem; color: var(--text-dim-solid); }
 
-.iq-root .hm2-tip { position: fixed; z-index: 150; width: 260px; padding: 14px 16px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-2); box-shadow: 0 14px 36px rgba(0, 0, 0, .55); pointer-events: none; }
-.iq-root .hm2-tip .top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-family: var(--f-mono); font-weight: 800; font-size: 1.05rem; color: var(--text-hi); }
-.iq-root .hm2-tip .top .s { font-size: 1.15rem; }
-.iq-root .hm2-tip .sub { margin: 3px 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); font-size: .8rem; color: var(--text-dim-solid); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.iq-root .hm2-tip dl { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.iq-root .hm2-tip dl > div { display: flex; justify-content: space-between; gap: 12px; font-size: .84rem; }
-.iq-root .hm2-tip dt { color: var(--text-dim-solid); }
-.iq-root .hm2-tip dd { margin: 0; font-family: var(--f-mono); font-weight: 700; color: var(--text-hi); }
-.iq-root .hm2-tip .foot { margin-top: 10px; font-size: .74rem; color: var(--text-dim-solid); }
 @media (max-width: 700px) {
   .iq-root .hm2-map { height: 70vh; }
   .iq-root .hm2-search { width: 100%; }

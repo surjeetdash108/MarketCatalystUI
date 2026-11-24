@@ -47,6 +47,7 @@ import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 import { range52, fiftyTwoWeekBars } from "../range52";
 import { nextEarningsDate } from "../next-earnings";
+import { DEFAULT_PEER_SORT, PEER_DEFAULT_LIMIT, mergePeers, nextPeerSort, peerView, topByMarketCap, type PeerSort, type PeerSortKey } from "../peer-table";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
 
@@ -810,8 +811,13 @@ export function StockScreen({
   type InnerDrawer = "techrating" | "peers" | "industry" | "insider" | "keylevels" | "earnings" | "financials" | "dividend" | null;
   const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
   // Peers list sort by session % change; default desc (best performers first).
+  // The Overview card's % button flips this one.
   const [peerSort, setPeerSort] = useState<"desc" | "asc">("desc");
-  const [peerSortBy, setPeerSortBy] = useState<"c" | "w" | "m" | "mcap" | "rs" | "sym">("c");
+  // The Peers tab's table: the column header last clicked, and whether the user
+  // has asked for every peer instead of the largest PEER_DEFAULT_LIMIT.
+  const [peerTbl, setPeerTbl] = useState<PeerSort>(DEFAULT_PEER_SORT);
+  const [peersShowAll, setPeersShowAll] = useState(false);
+  useEffect(() => { setPeersShowAll(false); }, [sym]);
   const [peerQuery, setPeerQuery] = useState<string>("");
   // News tab period; null = the first period that has any stories.
   const [newsPeriod, setNewsPeriod] = useState<NewsPeriod | null>(null);
@@ -1541,25 +1547,37 @@ export function StockScreen({
       });
     }
   }
-  // Fallback to same-sector RS leaders only if none of the related tickers resolve.
-  const peersAll: PeerRow[] = relatedPeersAll.length
-    ? relatedPeersAll
-    : companies
-        .filter(c => c.sector === group && c.ticker !== sym && c.pctChange != null)
-        .sort((a, b) => (b.rsRating ?? 0) - (a.rsRating ?? 0))
-        .map(c => ({
-          t: c.ticker,
-          c: c.pctChange as number,
-          price: c.price ?? null,
-          marketCap: c.marketCap != null ? c.marketCap / 1e9 : null,
-          peRatio: c.peRatio ?? null,
-          rsRating: c.rsRating,
-          name: c.name,
-          weeklyChange: c.week5ChangePct ?? null,
-          monthlyChange: c.monthChangePct ?? null,
-        }));
-  const peers = peersAll;                    // card shows ALL peers (scrolls within the card body when they overflow)
-  const peersTotal = peersAll.length;
+  // Every peer we can list: the vendor's related companies first (their rows carry
+  // the live-enriched figures), then the rest of this company's INDUSTRY (NVDA: the
+  // other Semiconductors). The vendor list alone is only ~10 names. The industry
+  // comes from the synced list, which loads before the company record, so the tab
+  // never shows a whole-sector list as a placeholder while the record loads.
+  const peerRowOf = (c: CompanyDoc): PeerRow => ({
+    t: c.ticker,
+    c: c.pctChange as number,
+    price: c.price ?? null,
+    marketCap: c.marketCap != null ? c.marketCap / 1e9 : null,
+    peRatio: c.peRatio ?? null,
+    rsRating: c.rsRating,
+    name: c.name,
+    weeklyChange: c.week5ChangePct ?? null,
+    monthlyChange: c.monthChangePct ?? null,
+  });
+  const myIndustry = companies.find(x => x.ticker === sym)?.industry ?? liveCompany?.industry ?? null;
+  const industryPeers: PeerRow[] = myIndustry
+    ? companies.filter(c => c.industry === myIndustry && c.ticker !== sym && c.pctChange != null).map(peerRowOf)
+    : [];
+  const peersPool: PeerRow[] = mergePeers(relatedPeersAll, industryPeers);
+  // No industry on record and no related names resolved: same sector instead.
+  const peersAllFull: PeerRow[] = peersPool.length
+    ? peersPool
+    : companies.filter(c => c.sector === group && c.ticker !== sym && c.pctChange != null).map(peerRowOf);
+  // The default view everywhere (Overview card, Leader/Laggard, the table): only the
+  // PEER_DEFAULT_LIMIT largest by market cap. The tab's "Show all" and the Overview
+  // card's "View all →" reach the rest.
+  const peersAll: PeerRow[] = topByMarketCap(peersAllFull);
+  const peers = peersAll;
+  const peersTotal = peersAllFull.length;
   const pcs = peersAll.map(x => x.c);
   const pmx = pcs.length ? Math.max(...pcs) : 0;
   const pmn = pcs.length ? Math.min(...pcs) : 0;
@@ -1570,44 +1588,19 @@ export function StockScreen({
   // User-controlled ordering by session % change (asc/desc). Leader/Laggard
   // tags still key off pmx/pmn, so they stay correct regardless of sort.
   const sortedPeers = [...peersAll].sort((a, b) => (peerSort === "asc" ? a.c - b.c : b.c - a.c));
+  /** Every peer, same order: what the "View all" drawer lists. */
+  const sortedPeersAll = [...peersAllFull].sort((a, b) => (peerSort === "asc" ? a.c - b.c : b.c - a.c));
 
-  const displayPeers = useMemo(() => {
-    let list = [...peersAll];
-    if (peerQuery.trim()) {
-      const q = peerQuery.trim().toUpperCase();
-      list = list.filter(p => p.t.toUpperCase().includes(q) || (p.name && p.name.toUpperCase().includes(q)));
-    }
-    list.sort((a, b) => {
-      if (peerSortBy === "c") {
-        return peerSort === "desc" ? b.c - a.c : a.c - b.c;
-      }
-      if (peerSortBy === "w") {
-        const wa = a.weeklyChange ?? -9999;
-        const wb = b.weeklyChange ?? -9999;
-        return peerSort === "desc" ? wb - wa : wa - wb;
-      }
-      if (peerSortBy === "m") {
-        const ma = a.monthlyChange ?? -9999;
-        const mb = b.monthlyChange ?? -9999;
-        return peerSort === "desc" ? mb - ma : ma - mb;
-      }
-      if (peerSortBy === "mcap") {
-        const ma = a.marketCap ?? -1;
-        const mb = b.marketCap ?? -1;
-        return peerSort === "desc" ? mb - ma : ma - mb;
-      }
-      if (peerSortBy === "rs") {
-        const rsa = a.rsRating ?? -1;
-        const rsb = b.rsRating ?? -1;
-        return peerSort === "desc" ? rsb - rsa : rsa - rsb;
-      }
-      if (peerSortBy === "sym") {
-        return peerSort === "desc" ? b.t.localeCompare(a.t) : a.t.localeCompare(b.t);
-      }
-      return 0;
-    });
-    return list;
-  }, [peersAll, peerQuery, peerSortBy, peerSort]);
+  // The Peers tab's table: the largest 25 by default, ordered by the column header
+  // last clicked; a search or "Show all" lifts the cap (see peer-table.ts).
+  const peerTable = useMemo(
+    () => peerView(peersAllFull, { query: peerQuery, by: peerTbl.by, dir: peerTbl.dir, showAll: peersShowAll }),
+    [peersAllFull, peerQuery, peerTbl, peersShowAll], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const displayPeers = peerTable.rows;
+  // Leader / Laggard tags in the table are judged among the rows it shows.
+  const tblMax = displayPeers.length ? Math.max(...displayPeers.map(x => x.c)) : 0;
+  const tblMin = displayPeers.length ? Math.min(...displayPeers.map(x => x.c)) : 0;
 
   // Tab bar config — mirrors the stock-detail design's Overview/Analysis/Peers/
   // Earnings/Financials/Holdings/News split (the price chart sits on
@@ -2577,7 +2570,7 @@ export function StockScreen({
           {/* Industry Group rank */}
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
-              <h3>Industry Group rank</h3>
+              <h3>Sector momentum intraday</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <VendorTag v={["fmp", "polygon"]} />
                 <span className="link" onClick={() => setInnerDrawer("industry")}>View all →</span>
@@ -3324,7 +3317,7 @@ export function StockScreen({
               <div className="card">
                 <div className="card-h" style={{ flexWrap: "wrap", gap: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                    <h3 style={{ margin: 0 }}>Peers<span className="sd-unit">{displayPeers.length} companies</span></h3>
+                    <h3 style={{ margin: 0 }}>Peers<span className="sd-unit">{displayPeers.length}{peerTable.limited ? ` of ${peerTable.matched}` : ""} companies</span></h3>
                     <VendorTag v={["fmp", "polygon"]} />
                     {/* Search box */}
                     <input
@@ -3335,42 +3328,43 @@ export function StockScreen({
                       className="sd-search"
                     />
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Sort</span>
-                    <div className="sd-seg" role="group" aria-label="Sort peers">
-                      {([["c", "% Change", "desc"], ["w", "Weekly", "desc"], ["m", "Monthly", "desc"], ["mcap", "Market cap", "desc"], ["rs", "RS rating", "desc"], ["sym", "Ticker", "asc"]] as const).map(([k, l, first]) => (
-                        <button key={k} type="button" aria-pressed={peerSortBy === k}
-                          onClick={() => {
-                            if (peerSortBy === k) setPeerSort(x => (x === "desc" ? "asc" : "desc"));
-                            else { setPeerSortBy(k); setPeerSort(first); }
-                          }}>
-                          {l}{peerSortBy === k ? (peerSort === "desc" ? " ▼" : " ▲") : ""}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
                 <div className="card-b" style={{ padding: 0 }}>
                   {displayPeers.length ? (
+                    <>
                     <div className="table-wrap" style={{ overflowX: "auto" }}>
                       <table className="tbl" style={{ width: "100%", fontSize: ".8rem" }}>
                         <thead>
                           <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
-                            <th style={{ textAlign: "left", padding: "10px 14px" }}>Company</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Price</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Today's Change</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Weekly Change</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Monthly Change</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Market Cap</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>P/E Ratio</th>
-                            <th style={{ textAlign: "center", padding: "10px 14px" }}>RS Rating</th>
+                            {/* Click a heading to sort by it; click again to reverse. Text starts A to Z, numbers biggest first. */}
+                            {([
+                              ["sym", "Company", "left"], ["price", "Price", "right"], ["c", "Today's Change", "right"],
+                              ["w", "Weekly Change", "right"], ["m", "Monthly Change", "right"], ["mcap", "Market Cap", "right"],
+                              ["pe", "P/E Ratio", "right"], ["rs", "RS Rating", "center"],
+                            ] as [PeerSortKey, string, "left" | "right" | "center"][]).map(([key, label, align]) => {
+                              const on = peerTbl.by === key;
+                              return (
+                                <th key={key} aria-sort={on ? (peerTbl.dir === "desc" ? "descending" : "ascending") : "none"}
+                                  style={{ textAlign: align, padding: 0 }}>
+                                  <button type="button" onClick={() => setPeerTbl(cur => nextPeerSort(cur, key))}
+                                    title={`Sort by ${label}`}
+                                    style={{
+                                      width: "100%", padding: "10px 14px", textAlign: align, cursor: "pointer",
+                                      background: "none", border: 0, font: "inherit", letterSpacing: "inherit", textTransform: "inherit",
+                                      color: on ? "var(--brand-2)" : "inherit", whiteSpace: "nowrap",
+                                    }}>
+                                    {label}{on ? (peerTbl.dir === "desc" ? " ▼" : " ▲") : ""}
+                                  </button>
+                                </th>
+                              );
+                            })}
                           </tr>
                         </thead>
                         <tbody>
                           {displayPeers.map(peer => {
                             const isCurrent = peer.t === sym;
-                            const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
+                            const tag = peer.c === tblMax ? "Leader" : peer.c === tblMin ? "Laggard" : "";
 
                             return (
                               <tr
@@ -3429,6 +3423,21 @@ export function StockScreen({
                         </tbody>
                       </table>
                     </div>
+                    {/* Default is the largest PEER_DEFAULT_LIMIT by market cap; the rest are one click away. */}
+                    {(peerTable.limited || (peersShowAll && !peerQuery.trim() && peersTotal > PEER_DEFAULT_LIMIT)) && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderTop: "1px solid var(--border-soft)", fontSize: ".76rem", color: "var(--text-dim-solid)" }}>
+                        <span>
+                          {peerTable.limited
+                            ? `Showing the ${displayPeers.length} largest by market cap, of ${peerTable.matched} peers.`
+                            : `Showing all ${peerTable.matched} peers.`}
+                        </span>
+                        <button type="button" className="link" onClick={() => setPeersShowAll(v => !v)}
+                          style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }}>
+                          {peerTable.limited ? `Show all ${peerTable.matched} →` : `Show the largest ${PEER_DEFAULT_LIMIT}`}
+                        </button>
+                      </div>
+                    )}
+                    </>
                   ) : (
                     <div style={{ padding: 24 }}>
                       <DataState loading={companiesLoading} label={peerQuery ? "No peers match your search query." : "No live peers found for this company."} />
@@ -3667,12 +3676,12 @@ export function StockScreen({
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
-                {sortedPeers.length === 0 ? (
+                {sortedPeersAll.length === 0 ? (
                   <DataState loading={companiesLoading || liveCompanyLoading} label={`No live peers found for ${sym}.`} />
-                ) : sortedPeers.map(peer => {
+                ) : sortedPeersAll.map(peer => {
                   return (
                       <div key={peer.t} className="minirow" style={{ cursor: "pointer" }}
-                        onClick={() => { setInnerDrawer(null); openStockDetail(peer.t, sortedPeers.map(x => x.t)); }}>
+                        onClick={() => { setInnerDrawer(null); openStockDetail(peer.t, sortedPeersAll.map(x => x.t)); }}>
                         <StockLogo sym={peer.t} size={22} />
                         <span className="mono" style={{
                           fontWeight: 700, minWidth: 52,
@@ -3694,7 +3703,7 @@ export function StockScreen({
               <div className="drawer-h">
                 <StockLogo sym={sym} size={34} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Industry Group Rank</div>
+                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Sector Momentum Intraday</div>
                   <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>All sectors by today&apos;s performance</div>
                 </div>
                 <VendorTag v={["fmp", "polygon"]} />

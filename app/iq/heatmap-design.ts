@@ -71,6 +71,157 @@ export function framePct(
 }
 
 /**
+ * Raises each weight to a minimum SHARE of the total, so the smallest sectors still
+ * get a block big enough to carry a readable name. The map is by market cap, and
+ * the real sectors run from about 40% of the map down to well under 1%: at a
+ * 1289x475 map the smallest blocks came out 8, 54 and 58px wide, where no header
+ * can show a name. Returns new weights (same order); the stocks inside a sector are
+ * still sized against each other by their own weights.
+ *
+ * Solves w_min = minShare × Σ max(w, w_min), so the floored sectors really end up
+ * with `minShare` of the map after the weights are normalised. If every sector
+ * would need more than an equal share, they all get equal weight.
+ */
+export function floorWeights(weights: number[], minShare: number): number[] {
+  const n = weights.length;
+  if (n === 0) return [];
+  if (!(minShare > 0)) return [...weights];
+  if (minShare * n >= 1) return weights.map(() => 1);
+  let floor = minShare * weights.reduce((a, w) => a + w, 0);
+  for (let i = 0; i < 40; i++) {
+    const next = minShare * weights.reduce((a, w) => a + Math.max(w, floor), 0);
+    if (Math.abs(next - floor) <= 1e-12 * next) { floor = next; break; }
+    floor = next;
+  }
+  return weights.map(w => Math.max(w, floor));
+}
+
+/** How a sector's header strip is laid out: name and move on one row, or stacked. */
+export interface HeaderPlan {
+  /** Name and move side by side (one row); false = the move sits under the name. */
+  inline: boolean;
+  /** False only when the block is too short to stack: the name then takes the whole row. */
+  showPct: boolean;
+  /** Rows the name may use (a long name wraps to two when stacked). */
+  nameLines: 1 | 2;
+  /** Height of the strip in px; the stocks are laid out below it. */
+  h: number;
+}
+
+// Header type is .7rem bold caps (about 8.5px a letter, measured on the live map)
+// and a .7rem mono move (about 7px a character).
+const NAME_CH = 8.8;
+const PCT_CH = 7.2;
+/** Left 4 + right 8 padding, the sector's own 2px, and a little slack for font differences. */
+const HEADER_SIDE = 16;
+const HEADER_ROW_H = 13;
+const HEADER_PAD_V = 8;
+const HEADER_INLINE_H = 26;
+/** Keep at least this much height for stocks below a taller header. */
+const MIN_BODY_H = 22;
+
+/** Lines a name needs at `perLine` characters: wraps at spaces, and a single word longer than a line breaks across lines. */
+function wrappedLines(name: string, perLine: number): number {
+  let lines = 1;
+  let cur = 0;
+  for (const word of name.split(/\s+/).filter(Boolean)) {
+    if (word.length > perLine) {
+      // Starts on a fresh line if the current one has text, then spills over.
+      if (cur > 0) lines++;
+      lines += Math.ceil(word.length / perLine) - 1;
+      cur = word.length % perLine || perLine;
+    } else if (cur === 0) cur = word.length;
+    else if (cur + 1 + word.length <= perLine) cur += 1 + word.length;
+    else { lines++; cur = word.length; }
+  }
+  return lines;
+}
+
+/**
+ * Sizes a sector's header strip for its block. The old strip was always one row,
+ * name beside move, so in a block about 100px wide the move (about 40px) left the
+ * name roughly 40px: "CONS…", "UTIL…", "C…". Now the name wins the space:
+ *  - everything fits on one row: as before;
+ *  - otherwise the move goes under the name, and a long name wraps to two rows;
+ *  - a block too short for that keeps one row and drops the move, so the name still shows.
+ */
+export function sectorHeaderPlan(w: number, h: number, name: string, pctText: string): HeaderPlan {
+  const avail = Math.max(0, w - HEADER_SIDE);
+  if (name.length * NAME_CH + 8 + pctText.length * PCT_CH <= avail) {
+    return { inline: true, showPct: true, nameLines: 1, h: HEADER_INLINE_H };
+  }
+  const nameLines = wrappedLines(name, Math.max(1, Math.floor(avail / NAME_CH))) > 1 ? 2 : 1;
+  const stackedH = HEADER_PAD_V + HEADER_ROW_H * (nameLines + 1);
+  if (h - stackedH >= MIN_BODY_H) return { inline: false, showPct: true, nameLines, h: stackedH };
+  return { inline: true, showPct: false, nameLines: 1, h: HEADER_INLINE_H };
+}
+
+/** A dated daily close, as the companies docs carry them (`week5Closes`, oldest first). */
+export interface DatedClose { date: string; close: number }
+
+/**
+ * The move of the latest regular session, rebuilt from the stored dated closes:
+ * the close dated `sessionIso` against the one before it. Null unless the NEWEST
+ * stored close is that session. The technicals job can run a session behind, and
+ * its last two closes would then be the session before's move, so a stale doc
+ * shows "—" instead of a plausible wrong number.
+ */
+export function lastSessionPct(closes: DatedClose[] | null | undefined, sessionIso: string): number | null {
+  if (!closes || closes.length < 2) return null;
+  const last = closes[closes.length - 1];
+  const prev = closes[closes.length - 2];
+  if (last.date !== sessionIso || !(last.close > 0) || !(prev.close > 0)) return null;
+  return ((last.close - prev.close) / prev.close) * 100;
+}
+
+/** The slice of a live quote `dayMovePct` reads (a subset of LiveQuote). */
+export interface HmQuote {
+  pctChange: number | null;
+  marketStatus?: string | null;
+  previousClose?: number | null;
+  regularClose?: number | null;
+  /** The vendor's own move for the latest completed session (backend `lastSessionChangePct`). */
+  lastSessionPct?: number | null;
+}
+
+/**
+ * The 1D move a tile shows. The page says "As of Monday close" outside the
+ * session, so it has to be the REGULAR session's move then, not the quote's
+ * `pctChange`, which off-hours is measured to the latest extended-hours print:
+ *
+ *  - open            the live day move.
+ *  - pre-market      no regular session has run today, so the quote's change is
+ *                    the pre-market print against the close (0.00% for nearly
+ *                    every stock) and the stored change has been re-based to the
+ *                    new day (also 0). The last session's move is the vendor's
+ *                    own (`lastSessionPct`), else rebuilt from the dated closes;
+ *                    with neither, no number rather than a 0.
+ *  - after / closed  the regular close against the close before it. An
+ *                    after-hours print is not in it.
+ *
+ * `phase` is the market clock ("open" | "pre" | "after" | "closed"), used when a
+ * ticker has no live quote. Mirrors the stock header's rule (quote-headline.tsx).
+ */
+export function dayMovePct(
+  q: HmQuote | null | undefined,
+  storedPct: number | null | undefined,
+  closes: DatedClose[] | null | undefined,
+  sessionIso: string,
+  phase: string,
+): number | null {
+  const status = q?.marketStatus ?? (phase === "open" ? "open" : phase === "pre" ? "early_trading" : null);
+  if (status === "open" || (status == null && q?.pctChange != null)) return q?.pctChange ?? storedPct ?? null;
+  // The vendor's own figure for the completed session comes first; the dated
+  // closes cover a server that does not send it yet.
+  if (status === "early_trading") return q?.lastSessionPct ?? lastSessionPct(closes, sessionIso);
+  if (q?.lastSessionPct != null) return q.lastSessionPct;
+  const rc = q?.regularClose;
+  const pc = q?.previousClose;
+  if (rc != null && pc != null && rc > 0 && pc > 0) return ((rc - pc) / pc) * 100;
+  return lastSessionPct(closes, sessionIso) ?? storedPct ?? null;
+}
+
+/**
  * "As of Friday close, Nov 20, 2026" outside the session, "Live · ~15 min
  * delayed" during it. `sessionIso` is the ET date of the latest regular session.
  */
