@@ -1675,7 +1675,9 @@ export function EarningsScreen() {
           }
         : it;
     })
-    .filter(it => session === "both" || it.sess === session)
+    // A narrowed view keeps rows whose session is unknown: they show under "Time
+    // not specified" instead of disappearing, which left the snapshot looking empty.
+    .filter(it => session === "both" || it.sess === session || (it.sess !== "BMO" && it.sess !== "AMC"))
     .sort((a, b) => (mcapByTicker.get(b.s) ?? 0) - (mcapByTicker.get(a.s) ?? 0) || a.s.localeCompare(b.s));
   const glanceBmo = glanceItems.filter(it => it.sess === "BMO");
   const glanceAmc = glanceItems.filter(it => it.sess === "AMC");
@@ -2013,7 +2015,17 @@ export function EarningsScreen() {
           <aside className="ew-week">
             <div className="ew-week-h">
               <span>{DOW3[anchorDate.getUTCDay()]} {MON3[anchorDate.getUTCMonth()]} {anchorDate.getUTCDate()}</span>
-              <button className="closebtn" title="Close details" onClick={closeDetail}>✕</button>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <button
+                  className="ecal-segbtn ecal-glancebtn"
+                  title="Back to the calendar with the at-a-glance results open"
+                  onClick={() => { closeDetail(); setAtGlance(true); }}
+                  style={{ borderRadius: 8, padding: "4px 10px", fontWeight: 600 }}
+                >
+                  At a glance
+                </button>
+                <button className="closebtn" title="Close details" onClick={closeDetail}>✕</button>
+              </span>
             </div>
             {/* Search this day's reporting tickers by symbol or company name. */}
             <div style={{ padding: "8px 0 10px" }}>
