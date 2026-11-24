@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useIQActions } from "./shell";
 import { useApiResource } from "./hooks/useApiResource";
 import { StockLogo } from "./utils";
@@ -57,6 +57,76 @@ export const pulseQueryPath = (q: string) => {
 /** The avatar letter when no ticker is tagged: the post's first character. */
 export const pulseLetter = (text: string) => (text.trim()[0] ?? "M").toUpperCase();
 
+/**
+ * The words to highlight for what is typed in the search box: split on spaces,
+ * a leading $ (ticker) or @ (handle) dropped, lower-cased, duplicates removed.
+ */
+export function pulseTerms(q: string): string[] {
+  const out: string[] = [];
+  for (const w of q.trim().split(/\s+/)) {
+    const t = w.replace(/^[$@]+/, "").toLowerCase();
+    if (t && !out.includes(t)) out.push(t);
+  }
+  return out.slice(0, 8);
+}
+
+/** `text` cut into runs, each marked when it matches one of `terms` (case-insensitive). */
+export function pulseSegments(text: string, terms: string[]): Array<{ t: string; hit: boolean }> {
+  if (!text || terms.length === 0) return [{ t: text, hit: false }];
+  const alt = [...terms].sort((a, b) => b.length - a.length)
+    .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const parts = text.split(new RegExp(`(${alt})`, "gi"));
+  return parts.filter(t => t !== "").map(t => ({ t, hit: terms.includes(t.toLowerCase()) }));
+}
+
+/** How many times `terms` match in `text` (what the card marks), for the count beside the search box. */
+export const pulseMatchCount = (text: string, terms: string[]): number =>
+  pulseSegments(text, terms).filter(s => s.hit).length;
+
+/** `text` with the matching words wrapped in <mark>. */
+function Hl({ text, terms }: { text: string; terms: string[] }) {
+  return (
+    <>
+      {pulseSegments(text, terms).map((seg, i) =>
+        seg.hit ? <mark key={i} className="cpulse-hl">{seg.t}</mark> : seg.t,
+      )}
+    </>
+  );
+}
+
+/**
+ * One post's text, held to a few lines with a Show more / Show less toggle.
+ * The toggle only appears when the text really overflows the collapsed height
+ * (ResizeObserver also reports once on observe, so it is measured on mount and
+ * again when the card is resized).
+ */
+function PulseText({ text, terms }: { text: string; terms: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  // While searching the whole post shows: a match past the fourth line would
+  // otherwise be in the results but hidden behind "Show more".
+  const searching = terms.length > 0;
+  const clamped = !open && !searching;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !clamped) return;
+    const ro = new ResizeObserver(() => setOverflows(el.scrollHeight > el.clientHeight + 1));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, clamped]);
+  return (
+    <>
+      <div ref={ref} className={`cpulse-tw-text${clamped ? " clamp" : ""}`}><Hl text={text} terms={terms} /></div>
+      {!searching && (overflows || open) && (
+        <button type="button" className="cpulse-more" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+          {open ? "Show less" : "Show more"}
+        </button>
+      )}
+    </>
+  );
+}
+
 export function CommunityPulse() {
   const { openStock } = useIQActions();
   // Search box: the query is sent after a short pause in typing.
@@ -68,7 +138,14 @@ export function CommunityPulse() {
   }, [q]);
   const { data, loading } = useApiResource<{ posts: PulsePost[] }>(pulseQueryPath(sentQ), POLL_MS);
   const posts = data?.posts ?? [];
+  // Highlights follow the box as it is typed; the posts below catch up after the pause.
+  const terms = pulseTerms(q);
   const searching = sentQ.trim().length > 0;
+  // Everything marked below: post text, name, handle and ticker.
+  const matches = terms.length === 0 ? 0 : posts.reduce(
+    (n, p) => n + [p.text, p.name, p.handle, p.ticker ?? ""].reduce((m, f) => m + pulseMatchCount(f, terms), 0),
+    0,
+  );
   // Keeps "5m" / "1h" current between polls.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -97,6 +174,11 @@ export function CommunityPulse() {
           maxLength={100}
           data-testid="pulse-search"
         />
+        {terms.length > 0 && (
+          <span className={`cnt${matches === 0 ? " none" : ""}`} aria-live="polite" data-testid="pulse-count">
+            {matches === 0 ? "No matches" : `${matches} ${matches === 1 ? "match" : "matches"}`}
+          </span>
+        )}
         {q && <button type="button" className="clr" aria-label="Clear search" onClick={() => setQ("")}>×</button>}
       </div>
 
@@ -117,14 +199,14 @@ export function CommunityPulse() {
             )}
             <div className="cpulse-tw-main">
               <div className="cpulse-tw-top">
-                <span className="nm">{p.name}</span>
-                <span className="hd">@{p.handle}</span>
+                <span className="nm"><Hl text={p.name} terms={terms} /></span>
+                <span className="hd">@<Hl text={p.handle} terms={terms} /></span>
                 <span className="ago">{pulseAgo(p.createdAt, now)}</span>
               </div>
-              <div className="cpulse-tw-text">{p.text}</div>
+              <PulseText text={p.text} terms={terms} />
               <div className="cpulse-tw-foot">
                 {p.ticker && (
-                  <button type="button" className="tk-link" title={`Open ${p.ticker}`} onClick={() => openStock(p.ticker as string)}>${p.ticker}</button>
+                  <button type="button" className="tk-link" title={`Open ${p.ticker}`} onClick={() => openStock(p.ticker as string)}>$<Hl text={p.ticker} terms={terms} /></button>
                 )}
                 <span className="tm">{pulseTime(p.createdAt, now)}</span>
               </div>

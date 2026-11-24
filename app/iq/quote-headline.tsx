@@ -102,11 +102,31 @@ export function useHeadlineQuote(
   const p = snapshot.price ?? 0;
   const dollar = snapshot.pctChange != null ? Math.abs((snapshot.pctChange / 100) * p) : null;
 
-  const paired = pairedQuote(
-    sharedQuote,
-    live.tick ? { price: live.tick.price, pctChange: live.pct } : null,
-    snapshot,
-  );
+  /*
+   * During the regular session the chart's last candle moves with the live tick
+   * (pushed), while the shared quote is a 30 s poll. Ranking the quote first
+   * left the header up to ~30 s behind the chart it sits above. When the tick is
+   * NEWER than the quote (both carry the vendor's own timestamps), the tick wins.
+   * Price and change come from the tick together, against one base — the prior
+   * regular close — so they are never a splice of two moments (see pairedQuote).
+   * Without a tick time or a base the tick is not used and nothing changes.
+   */
+  const tick = live.tick;
+  const tickBase = live.prevClose ?? sharedQuote?.previousClose ?? null;
+  const tickIsNewer =
+    mkt.phase === "open" &&
+    tick != null && tick.price > 0 && tick.at != null &&
+    tickBase != null && tickBase > 0 &&
+    (sharedQuote?.updatedAt == null || tick.at > sharedQuote.updatedAt);
+  const tickPct = tickIsNewer ? ((tick.price - tickBase) / tickBase) * 100 : null;
+
+  const paired = tickIsNewer
+    ? { price: tick.price, pctChange: tickPct }
+    : pairedQuote(
+        sharedQuote,
+        live.tick ? { price: live.tick.price, pctChange: live.pct } : null,
+        snapshot,
+      );
   const dispPrice = paired.price;
   const dispPct = paired.pctChange;
 
@@ -184,7 +204,7 @@ export function useHeadlineQuote(
     ? 0
     : isExtended
     ? (closesMove ?? (barsFallback ? sharedQuote?.pctChange : null) ?? snapshot.pctChange ?? 0)
-    : (sharedQuote?.regularPct ?? dispPct ?? snapshot.pctChange ?? 0);
+    : (tickPct ?? sharedQuote?.regularPct ?? dispPct ?? snapshot.pctChange ?? 0);
 
   const regDollar =
     regPrice > 0 && regPct != null && regPct !== -100
@@ -220,7 +240,7 @@ export function useHeadlineQuote(
    * headline is a close, so it reads as that session's 4:00 PM; pre-market it
    * is the prior session's close, whose date the quote does not carry.
    */
-  const quoteAt = sharedQuote?.updatedAt ?? live.tick?.at ?? null;
+  const quoteAt = tickIsNewer ? tick.at : (sharedQuote?.updatedAt ?? live.tick?.at ?? null);
   const regAsOf = !isExtended
     ? (quoteAt != null ? `As of ${fmtAsOf(quoteAt)}` : null)
     : isPre

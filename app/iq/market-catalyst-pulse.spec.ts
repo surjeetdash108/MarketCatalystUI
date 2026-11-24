@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
-import { pulseAgo, pulseLetter, pulseQueryPath, pulseTime } from "./community-pulse";
+import { pulseAgo, pulseLetter, pulseMatchCount, pulseQueryPath, pulseSegments, pulseTerms, pulseTime } from "./community-pulse";
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
 
@@ -59,3 +59,62 @@ describe("Market Catalyst Pulse search", () => {
     assert.match(src, /No posts match/);
   });
 });
+
+describe("Market Catalyst Pulse long posts", () => {
+  it("each post's text collapses with a Show more / Show less toggle", () => {
+    const src = read("./community-pulse.tsx");
+    assert.match(src, /<PulseText text=\{p\.text\} terms=\{terms\} \/>/);
+    assert.match(src, /Show more/);
+    assert.match(src, /Show less/);
+    assert.match(src, /aria-expanded=\{open\}/);
+    assert.match(read("../iq.css"), /\.cpulse-tw-text\.clamp \{[^}]*-webkit-line-clamp: 4/);
+  });
+});
+
+describe("Market Catalyst Pulse search highlight", () => {
+  it("terms: split on spaces, $ and @ dropped, lower-cased, no duplicates", () => {
+    assert.deepEqual(pulseTerms("  $NVDA chips nvda @Market "), ["nvda", "chips", "market"]);
+    assert.deepEqual(pulseTerms("   "), []);
+    assert.deepEqual(pulseTerms("$"), []);
+  });
+  it("marks every match, any case, as the user types", () => {
+    const segs = pulseSegments("Nvidia ($NVDA) beat; NVIDIA rallied", ["nvi"]);
+    assert.deepEqual(segs.filter(s => s.hit).map(s => s.t), ["Nvi", "NVI"]);
+    assert.equal(segs.map(s => s.t).join(""), "Nvidia ($NVDA) beat; NVIDIA rallied");
+  });
+  it("a ticker query marks the symbol inside $TICKER; several words each mark", () => {
+    assert.deepEqual(pulseSegments("($NVDA) up", pulseTerms("$nvda")).filter(s => s.hit).map(s => s.t), ["NVDA"]);
+    assert.deepEqual(pulseSegments("chip bid, chips up", pulseTerms("chips bid")).filter(s => s.hit).map(s => s.t), ["bid", "chips"]);
+  });
+  it("regex characters in the box are matched literally; no terms means no marks", () => {
+    assert.deepEqual(pulseSegments("a (b) c", pulseTerms("(b")).filter(s => s.hit).map(s => s.t), ["(b"]);
+    assert.deepEqual(pulseSegments("plain text", []), [{ t: "plain text", hit: false }]);
+  });
+  it("the card marks the text, name, handle and ticker, and shows full posts while searching", () => {
+    const src = read("./community-pulse.tsx");
+    assert.match(src, /<mark key=\{i\} className="cpulse-hl">/);
+    assert.match(src, /<PulseText text=\{p\.text\} terms=\{terms\} \/>/);
+    assert.match(src, /const terms = pulseTerms\(q\)/);
+    assert.match(src, /const clamped = !open && !searching/);
+  });
+});
+
+describe("Market Catalyst Pulse match count and find-style highlight", () => {
+  const post = "Nvidia ($NVDA) interim CEO; NVDA up. Nvidia again.";
+  it("counts every marked occurrence, any case", () => {
+    assert.equal(pulseMatchCount(post, pulseTerms("nvda")), 2);
+    assert.equal(pulseMatchCount(post, pulseTerms("nvidia")), 2);
+    assert.equal(pulseMatchCount(post, pulseTerms("nvid nvda")), 4);
+    assert.equal(pulseMatchCount(post, []), 0);
+  });
+  it("a typo that is in no post (nvdi) matches nothing — the box says so instead of staying silent", () => {
+    assert.equal(pulseMatchCount(post, pulseTerms("nvdi")), 0);
+    const src = read("./community-pulse.tsx");
+    assert.match(src, /No matches/);
+    assert.match(src, /data-testid="pulse-count"/);
+  });
+  it("matches are bright yellow with dark ink, like the browser's find", () => {
+    assert.match(read("../iq.css"), /\.cpulse mark\.cpulse-hl \{ background: #ffe600; color: #111;/);
+  });
+});
+

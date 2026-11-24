@@ -1626,13 +1626,13 @@ export function StockScreen({
           { id: "13f" as StockTab, label: "13F Filings" },
         ]
       : []),
-    { id: "news", label: "News", count: tickerNews?.length || undefined },
+    { id: "news", label: "News" },
   ];
 
   const TABS = useMemo(() => {
     if (!visibleTabs || visibleTabs.length === 0) return ALL_TABS;
     return ALL_TABS.filter(t => visibleTabs.includes(t.id));
-  }, [visibleTabs, isEtf, hist10.length, tickerNews?.length, peersTotal]);
+  }, [visibleTabs, isEtf, hist10.length, peersTotal]);
   // Rail cards belong to Analysis (Technical rating / Indicators / analyst actions / Key levels).
   // Overview no longer carries Peers in rail — Peers has its own dedicated comparison section.
   // Every other tab gets a full-width main column instead of an empty track.
@@ -1774,7 +1774,19 @@ export function StockScreen({
                     })()}
                   </div>
                   <div className="ex" style={{ lineHeight: 1.25 }} title={[data.name, ex, group].filter(Boolean).join(" · ")}>
-                    {[ex, group].filter(Boolean).join(" · ") || data.name}
+                    {group ? (<>
+                      {ex && <>{ex} · </>}
+                      <button
+                        type="button"
+                        onClick={() => setInnerDrawer("industry")}
+                        title={`See where ${group} ranks among all sectors today`}
+                        style={{
+                          background: "none", border: 0, padding: 0, margin: 0,
+                          font: "inherit", color: "inherit", cursor: "pointer",
+                          textDecoration: "underline dotted", textUnderlineOffset: 3,
+                        }}
+                      >{group}</button>
+                    </>) : (ex || data.name)}
                   </div>
                 </div>
               </div>
@@ -2713,7 +2725,7 @@ export function StockScreen({
             const target = consensusDoc?.priceTargetConsensus ?? null;
             const targetUp = target != null && dispPrice != null && dispPrice > 0 ? (target - dispPrice) / dispPrice * 100 : null;
             type Row = { k: string; v: ReactNode | null; delta?: { txt: string; up: boolean } | null };
-            const left: Row[] = [
+            const fundamentalRows: Row[] = [
               { k: "Market cap",    v: mc != null ? cap(mc) : null },
               { k: "P/E ratio",     v: eps != null && eps <= 0 ? "n/a" : (data.peRatio != null ? data.peRatio.toFixed(2) : null) },
               { k: "EPS (TTM)",     v: eps != null ? "$" + eps.toFixed(2) : null },
@@ -2736,7 +2748,7 @@ export function StockScreen({
                   return /^\d{4}-\d{2}-\d{2}$/.test(d) && d > "1900-12-31" ? fmtDate(d) : null;
                 })() },
             ];
-            const right: Row[] = [
+            const tradingRows: Row[] = [
               { k: "Volume",        v: sessionVol != null ? Math.round(sessionVol).toLocaleString("en-US") : null },
               { k: "Open",          v: dayBar ? px(dayBar.o) : null },
               { k: "Previous close", v: prevClose != null ? px(prevClose) : null },
@@ -2753,6 +2765,13 @@ export function StockScreen({
                 delta: targetUp != null ? { txt: pct(targetUp), up: targetUp >= 0 } : null },
               { k: "Earnings date", v: erDate !== "—" ? <>{fmtDate(erDate)}{!isErConfirmed && <span className="pill" style={{ marginLeft: 6, fontSize: ".65rem", padding: "1px 5px", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Estimated</span>}</> : null },
             ];
+            // Three parts of seven rows, side by side: valuation and payout,
+            // trading, then the company and what analysts think of it.
+            const byKey = new Map([...fundamentalRows, ...tradingRows].map(r => [r.k, r] as const));
+            const part = (...keys: string[]) => keys.map(k => byKey.get(k)).filter((r): r is Row => r != null);
+            const valuationPart = part("Market cap", "P/E ratio", "EPS (TTM)", "Dividend (fwd)", "Ex-dividend date", "Beta", "Earnings date");
+            const tradingPart = part("Volume", "Avg volume (20D)", "Open", "Previous close", "Day's range", "52-week range", "Off 52W high / low");
+            const companyPart = part("Sector", "Industry", "CEO", "Employees", "Listing date", "Analysts", "Price target");
             const col = (rows: Row[]) => (
               <dl className="sd-kv">
                 {rows.map(r => (
@@ -2773,8 +2792,9 @@ export function StockScreen({
                   <VendorTag v={["fmp", "polygon"]} />
                 </div>
                 <div className="sd-kv-grid">
-                  {col(left)}
-                  {col(right)}
+                  {col(valuationPart)}
+                  {col(tradingPart)}
+                  {col(companyPart)}
                 </div>
               </div>
             );
@@ -2848,44 +2868,6 @@ export function StockScreen({
                 </div>
               </div>
               {aiAnalysis?.ok && <div className="sd-foot">AI-generated · informational only, not investment advice.</div>}
-            </div>
-
-            <div className="card sd-card">
-              <div className="card-h">
-                <h3>Industry group rank</h3>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <VendorTag v={["fmp", "polygon"]} />
-                  <span className="link" onClick={() => setInnerDrawer("industry")}>View all →</span>
-                </div>
-              </div>
-              {topSectors.length === 0 ? (
-                <div className="card-b"><DataState loading={sectorsLoading} label="No live sector performance data yet." /></div>
-              ) : (() => {
-                const maxAbs = Math.max(0.01, ...topSectors.map(x => Math.abs(x.pctChange)));
-                return (<>
-                  {topSectors.map((x, i) => {
-                    const mine = x.sector === group;
-                    return (
-                      <div key={x.sector} className={`sd-row${mine ? " mine" : ""}`}>
-                        <span className="sd-dot">{i + 1}</span>
-                        <span className="grow">
-                          {x.sector}
-                          {mine && <span className="pill" style={{ marginLeft: 6, background: "var(--brand-dim)", color: "var(--brand)" }}>{sym}</span>}
-                        </span>
-                        <span className="sd-bar-track">
-                          <span className={`sd-bar${x.pctChange < 0 ? " neg" : ""}`} style={{ width: `${(Math.abs(x.pctChange) / maxAbs) * 100}%` }} />
-                        </span>
-                        <span className={`num ${x.pctChange >= 0 ? "up" : "down"}`} style={{ width: 56, textAlign: "right" }}>{sign(x.pctChange)}</span>
-                      </div>
-                    );
-                  })}
-                  <div className="sd-foot">
-                    {group
-                      ? <>{group} ranks <strong>#{grank || "—"} of {rankedSectors.length}</strong> sectors by today&apos;s performance.</>
-                      : "This ticker has no sector on record."}
-                  </div>
-                </>);
-              })()}
             </div>
           </>)}
 
@@ -3315,7 +3297,7 @@ export function StockScreen({
                   ) : (<>
                     <div className="sd-newsbar">
                       <SegToggle label="News period" value={period} onChange={setNewsPeriod}
-                        options={NEWS_PERIODS.map(([k, l]) => [k, <>{l}<span className="n">{counts[k]}</span></>] as [NewsPeriod, ReactNode])} />
+                        options={NEWS_PERIODS.map(([k, l]) => [k, l] as [NewsPeriod, ReactNode])} />
                     </div>
                     {list.length === 0 ? (
                       <div className="sd-note" style={{ padding: "26px 16px", textAlign: "center" }}>No stories in this period.</div>

@@ -1025,26 +1025,59 @@ export function AnalystScreen() {
                       {summaryMetrics.topCluster.cluster}× CLUSTER
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: TEXT_MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {summaryMetrics.topCluster.clusterFirms.slice(0, 3).join(", ")}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 5, fontSize: 12, color: TEXT_MUTED }}>
+                    <span style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {summaryMetrics.topCluster.clusterFirms.slice(0, 3).join(", ")}
+                    </span>
+                    {summaryMetrics.topCluster.clusterFirms.length > 3 && (
+                      <span style={{ flex: "none" }}>+{summaryMetrics.topCluster.clusterFirms.length - 3}</span>
+                    )}
                   </div>
                 </>
               )}
 
-              {/* Tooltip Popup */}
-              {activeTip === "clus" && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 290, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.1)" : "0 14px 36px rgba(0,0,0,.7)" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: TEXT_HI, marginBottom: 6 }}>Multi-firm cluster on {summaryMetrics.topCluster?.t}</div>
-                  <div style={{ fontSize: 12, color: TEXT_MUTED, lineHeight: 1.5, marginBottom: 10 }}>
-                    {summaryMetrics.topCluster?.cluster} independent Wall Street research desks made same-direction calls within 72 hours.
+              {/* Tooltip Popup: what the cluster is, the numbers, then who is in it. */}
+              {activeTip === "clus" && summaryMetrics.topCluster && (() => {
+                const c = summaryMetrics.topCluster;
+                const n = c.cluster;
+                const firms = c.clusterFirms;
+                const rule = `1px solid ${BORDER_DARK}`;
+                const stats: Array<[string, string, boolean]> = [[String(n), n === 1 ? "firm" : "firms", true], ["72h", "window", false], ["1", "direction", false]];
+                return (
+                  <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 380, maxWidth: "calc(100vw - 32px)", borderRadius: 14, overflow: "hidden", background: BG_CARD, border: rule, boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.1)" : "0 14px 36px rgba(0,0,0,.7)" }}>
+                    <div style={{ padding: "16px 18px 14px" }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: TEXT_HI, marginBottom: 6 }}>
+                        {n >= 2 ? `${n} firms made the same call on ${c.t}` : `Latest call on ${c.t}`}
+                      </div>
+                      <div style={{ fontSize: 13, color: TEXT_MUTED, lineHeight: 1.5 }}>
+                        Independent Wall Street research desks, all moving in the same direction within 72 hours.
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", borderTop: rule }}>
+                      {stats.map(([v, label, accent], i) => (
+                        <div key={label} style={{ padding: "12px 18px", borderLeft: i === 0 ? undefined : rule }}>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: accent ? G : TEXT_HI, lineHeight: 1.2 }}>{v}</div>
+                          <div style={{ fontSize: 13, color: TEXT_MUTED }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ padding: "14px 18px 16px", borderTop: rule }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED, marginBottom: 10 }}>FIRMS IN THIS CLUSTER</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "9px 16px" }}>
+                        {firms.map(f => (
+                          <div key={f} style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, fontSize: 14, color: TEXT_HI }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: G, flex: "none" }} />
+                            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ padding: "12px 18px 14px", borderTop: rule, fontSize: 13, color: TEXT_MUTED, lineHeight: 1.5 }}>
+                      Several firms agreeing at once is a stronger signal than any single call.
+                    </div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
-                    {summaryMetrics.topCluster?.clusterFirms.map(f => (
-                      <div key={f} style={{ color: TEXT_HI }}>• {f}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* 3. TOP SECTOR */}

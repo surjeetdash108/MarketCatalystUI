@@ -4922,7 +4922,7 @@ export function StockIntelligenceScreen() {
                       <div style={{ height: 8, width: `${thConf ?? 0}%`, background: thBand[1], transition: "width 400ms ease" }} />
                     </div>
                     <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-                      {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
+                      {thBull ? "Bullish" : "Bearish"} because {highlightSignedPercents(thStrong.map((d: any) => `${d.name} (${d.val})`).join(", "))} carry the most weight in the {labHz} profile.
                     </div>
                     <ConfidenceBreakdown cats={thRun.cats} colorFor={sc} open={labBreakdownOpen} onToggle={(k) => setLabBreakdownOpen((o) => ({ ...o, [k]: !o[k] }))} />
                   </div>
