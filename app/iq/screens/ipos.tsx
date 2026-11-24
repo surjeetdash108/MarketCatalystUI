@@ -282,7 +282,7 @@ export function IPOsScreen() {
   return (
     <>
       <div className="page-head">
-        <div className="tabs">
+        <div className="tabs ipo-tabs">
           <button className={`tab${tab === "recent" ? " on" : ""}`} onClick={() => setTab("recent")}>Recent IPO performance</button>
           <button className={`tab${tab === "pipeline" ? " on" : ""}`} onClick={() => setTab("pipeline")}>Upcoming pipeline</button>
           <button className={`tab${tab === "calendar" ? " on" : ""}`} onClick={() => setTab("calendar")}>Live IPO Calendar</button>

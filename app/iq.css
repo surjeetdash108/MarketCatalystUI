@@ -14321,3 +14321,9 @@ h6.sd-sec {
 }
 .iq-root .hm2-page { padding: 12px 18px 0; }
 
+
+/* IPO screen: the selected tab (Recent / Upcoming / Live) is green (T37). */
+.ipo-tabs .tab.on {
+  background: var(--brand);
+  color: var(--on-brand);
+}
