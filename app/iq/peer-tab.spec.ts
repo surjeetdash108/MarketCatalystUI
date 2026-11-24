@@ -35,16 +35,17 @@ describe("Peers tab default view", () => {
   it("opens ordered by market cap and shows the largest 25, with the table fed by the whole pool", () => {
     assert.match(src, /useState<PeerSort>\(DEFAULT_PEER_SORT\)/);
     assert.match(src, /const peersAll: PeerRow\[\] = topByMarketCap\(peersAllFull\);/);
-    assert.match(src, /peerView\(peersAllFull, \{ query: peerQuery, by: peerTbl\.by, dir: peerTbl\.dir, showAll: peersShowAll \}\)/);
+    assert.match(src, /peerView\(peersAllFull, \{ query: peerQuery, by: peerTbl\.by, dir: peerTbl\.dir, showAll: false, limit: peersShown \}\)/);
   });
 
-  it("says how many are shown and offers all of them", () => {
+  it("says how many are shown and loads the next 25 at the bottom", () => {
     assert.match(src, /peerTable\.limited \? ` of \$\{peerTable\.matched\}` : ""/);
-    assert.match(src, /Show all \$\{peerTable\.matched\} →/);
+    assert.match(src, /setPeersShown\(n => n \+ PEER_DEFAULT_LIMIT\)/);
+    assert.match(src, /Showing \{displayPeers\.length\} of \{peerTable\.matched\} peers/);
   });
 
   it("goes back to the largest 25 when another stock is opened", () => {
-    assert.match(src, /useEffect\(\(\) => \{ setPeersShowAll\(false\); \}, \[sym\]\)/);
+    assert.match(src, /useEffect\(\(\) => \{ setPeersShown\(PEER_DEFAULT_LIMIT\); \}, \[sym\]\)/);
   });
 
   it("the View all drawer lists every peer, not only the default 25", () => {

@@ -10,6 +10,7 @@ import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { VendorTag, titleCaseLabel, fmtPrice } from "../utils";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { isCommonEquity } from "../universe.util";
+import { useSavedScreens, SAVED_SCREEN_LIMIT, type ScreenFilters } from "../hooks/useSavedScreens";
 
 // Maps the numeric 1-99 tech rating onto the filter's string categories
 // (Strong Buy / Buy / Neutral / Sell / Strong Sell).
@@ -209,6 +210,45 @@ export function ScreenerScreen() {
     setDmaAbove(false); setRsiBand(false); setPriceGt5(false);
   }
 
+  /* ── Saved screens (users/{uid}/saved_screens, up to SAVED_SCREEN_LIMIT) ── */
+  const saved = useSavedScreens();
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedSel, setSavedSel] = useState("");
+
+  const toggleState: Record<string, [boolean, (v: boolean) => void]> = {
+    rs90: [rs90, setRs90], rs7090: [rs7090, setRs7090], rsLt40: [rsLt40, setRsLt40],
+    salesGt20: [salesGt20, setSalesGt20], epsGt25: [epsGt25, setEpsGt25], marginPos: [marginPos, setMarginPos],
+    ratingBuy: [ratingBuy, setRatingBuy], mcGt10: [mcGt10, setMcGt10], rvolGt15: [rvolGt15, setRvolGt15],
+    dmaAbove: [dmaAbove, setDmaAbove], rsiBand: [rsiBand, setRsiBand], priceGt5: [priceGt5, setPriceGt5],
+  };
+
+  function currentFilters(): ScreenFilters {
+    return {
+      presets: [...activePresets].map(i => screenerPresets[i]?.name).filter((n): n is string => !!n),
+      sector,
+      toggles: Object.fromEntries(Object.entries(toggleState).map(([k, [v]]) => [k, v])),
+    };
+  }
+
+  function loadScreen(id: string) {
+    setSavedSel(id);
+    const s = saved.screens.find(x => x.id === id);
+    if (!s) return;
+    const byName = new Map(screenerPresets.map((p, i) => [p.name, i]));
+    setActivePresets(new Set(s.filters.presets.map(n => byName.get(n)).filter((i): i is number => i != null)));
+    setSector(s.filters.sector ?? "");
+    for (const [k, [, set]] of Object.entries(toggleState)) set(!!s.filters.toggles?.[k]);
+  }
+
+  async function submitSave() {
+    const r = await saved.save(saveName, currentFilters());
+    if (!r.ok) { setSaveError(r.message); return; }
+    setSavedSel(r.screen.id);
+    setSaveOpen(false); setSaveName(""); setSaveError(null);
+  }
+
   /* ── Market-wide facts some presets need (fetched only while one is on) ── */
   const needs = new Set([...activePresets].flatMap(i => screenerPresets[i].needs ?? []));
   const { data: insiderTx } = useApiList<InsiderTxDoc>(needs.has("insider") ? "/market-data/insider-transactions" : null);
@@ -315,8 +355,48 @@ export function ScreenerScreen() {
               <span aria-hidden style={{ display: "inline-block", transition: "transform .2s", transform: filtersOpen ? "rotate(90deg)" : "none", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>▸</span>
               Filters
             </span>
-            <span className="link" onClick={e => { e.stopPropagation(); resetAll(); }}>Reset</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 12 }} onClick={e => e.stopPropagation()}>
+              {saved.signedIn && (<>
+                <select
+                  aria-label="Saved screens"
+                  value={savedSel}
+                  onChange={e => e.target.value && loadScreen(e.target.value)}
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)", padding: "3px 8px", fontSize: ".74rem", color: "var(--text-hi)" }}
+                >
+                  <option value="">{saved.screens.length ? `Saved screens (${saved.screens.length}/${SAVED_SCREEN_LIMIT})` : "No saved screens"}</option>
+                  {saved.screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                {savedSel && (
+                  <span className="link" title="Delete this saved screen"
+                    onClick={() => { const id = savedSel; setSavedSel(""); void saved.remove(id); }}>Delete</span>
+                )}
+                <span className="link" onClick={() => {
+                  setSaveName(saved.screens.find(s => s.id === savedSel)?.name ?? "");
+                  setSaveError(null); setSaveOpen(true);
+                }}>Save screen</span>
+              </>)}
+              <span className="link" onClick={() => { resetAll(); setSavedSel(""); }}>Reset</span>
+            </span>
           </div>
+
+          {saveOpen && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", borderBottom: "1px solid var(--border-soft)" }}>
+              <input
+                autoFocus
+                value={saveName}
+                maxLength={60}
+                placeholder="Name this screen"
+                onChange={e => setSaveName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") void submitSave(); if (e.key === "Escape") setSaveOpen(false); }}
+                style={{ flex: "1 1 220px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)", padding: "6px 10px", fontSize: ".82rem", color: "var(--text-hi)" }}
+              />
+              <button className="btn cta" onClick={() => void submitSave()}>Save</button>
+              <button className="btn" onClick={() => setSaveOpen(false)}>Cancel</button>
+              <span style={{ fontSize: ".72rem", color: saveError ? "var(--down)" : "var(--text-dim-solid)", flexBasis: "100%" }}>
+                {saveError ?? `Saves the presets, sector and filters. Same name replaces it. Up to ${SAVED_SCREEN_LIMIT} screens.`}
+              </span>
+            </div>
+          )}
 
           {filtersOpen && (<>
           {/* Presets row */}

@@ -7287,6 +7287,12 @@ table.tbl tr:hover td {
   box-shadow: 0 2px 8px -4px var(--brand);
 }
 
+/* Off, "At a glance" still stands out at the right of the toolbar (T34). */
+.ecal-glancebtn {
+  border: 1px solid var(--brand) !important;
+  color: var(--brand);
+}
+
 /* "At a glance" is a toggle — make its on/off state an obvious colour change:
    solid brand fill + white text/icon when ON, plain/dim when OFF. */
 .ecal-glancebtn.on {
@@ -14321,3 +14327,9 @@ h6.sd-sec {
 }
 .iq-root .hm2-page { padding: 12px 18px 0; }
 
+
+/* IPO screen: the selected tab (Recent / Upcoming / Live) is green (T37). */
+.ipo-tabs .tab.on {
+  background: var(--brand);
+  color: var(--on-brand);
+}

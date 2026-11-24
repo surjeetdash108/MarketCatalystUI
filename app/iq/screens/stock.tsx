@@ -3,6 +3,7 @@
 import { StockCatalystSummary } from "../mover-news-modal";
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { fmtDate, etTodayIso } from "../calendar-range";
+import { summarizeInsiders, compactUsd } from "../insider-summary";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
@@ -816,8 +817,9 @@ export function StockScreen({
   // The Peers tab's table: the column header last clicked, and whether the user
   // has asked for every peer instead of the largest PEER_DEFAULT_LIMIT.
   const [peerTbl, setPeerTbl] = useState<PeerSort>(DEFAULT_PEER_SORT);
-  const [peersShowAll, setPeersShowAll] = useState(false);
-  useEffect(() => { setPeersShowAll(false); }, [sym]);
+  // How many of the largest peers the Peers tab shows: 25, then 25 more per "Load more".
+  const [peersShown, setPeersShown] = useState(PEER_DEFAULT_LIMIT);
+  useEffect(() => { setPeersShown(PEER_DEFAULT_LIMIT); }, [sym]);
   const [peerQuery, setPeerQuery] = useState<string>("");
   // News tab period; null = the first period that has any stories.
   const [newsPeriod, setNewsPeriod] = useState<NewsPeriod | null>(null);
@@ -1594,8 +1596,8 @@ export function StockScreen({
   // The Peers tab's table: the largest 25 by default, ordered by the column header
   // last clicked; a search or "Show all" lifts the cap (see peer-table.ts).
   const peerTable = useMemo(
-    () => peerView(peersAllFull, { query: peerQuery, by: peerTbl.by, dir: peerTbl.dir, showAll: peersShowAll }),
-    [peersAllFull, peerQuery, peerTbl, peersShowAll], // eslint-disable-line react-hooks/exhaustive-deps
+    () => peerView(peersAllFull, { query: peerQuery, by: peerTbl.by, dir: peerTbl.dir, showAll: false, limit: peersShown }),
+    [peersAllFull, peerQuery, peerTbl, peersShown], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const displayPeers = peerTable.rows;
   // Leader / Laggard tags in the table are judged among the rows it shows.
@@ -2778,7 +2780,7 @@ export function StockScreen({
                 ))}
               </dl>
             );
-            return (
+            return (<>
               <div className="card">
                 <div className="card-h">
                   <h3>Key statistics</h3>
@@ -2790,7 +2792,20 @@ export function StockScreen({
                   {col(companyPart)}
                 </div>
               </div>
-            );
+              {!isEtf && (
+                <div className="card">
+                  <div className="card-h"><h3>Stock splits</h3><VendorTag v={["fmp", "polygon"]} /></div>
+                  {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 5).map(x => (
+                    <div key={x.executionDate} className="sd-row">
+                      <span className="grow num">{x.executionDate}</span>
+                      <span className="num">{x.splitFrom}:{x.splitTo}</span>
+                    </div>
+                  )) : (
+                    <div className="sd-note" style={{ paddingBottom: 14 }}>No splits on record.</div>
+                  )}
+                </div>
+              )}
+            </>);
           })()}
 
           {activeTab === "analysis" && (<>
@@ -3064,6 +3079,43 @@ export function StockScreen({
               <EtfHoldingsView symbol={sym} />
             ) : (
               <div className="sd-hold" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {allSymInsiderTxns.length > 0 && (() => {
+                const today = etTodayIso();
+                const windows = [summarizeInsiders(allSymInsiderTxns, today, 30), summarizeInsiders(allSymInsiderTxns, today, 90)];
+                const lead = windows[0].buys + windows[0].sells > 0 ? windows[0] : windows[1];
+                const tone = lead.netValue > 0 ? "var(--up)" : lead.netValue < 0 ? "var(--down)" : "var(--text-hi)";
+                return (
+                  <div className="card" style={{ width: "100%" }}>
+                    <div className="card-h"><h3>Insider summary<span className="sd-unit">open-market trades only (Form 4 codes P / S)</span></h3></div>
+                    <div className="card-b">
+                      <div style={{ fontSize: ".95rem", fontWeight: 700, color: tone, marginBottom: 10 }}>{lead.verdict}</div>
+                      <table className="sd-ftab" style={{ width: "100%" }}>
+                        <thead>
+                          <tr><th></th><th>Buys</th><th>Sells</th><th>Bought</th><th>Sold</th><th>Net</th><th>Insiders buying / selling</th></tr>
+                        </thead>
+                        <tbody>
+                          {windows.map(w => (
+                            <tr key={w.days}>
+                              <td>Last {w.days} days</td>
+                              <td>{w.buys}</td>
+                              <td>{w.sells}</td>
+                              <td className="up">{compactUsd(w.buyValue)}</td>
+                              <td className="down">{compactUsd(w.sellValue)}</td>
+                              <td className={w.netValue > 0 ? "up" : w.netValue < 0 ? "down" : undefined}>{w.netValue > 0 ? "+" : ""}{compactUsd(w.netValue)}</td>
+                              <td>{w.buyers} / {w.sellers}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {windows[1].largest && (
+                        <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                          Largest trade (90 days): {windows[1].largest.owner} {windows[1].largest.side === "buy" ? "bought" : "sold"} {compactUsd(windows[1].largest.value)} on {fmtDate(windows[1].largest.date)}.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="card" style={{ width: "100%" }}>
                 <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -3231,17 +3283,6 @@ export function StockScreen({
                   })()}
                 </div>
 
-                <div className="card">
-                  <div className="card-h"><h3>Stock splits</h3><VendorTag v={["fmp", "polygon"]} /></div>
-                  {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 5).map(x => (
-                    <div key={x.executionDate} className="sd-row">
-                      <span className="grow num">{x.executionDate}</span>
-                      <span className="num">{x.splitFrom}:{x.splitTo}</span>
-                    </div>
-                  )) : (
-                    <div className="sd-note" style={{ paddingBottom: 14 }}>No splits on record.</div>
-                  )}
-                </div>
               </div>
               </div>
             )
@@ -3423,18 +3464,13 @@ export function StockScreen({
                         </tbody>
                       </table>
                     </div>
-                    {/* Default is the largest PEER_DEFAULT_LIMIT by market cap; the rest are one click away. */}
-                    {(peerTable.limited || (peersShowAll && !peerQuery.trim() && peersTotal > PEER_DEFAULT_LIMIT)) && (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderTop: "1px solid var(--border-soft)", fontSize: ".76rem", color: "var(--text-dim-solid)" }}>
-                        <span>
-                          {peerTable.limited
-                            ? `Showing the ${displayPeers.length} largest by market cap, of ${peerTable.matched} peers.`
-                            : `Showing all ${peerTable.matched} peers.`}
-                        </span>
-                        <button type="button" className="link" onClick={() => setPeersShowAll(v => !v)}
-                          style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }}>
-                          {peerTable.limited ? `Show all ${peerTable.matched} →` : `Show the largest ${PEER_DEFAULT_LIMIT}`}
+                    {/* The largest PEER_DEFAULT_LIMIT by market cap first; "Load more" adds the next PEER_DEFAULT_LIMIT. */}
+                    {peerTable.limited && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 14px", borderTop: "1px solid var(--border-soft)", fontSize: ".76rem", color: "var(--text-dim-solid)" }}>
+                        <button type="button" className="btn" onClick={() => setPeersShown(n => n + PEER_DEFAULT_LIMIT)}>
+                          Load {Math.min(PEER_DEFAULT_LIMIT, peerTable.matched - displayPeers.length)} more
                         </button>
+                        <span>Showing {displayPeers.length} of {peerTable.matched} peers, largest by market cap first.</span>
                       </div>
                     )}
                     </>

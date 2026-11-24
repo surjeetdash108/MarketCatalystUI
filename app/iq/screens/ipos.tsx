@@ -12,9 +12,10 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 );
 import { useApiList } from "../hooks/useApiList";
 import { useLiveQuotes } from "../live-quotes-context";
+import { displayStatus, hasListed, isNonCommonListing, listingKind } from "../ipo-rows";
 import type { IpoEventDoc, IpoPipelineDoc, CompanyDoc } from "../types";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
-import { fmtMonthDay } from "../calendar-range";
+import { etTodayIso, fmtMonthDay } from "../calendar-range";
 
 const IPO_PAGE_SIZE = 20;
 
@@ -140,9 +141,20 @@ export function IPOsScreen() {
       return true;
     });
   })();
-  // Live quotes for names that have listed (an aftermarket price exists).
-  const listedSyms = liveIposSorted.filter(e => e.symbol && e.currentPrice != null).map(e => e.symbol as string);
+  // Live quotes for names that have, or may have, listed: a stored aftermarket
+  // price, or a listing date in the last 30 days (the stored status lags the
+  // feed, so a quote is how a just-listed "pending" deal shows it trades).
+  const todayIso = etTodayIso();
+  const recentCut = (() => { const d = new Date(`${todayIso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 30); return d.toISOString().slice(0, 10); })();
+  const listedSyms = liveIposSorted
+    .filter(e => e.symbol && e.date <= todayIso && (e.currentPrice != null || e.date >= recentCut))
+    .map(e => e.symbol as string)
+    .slice(0, 150);
   const liveQuotes = useLiveQuotes(listedSyms);
+  const livePxOf = (sym: string | null | undefined): number | null => {
+    const p = sym ? liveQuotes.get(sym)?.price : null;
+    return p != null && p > 0 ? p : null;
+  };
   // Prefer the IPO doc's own (SIC-derived) sector; fall back to the companies
   // universe. The dropdown is built from the sectors actually present.
   const secForIpo = (e: IpoEventDoc): string => e.sector ?? sectorOf(e.symbol);
@@ -160,10 +172,14 @@ export function IPOsScreen() {
   // then re-derived from that price so the two columns cannot disagree.
   const offerOf = (e: IpoEventDoc) =>
     e.offerPrice ?? (e.priceLow != null && e.priceHigh != null ? (e.priceLow + e.priceHigh) / 2 : e.priceLow ?? e.priceHigh);
-  const liveRows: IpoRow[] = liveIposSorted.map(e => {
+  // Only companies that have actually started trading: not ETFs, warrants,
+  // units or rights, and not deals still waiting to list (they had no price, so
+  // the newest rows read as blanks).
+  const liveRows: IpoRow[] = liveIposSorted
+    .filter(e => !isNonCommonListing(e) && hasListed(e, livePxOf(e.symbol), todayIso))
+    .map(e => {
     const offer = offerOf(e);
-    const q = e.symbol && e.currentPrice != null ? liveQuotes.get(e.symbol) : undefined;
-    const livePx = q?.price != null && q.price > 0 ? q.price : null;
+    const livePx = livePxOf(e.symbol);
     return {
     id: e.id,
     s: e.symbol ?? "—",
@@ -266,7 +282,7 @@ export function IPOsScreen() {
   return (
     <>
       <div className="page-head">
-        <div className="tabs">
+        <div className="tabs ipo-tabs">
           <button className={`tab${tab === "recent" ? " on" : ""}`} onClick={() => setTab("recent")}>Recent IPO performance</button>
           <button className={`tab${tab === "pipeline" ? " on" : ""}`} onClick={() => setTab("pipeline")}>Upcoming pipeline</button>
           <button className={`tab${tab === "calendar" ? " on" : ""}`} onClick={() => setTab("calendar")}>Live IPO Calendar</button>
@@ -497,6 +513,13 @@ export function IPOsScreen() {
       )}
 
       {/* ── Live IPO calendar (Polygon) ── */}
+      {tab === "calendar" && filteredCalendar.length === 0 && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="card-b" style={{ padding: 28, textAlign: "center", color: "var(--text-dim-solid)", fontSize: ".84rem" }}>
+            {q || sector !== "All" ? "No IPOs match this search or sector." : "No IPOs in the calendar window right now."}
+          </div>
+        </div>
+      )}
       {tab === "calendar" && filteredCalendar.length > 0 && (
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
@@ -516,7 +539,10 @@ export function IPOsScreen() {
                 </tr>
               </thead>
               <tbody>
-                {pageSlice(filteredCalendar).map(e => (
+                {pageSlice(filteredCalendar).map(e => {
+                  const livePx = livePxOf(e.symbol);
+                  const status = displayStatus(e, livePx, todayIso);
+                  return (
                   <tr key={e.id} onClick={() => setSelectedSym(e.symbol || "")} style={{ cursor: "pointer" }}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -526,17 +552,38 @@ export function IPOsScreen() {
                     </td>
                     <td style={{ fontFamily: "var(--f-mono)", fontWeight: 700, color: "var(--text-hi)" }}>
                       {e.symbol || "—"}
+                      {listingKind(e) && (
+                        <span className="pill" style={{ marginLeft: 6, fontSize: ".6rem", fontFamily: "var(--f-body, inherit)", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                          {listingKind(e)}
+                        </span>
+                      )}
                     </td>
                     <td>{e.date}</td>
                     <td>{e.exchange || "—"}</td>
-                    <td className="num"><IpoPriceCell low={e.priceLow} high={e.priceHigh} offer={e.offerPrice} /></td>
+                    <td className="num">
+                      {/* A listed name shows where it trades now (the live quote the stock
+                          drawer uses), with the offer range under it when there was one. */}
+                      {status === "history" && (livePx ?? e.currentPrice) != null ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                          <span style={{ fontFamily: "var(--f-mono)", fontWeight: 700, color: "var(--text-hi)" }}>${(livePx ?? e.currentPrice as number).toFixed(2)}</span>
+                          {(e.offerPrice != null || e.priceLow != null) && (
+                            <span style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
+                              offer {e.offerPrice != null ? `$${e.offerPrice.toFixed(2)}` : formatIpoPrice(e.priceLow, e.priceHigh)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <IpoPriceCell low={e.priceLow} high={e.priceHigh} offer={e.offerPrice} />
+                      )}
+                    </td>
                     <td>
-                      <span className={`pill ${e.status === "priced" || e.status === "history" ? "up" : e.status === "withdrawn" ? "down" : "amc"}`}>
-                        {ipoStatusLabel(e.status)}
+                      <span className={`pill ${status === "priced" || status === "history" ? "up" : status === "withdrawn" ? "down" : "amc"}`}>
+                        {ipoStatusLabel(status)}
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
