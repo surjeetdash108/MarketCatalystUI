@@ -12,9 +12,10 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 );
 import { useApiList } from "../hooks/useApiList";
 import { useLiveQuotes } from "../live-quotes-context";
+import { hasListed, isNonCommonListing } from "../ipo-rows";
 import type { IpoEventDoc, IpoPipelineDoc, CompanyDoc } from "../types";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
-import { fmtMonthDay } from "../calendar-range";
+import { etTodayIso, fmtMonthDay } from "../calendar-range";
 
 const IPO_PAGE_SIZE = 20;
 
@@ -140,9 +141,20 @@ export function IPOsScreen() {
       return true;
     });
   })();
-  // Live quotes for names that have listed (an aftermarket price exists).
-  const listedSyms = liveIposSorted.filter(e => e.symbol && e.currentPrice != null).map(e => e.symbol as string);
+  // Live quotes for names that have, or may have, listed: a stored aftermarket
+  // price, or a listing date in the last 30 days (the stored status lags the
+  // feed, so a quote is how a just-listed "pending" deal shows it trades).
+  const todayIso = etTodayIso();
+  const recentCut = (() => { const d = new Date(`${todayIso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 30); return d.toISOString().slice(0, 10); })();
+  const listedSyms = liveIposSorted
+    .filter(e => e.symbol && e.date <= todayIso && (e.currentPrice != null || e.date >= recentCut))
+    .map(e => e.symbol as string)
+    .slice(0, 150);
   const liveQuotes = useLiveQuotes(listedSyms);
+  const livePxOf = (sym: string | null | undefined): number | null => {
+    const p = sym ? liveQuotes.get(sym)?.price : null;
+    return p != null && p > 0 ? p : null;
+  };
   // Prefer the IPO doc's own (SIC-derived) sector; fall back to the companies
   // universe. The dropdown is built from the sectors actually present.
   const secForIpo = (e: IpoEventDoc): string => e.sector ?? sectorOf(e.symbol);
@@ -160,10 +172,14 @@ export function IPOsScreen() {
   // then re-derived from that price so the two columns cannot disagree.
   const offerOf = (e: IpoEventDoc) =>
     e.offerPrice ?? (e.priceLow != null && e.priceHigh != null ? (e.priceLow + e.priceHigh) / 2 : e.priceLow ?? e.priceHigh);
-  const liveRows: IpoRow[] = liveIposSorted.map(e => {
+  // Only companies that have actually started trading: not ETFs, warrants,
+  // units or rights, and not deals still waiting to list (they had no price, so
+  // the newest rows read as blanks).
+  const liveRows: IpoRow[] = liveIposSorted
+    .filter(e => !isNonCommonListing(e) && hasListed(e, livePxOf(e.symbol), todayIso))
+    .map(e => {
     const offer = offerOf(e);
-    const q = e.symbol && e.currentPrice != null ? liveQuotes.get(e.symbol) : undefined;
-    const livePx = q?.price != null && q.price > 0 ? q.price : null;
+    const livePx = livePxOf(e.symbol);
     return {
     id: e.id,
     s: e.symbol ?? "—",
