@@ -59,16 +59,18 @@ interface AnnouncementDoc {
   };
 }
 
-/** A titled bullet list — rendered only when it has items. */
-function AnnList({ title, items, tone }: { title: string; items?: string[]; tone?: string }) {
+type AnnTone = "neutral" | "up" | "down" | "warn" | "info";
+
+/** A titled block of points with visible bullets — rendered only when it has items. */
+function AnnList({ title, items, tone = "neutral" }: { title: string; items?: string[]; tone?: AnnTone }) {
   if (!items || items.length === 0) return null;
   return (
-    <div>
-      <div style={{ fontSize: ".64rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)", marginBottom: 4 }}>{title}</div>
-      <ul style={{ margin: 0, paddingLeft: 18, fontSize: ".78rem", lineHeight: 1.5 }}>
-        {items.map((x, i) => <li key={i} className={tone}>{x}</li>)}
+    <section className={`ann-sec ${tone}`}>
+      <h4 className="ann-h">{title}</h4>
+      <ul className="ann-ul">
+        {items.map((x, i) => <li key={i}>{x}</li>)}
       </ul>
-    </div>
+    </section>
   );
 }
 
@@ -119,29 +121,36 @@ function EarningsAnnouncementsTab() {
                   <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
                 </button>
                 {isOpen && (
-                  <div style={{ padding: "2px 16px 16px 50px", display: "flex", flexDirection: "column", gap: 12 }}>
-                    {(r.overallAssessment || r.summary) && <p style={{ fontSize: ".82rem", lineHeight: 1.5, margin: 0 }}>{r.overallAssessment || r.summary}</p>}
+                  <div className="ann-body">
+                    {(r.overallAssessment || r.summary) && <p className={`ann-lead ${vClass}`}>{r.overallAssessment || r.summary}</p>}
                     {a && (
-                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
-                        {a.epsActual != null && <span>EPS <b style={{ color: "var(--text-hi)" }}>{a.epsActual}</b>{a.epsEstimate != null ? ` vs est ${a.epsEstimate}` : ""}</span>}
-                        {(a.surprisePct != null || surpStr !== "—") && <span>Surprise <b className={vClass}>{a.surprisePct != null ? sign(a.surprisePct) : surpStr}</b></span>}
-                        {a.revenueActual != null && <span>Rev <b style={{ color: "var(--text-hi)" }}>{fmt(a.revenueActual)}</b>{a.revenueEstimate != null ? ` vs ${fmt(a.revenueEstimate)}` : ""}</span>}
+                      <div className="ann-metrics">
+                        {a.epsActual != null && <span className="ann-chip"><i>EPS</i><b>{a.epsActual}</b>{a.epsEstimate != null && <em>vs est {a.epsEstimate}</em>}</span>}
+                        {(a.surprisePct != null || surpStr !== "—") && <span className="ann-chip"><i>Surprise</i><b className={vClass}>{a.surprisePct != null ? sign(a.surprisePct) : surpStr}</b></span>}
+                        {a.revenueActual != null && <span className="ann-chip"><i>Revenue</i><b>{fmt(a.revenueActual)}</b>{a.revenueEstimate != null && <em>vs est {fmt(a.revenueEstimate)}</em>}</span>}
                       </div>
                     )}
-                    <AnnList title="Key developments" items={r.keyDevelopments} />
-                    <AnnList title="Positives" items={r.positiveFactors} tone="up" />
-                    <AnnList title="Negatives" items={r.negativeFactors} tone="down" />
-                    <AnnList title="Risks" items={r.risks} />
-                    <AnnList title="Opportunities" items={r.opportunities} />
+                    <AnnList title="Key developments" items={r.keyDevelopments} tone="info" />
+                    <div className="ann-pair">
+                      <AnnList title="Positives" items={r.positiveFactors} tone="up" />
+                      <AnnList title="Negatives" items={r.negativeFactors} tone="down" />
+                    </div>
+                    <div className="ann-pair">
+                      <AnnList title="Risks" items={r.risks} tone="warn" />
+                      <AnnList title="Opportunities" items={r.opportunities} tone="info" />
+                    </div>
                     {(r.fundamentalImpact || r.priceImpact || r.shortTermImpact || r.mediumTermImpact) && (
-                      <div style={{ fontSize: ".78rem", display: "flex", flexDirection: "column", gap: 6, lineHeight: 1.5 }}>
-                        {r.fundamentalImpact && <div><b>Fundamental impact:</b> {r.fundamentalImpact}</div>}
-                        {r.priceImpact && <div><b>Price impact:</b> {r.priceImpact}</div>}
-                        {r.shortTermImpact && <div><b>Short term:</b> {r.shortTermImpact}</div>}
-                        {r.mediumTermImpact && <div><b>Medium term:</b> {r.mediumTermImpact}</div>}
-                      </div>
+                      <section className="ann-sec neutral">
+                        <h4 className="ann-h">Impact</h4>
+                        <dl className="ann-dl">
+                          {r.fundamentalImpact && <div><dt>Fundamental</dt><dd>{r.fundamentalImpact}</dd></div>}
+                          {r.priceImpact && <div><dt>Price</dt><dd>{r.priceImpact}</dd></div>}
+                          {r.shortTermImpact && <div><dt>Short term</dt><dd>{r.shortTermImpact}</dd></div>}
+                          {r.mediumTermImpact && <div><dt>Medium term</dt><dd>{r.mediumTermImpact}</dd></div>}
+                        </dl>
+                      </section>
                     )}
-                    <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)" }}>AI-generated · not investment advice · updated {String(r.lastUpdatedAt).slice(0, 16).replace("T", " ")}</div>
+                    <div className="ann-foot">AI-generated · not investment advice · updated {String(r.lastUpdatedAt).slice(0, 16).replace("T", " ")}</div>
                   </div>
                 )}
               </div>
@@ -760,45 +769,14 @@ interface GlanceDoc {
 }
 interface GlanceResponse { generating: boolean; items: GlanceDoc[]; }
 
-/** Sentiment styling for the glance digests — colour, a friendly label, and a
- *  glyph so each period reads at a glance instead of as a wall of grey text. */
-const SENT: Record<GlanceSentiment, { color: string; label: string; icon: string }> = {
-  bullish: { color: "var(--up)",             label: "Bullish", icon: "📈" },
-  bearish: { color: "var(--down)",           label: "Bearish", icon: "📉" },
-  mixed:   { color: "var(--warn)",           label: "Mixed",   icon: "🔀" },
-  neutral: { color: "var(--text-dim-solid)", label: "Neutral", icon: "➖" },
+/** Sentiment styling for the glance digests: a colour, a friendly label and the
+ *  tone the "Notable movers" block takes. No glyphs — the colour carries the mood. */
+const SENT: Record<GlanceSentiment, { color: string; label: string; tone: AnnTone }> = {
+  bullish: { color: "var(--up)",             label: "Bullish", tone: "up" },
+  bearish: { color: "var(--down)",           label: "Bearish", tone: "down" },
+  mixed:   { color: "var(--warn)",           label: "Mixed",   tone: "warn" },
+  neutral: { color: "var(--text-dim-solid)", label: "Neutral", tone: "neutral" },
 };
-
-/** Engaging replacement for the plain uppercase-bullet AnnList inside a glance
- *  digest: each item becomes a soft, accent-tinted chip with a colour dot, so
- *  themes / earnings / movers scan as tags rather than a dense list. */
-function GlanceChips({ title, icon, items, color }: {
-  title: string; icon: string; items?: string[]; color: string;
-}) {
-  if (!items || items.length === 0) return null;
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9 }}>
-        <span aria-hidden style={{ fontSize: ".9rem", lineHeight: 1 }}>{icon}</span>
-        <span style={{ fontSize: ".68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--text-dim-solid)" }}>{title}</span>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-        {items.map((x, i) => (
-          <span key={i} style={{
-            display: "inline-flex", alignItems: "center", gap: 8, maxWidth: "100%",
-            fontSize: ".78rem", lineHeight: 1.45, color: "var(--text)",
-            background: `color-mix(in srgb, ${color} 9%, var(--surface-2))`,
-            border: `1px solid color-mix(in srgb, ${color} 24%, var(--border-soft))`,
-            borderRadius: 9, padding: "6px 11px",
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
-            <span>{x}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /** "August 2026" (monthly) or "Week of Aug 24 – 30, 2026" (weekly). All UTC so
  *  the label matches the period keys the backend wrote. */
@@ -859,14 +837,6 @@ function GlanceTab({ period, heading }: { period: "weekly" | "monthly"; heading:
                 <button
                   onClick={() => setOpenKey(isOpen ? "" : it.periodKey)}
                   style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "none", border: 0, cursor: "pointer", textAlign: "left", color: "inherit" }}>
-                  {/* Sentiment glyph in a soft tinted tile — an at-a-glance mood
-                      cue so each period leads with colour, not grey text. */}
-                  <span aria-hidden style={{
-                    width: 34, height: 34, flexShrink: 0, display: "grid", placeItems: "center",
-                    fontSize: "1rem", borderRadius: 10,
-                    background: `color-mix(in srgb, ${sc.color} 15%, var(--surface-2))`,
-                    border: `1px solid color-mix(in srgb, ${sc.color} 28%, var(--border-soft))`,
-                  }}>{sc.icon}</span>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     {/* Deliberately NOT .tkr. That class is the fixed-width
                         ticker-symbol style — `width: 52px` with
@@ -916,10 +886,12 @@ function GlanceTab({ period, heading }: { period: "weekly" | "monthly"; heading:
                         borderLeft: `3px solid ${sc.color}`, paddingLeft: 13,
                       }}>{it.marketTone}</p>
                     )}
-                    {it.summary && <p style={{ fontSize: ".83rem", lineHeight: 1.6, margin: 0, color: "var(--text)" }}>{it.summary}</p>}
-                    <GlanceChips title="Key themes"       icon="🎯" items={it.keyThemes}       color="var(--brand)" />
-                    <GlanceChips title="Biggest earnings" icon="📊" items={it.biggestEarnings} color="var(--ai)" />
-                    <GlanceChips title="Notable movers"   icon="🚀" items={it.notableMovers}   color={sc.color} />
+                    {it.summary && <p className="ann-text">{it.summary}</p>}
+                    <div className="ann-grid">
+                      <AnnList title="Key themes"       items={it.keyThemes}       tone="info" />
+                      <AnnList title="Biggest earnings" items={it.biggestEarnings} tone="neutral" />
+                      <AnnList title="Notable movers"   items={it.notableMovers}   tone={sc.tone} />
+                    </div>
                     <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)", display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", paddingTop: 10, borderTop: "1px solid var(--border-soft)" }}>
                       <span style={{ fontSize: ".55rem", fontWeight: 700, letterSpacing: ".04em", padding: "1px 5px", borderRadius: 4, background: "var(--ai)", color: "#fff" }}>AI</span>
                       Not investment advice · {it.sourceCount} {it.sourceCount === 1 ? "analysis" : "analyses"}

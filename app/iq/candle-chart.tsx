@@ -99,20 +99,26 @@ function etWeekStart(ms: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Whether `at` falls inside the regular session (09:30–16:00 ET). */
+function inRegularHours(at: number): boolean {
+  const mod = etMinuteOfDay(at);
+  return mod >= 9 * 60 + 30 && mod < 16 * 60;
+}
+
 /**
  * Whether the tick at `at` still falls inside the candle stamped `lastT`, i.e.
- * whether it may be folded onto it. Interval candles are regular-session only
- * (09:30–16:00 ET), so an extended-hours tick never qualifies for an intraday
- * size — the backend dropped those bars, and folding one in would draw a
- * price the series itself excludes.
+ * whether it may be folded onto it. Every candle is regular-session only
+ * (09:30–16:00 ET), so an extended-hours tick never qualifies — for the
+ * intraday sizes the backend dropped those bars, and for 1D/1W/1M the day's
+ * close is the 16:00 close. Folding an after-hours print in rewrote the day's
+ * close (AAPL: $349.66 on the candle against the $349.08 close in the header)
+ * and its change (+2.07% against +1.90%).
  */
 function candleIsOpen(lastT: number, iv: BarInterval, at: number): boolean {
+  if (!inRegularHours(at)) return false;
   const len = INTRADAY_INTERVAL_MS[iv];
   if (len != null) {
-    const mod = etMinuteOfDay(at);
-    return etSessionDate(lastT) === etSessionDate(at)
-      && at < lastT + len
-      && mod >= 9 * 60 + 30 && mod < 16 * 60;
+    return etSessionDate(lastT) === etSessionDate(at) && at < lastT + len;
   }
   if (iv === "1D") return etSessionDate(lastT) === etSessionDate(at);
   if (iv === "1W") return etWeekStart(lastT) === etWeekStart(at);
@@ -1359,7 +1365,8 @@ function CandleChartInner({
       const l = Math.min(last.l, c, dayRange ? (live.low ?? c) : c);
       return [...base.slice(0, -1), { ...last, c, h, l }];
     }
-    if (live.at == null || etSessionDate(last.t) !== etSessionDate(live.at)) return base;
+    // Same rule as above: an after-hours print is not part of the day's candle.
+    if (live.at == null || !inRegularHours(live.at) || etSessionDate(last.t) !== etSessionDate(live.at)) return base;
     const h = Math.max(last.h, live.high ?? c, c);
     const l = Math.min(last.l, live.low ?? c, c);
     return [...base.slice(0, -1), { ...last, c, h, l }];

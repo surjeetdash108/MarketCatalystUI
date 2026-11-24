@@ -4101,27 +4101,6 @@ table.tbl tr:hover td {
   box-shadow: 0 1px 6px -2px #000;
 }
 
-/* Heatmap sector row (Overall + each sector): green labels, and a solid brand
-   fill on the selected one — same treatment as .ecal-segbtn.on. The default
-   .tab.on is a grey/white surface that all but disappears next to its white
-   neighbours, so the active sector was hard to find among ~16 tabs. */
-.hm-sectors .tab {
-  color: var(--brand);
-  font-weight: 600;
-}
-
-.hm-sectors .tab:hover {
-  background: var(--brand-dim);
-  color: var(--brand);
-}
-
-.hm-sectors .tab.on {
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 700;
-  box-shadow: 0 2px 8px -4px var(--brand);
-}
-
 /* Movers header: the tab bar stays on one row on every tab. The caption beside
    it is longest on the This Week tabs; left shrinkable it squeezed .tabs and the
    labels wrapped to two lines, so the bar changed shape when those tabs opened.
@@ -8565,6 +8544,13 @@ table.tbl tr:hover td {
   padding: 0;
 }
 
+/* The "View all" drawers (Industry Group Rank, Peers, Key levels…) are rendered
+   inside the stock drawer, so the rule above zeroed their body padding too and
+   pinned the rank numbers to the drawer's left edge. Restore the normal inset. */
+.stock-side-drawer .side-drawer .drawer-b {
+  padding: 18px 20px 32px;
+}
+
 /* The top bar is z-index 100 (so its profile/notification dropdowns clear the
    search row), which painted over the top ~98px of this drawer and hid its
    header and ✕ close button. Lift the drawer, and the scrim that precedes it,
@@ -12969,10 +12955,14 @@ table.sd-ftab {
 }
 
 /* key statistics (Overview): two label/value columns, one stat per row */
+/* Key statistics: three parts side by side. auto-fit keeps three columns while each
+   fits ~310px (the longest row is the earnings date with its "Estimated" tag), then
+   drops to two and one as the card narrows. */
 .sd-kv-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
   column-gap: 28px;
+  row-gap: 8px;
   padding: 4px 18px 10px;
 }
 
@@ -13023,11 +13013,8 @@ table.sd-ftab {
 }
 
 @container sd (max-width: 680px) {
-  .sd-kv-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .sd-kv:first-child .sd-kv-row:last-child {
+  /* One column: keep a divider between the stacked parts. */
+  .sd-kv:not(:last-child) .sd-kv-row:last-child {
     border-bottom: 1px solid var(--border-soft);
   }
 
@@ -13694,6 +13681,11 @@ h6.sd-sec {
 .iq-root .cpulse-tw-top .hd { color: var(--text-dim-solid); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .iq-root .cpulse-tw-top .ago { margin-left: auto; flex: none; color: var(--text-dim-solid); font-size: .72rem; }
 .iq-root .cpulse-tw-text { font-size: .8rem; line-height: 1.45; color: var(--text-hi); text-wrap: pretty; }
+.iq-root .cpulse-tw-text.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+.iq-root .cpulse-more { align-self: flex-start; background: none; border: 0; padding: 0; font: inherit; font-size: .74rem; font-weight: 700; color: var(--brand-2); cursor: pointer; }
+.iq-root .cpulse-more:hover { text-decoration: underline; }
+/* Bright yellow with dark ink, like the browser's find-in-page, so a match is seen at a glance. */
+.iq-root .cpulse mark.cpulse-hl { background: #ffe600; color: #111; border-radius: 2px; padding: 0 1px; }
 .iq-root .cpulse-tw-foot { display: flex; align-items: center; gap: 6px; }
 .iq-root .cpulse-tw-foot .tk-link { background: none; border: 0; padding: 0; font: inherit; font-size: .78rem; font-weight: 700; color: #1d9bf0; cursor: pointer; }
 .iq-root .cpulse-tw-foot .tk-link:hover { text-decoration: underline; }
@@ -13742,10 +13734,6 @@ h6.sd-sec {
   cursor: pointer;
 }
 
-/* Left column (What Matters Now + Most Searched) and Community Pulse stack on narrow screens. */
-@media (max-width: 1100px) {
-  .iq-root .dash > .wmn-left, .iq-root .dash > .cpulse-col { grid-column: span 12; }
-}
 
 /* Alpha Signals bar */
 .iq-root .alpha-bar {
@@ -14069,10 +14057,23 @@ h6.sd-sec {
    hang down from it are not painted over by the search row. */
 .iq-root .topbar { position: relative; z-index: 100; }
 
-/* Community Pulse fills its grid row (like the design): the panel is positioned inside
-   the cell, so the row height comes from the left column, not from the panel. */
-.iq-root .dash > .cpulse-col { position: relative; display: block !important; min-height: 380px; }
+/* Dashboard body: every card sits in the left column (two across, the width they had
+   with three across the page) and Market Catalyst Pulse runs the full height of the
+   page on the right. The panel is positioned inside its cell, so the height comes from
+   the left column, not from the panel; its posts scroll inside it. */
+.iq-root .dash-split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; }
+.iq-root .dash-left { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.iq-root .dash-left > .col-4 { grid-column: span 6; }
+.iq-root .dash-split > .cpulse-col { position: relative; min-width: 0; min-height: 380px; }
 .iq-root .cpulse { position: absolute; inset: 0; min-height: 0; }
+/* Narrow screens: one column, Pulse after the cards at a fixed height. */
+@media (max-width: 1100px) {
+  .iq-root .dash-split { grid-template-columns: minmax(0, 1fr); }
+  .iq-root .dash-split > .cpulse-col { min-height: 520px; }
+}
+@media (max-width: 900px) {
+  .iq-root .dash-left > .col-4 { grid-column: span 12; }
+}
 
 /* Most Searched Tickers: one horizontally scrolling row (collapsible), as in the design. */
 .iq-root .srch-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
@@ -14217,5 +14218,114 @@ h6.sd-sec {
 .iq-root .cpulse-search input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font-size:.78rem}
 .iq-root .cpulse-search input::-webkit-search-cancel-button{display:none}
 .iq-root .cpulse-search .clr{background:none;border:0;color:var(--text-dim-solid);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px}
+.iq-root .cpulse-search .cnt{flex:none;font-size:.7rem;font-weight:600;color:var(--text-dim-solid);white-space:nowrap}
+.iq-root .cpulse-search .cnt.none{color:var(--warn)}
 
 .iq-root .alp-ring-note{display:block;font-size:.6rem;color:var(--text-dim-solid);text-align:center;margin-top:3px;white-space:nowrap}
+
+/* ============================================================
+   Live Feed → Announcement: an opened earnings read, point by point
+   ============================================================ */
+.iq-root .ann-body { padding: 4px 18px 20px 50px; display: flex; flex-direction: column; gap: 16px; }
+.iq-root .ann-lead { margin: 0; padding: 2px 0 2px 14px; border-left: 3px solid var(--border-strong); font-size: .9rem; line-height: 1.6; color: var(--text-hi); text-wrap: pretty; }
+.iq-root .ann-lead.up { border-left-color: var(--up); }
+.iq-root .ann-lead.down { border-left-color: var(--down); }
+.iq-root .ann-metrics { display: flex; flex-wrap: wrap; gap: 8px; }
+.iq-root .ann-chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); font-size: .76rem; color: var(--text-dim-solid); }
+.iq-root .ann-chip i { font-style: normal; font-size: .64rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.iq-root .ann-chip b { font-family: var(--f-mono); font-size: .84rem; color: var(--text-hi); }
+.iq-root .ann-chip em { font-style: normal; font-size: .72rem; }
+.iq-root .ann-pair, .iq-root .ann-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.iq-root .ann-pair:not(:has(.ann-sec)), .iq-root .ann-grid:not(:has(.ann-sec)) { display: none; }
+/* Running text kept to a readable line length instead of the full card width. */
+.iq-root .ann-text { margin: 0; max-width: 82ch; font-size: .88rem; line-height: 1.65; color: var(--text); text-wrap: pretty; }
+.iq-root .ann-sec { --ann: var(--text-dim-solid); min-width: 0; padding: 12px 14px 12px; border: 1px solid var(--border); border-left: 3px solid var(--ann); border-radius: 10px; background: var(--surface-1); }
+.iq-root .ann-sec.up { --ann: var(--up); }
+.iq-root .ann-sec.down { --ann: var(--down); }
+.iq-root .ann-sec.warn { --ann: var(--warn, #f5b544); }
+.iq-root .ann-sec.info { --ann: var(--brand-2, #4fb3ff); }
+.iq-root .ann-h { margin: 0 0 8px; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ann); }
+.iq-root .ann-ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.iq-root .ann-ul li { position: relative; padding-left: 16px; font-size: .84rem; line-height: 1.55; color: var(--text-hi); text-wrap: pretty; }
+.iq-root .ann-ul li::before { content: ""; position: absolute; left: 1px; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--ann); }
+.iq-root .ann-dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.iq-root .ann-dl > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.iq-root .ann-dl dt { font-size: .72rem; font-weight: 700; color: var(--text-dim-solid); }
+.iq-root .ann-dl dd { margin: 0; font-size: .84rem; line-height: 1.55; color: var(--text-hi); text-wrap: pretty; }
+.iq-root .ann-foot { font-size: .66rem; color: var(--text-dim-solid); }
+@media (max-width: 700px) {
+  .iq-root .ann-body { padding-left: 14px; }
+  .iq-root .ann-dl > div { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* ============================================================
+   Heatmap (redesign): title, grouped controls, legend, flat dark map
+   ============================================================ */
+.iq-root .hm2-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px; margin: 2px 0 14px; }
+.iq-root .hm2-h1 { margin: 0; font-family: var(--f-display); font-size: 1.7rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; color: var(--text-hi); }
+.iq-root .hm2-sub { margin: 4px 0 0; font-size: .86rem; color: var(--text-dim-solid); }
+.iq-root .hm2-search { display: flex; align-items: center; gap: 10px; width: 260px; max-width: 100%; height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); color: var(--text-dim-solid); }
+.iq-root .hm2-search:focus-within { border-color: var(--brand); }
+.iq-root .hm2-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text-hi); font: inherit; font-size: .9rem; }
+.iq-root .hm2-search input::-webkit-search-cancel-button { display: none; }
+.iq-root .hm2-search .clr { border: 0; background: none; color: var(--text-dim-solid); font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 2px; }
+
+.iq-root .hm2-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 12px; }
+.iq-root .hm2-seg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.iq-root .hm2-seg button { flex: none; padding: 8px 16px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: .88rem; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background .13s, color .13s; }
+.iq-root .hm2-seg button:hover:not(:disabled):not(.on) { background: var(--surface-2); color: var(--text-hi); }
+.iq-root .hm2-seg button.on { background: var(--brand); color: var(--on-brand); font-weight: 700; }
+.iq-root .hm2-seg button:disabled { opacity: .4; cursor: not-allowed; }
+.iq-root .hm2-sector { display: inline-flex; align-items: center; gap: 10px; font-size: .88rem; color: var(--text-hi); }
+.iq-root .hm2-sector select { height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); color: var(--text-hi); font: inherit; font-size: .88rem; cursor: pointer; }
+.iq-root .hm2-sector select:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.iq-root .hm2-back { height: 42px; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; background: transparent; color: var(--brand); font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; }
+.iq-root .hm2-back:hover { background: var(--brand-dim); }
+
+.iq-root .hm2-legend { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 10px 24px; margin-bottom: 12px; }
+.iq-root .hm2-scale { width: min(360px, 100%); }
+.iq-root .hm2-bar { height: 12px; border-radius: 6px; }
+.iq-root .hm2-ticks { display: flex; justify-content: space-between; margin-top: 5px; font-family: var(--f-mono); font-size: .7rem; color: var(--text-dim-solid); }
+.iq-root .hm2-cb { display: inline-flex; align-items: center; gap: 8px; font-size: .86rem; color: var(--text-hi); cursor: pointer; }
+
+.iq-root .hm2-map { position: relative; width: 100%; height: calc(100vh - 380px); min-height: 480px; overflow: hidden; border-radius: 10px; background: var(--bg); }
+.iq-root .hm2-all { position: absolute; inset: 0; }
+.iq-root .hm2-zoom { position: absolute; top: 8px; bottom: 16px; left: 16px; right: 16px; }
+.iq-root .hm2-sec { position: absolute; box-sizing: border-box; padding: 0 2px 2px 0; }
+.iq-root .hm2-sec-in { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.iq-root .hm2-sec-h { flex: none; height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 0 4px; border: 0; background: transparent; color: var(--text-hi); font: inherit; text-align: left; cursor: pointer; }
+.iq-root .hm2-sec-h:hover .name { text-decoration: underline; }
+.iq-root .hm2-sec-h .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.iq-root .hm2-sec-h .pct { flex: none; font-family: var(--f-mono); font-size: .7rem; font-weight: 700; color: var(--text-dim-solid); }
+.iq-root .hm2-sec-h .pct.up { color: var(--up); }
+.iq-root .hm2-sec-h .pct.down { color: var(--down); }
+.iq-root .hm2-sec-body { position: relative; flex: 1; min-height: 0; }
+
+.iq-root .hm2-tile { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; padding: 2px; cursor: pointer; box-shadow: inset 0 0 0 1px var(--bg); transition: opacity .12s; }
+.iq-root .hm2-tile .sym { font-family: var(--f-mono); font-weight: 700; line-height: 1; white-space: nowrap; }
+.iq-root .hm2-tile .pct { margin-top: 3px; font-family: var(--f-mono); line-height: 1; opacity: .9; }
+.iq-root .hm2-tile:hover, .iq-root .hm2-tile.mark { outline: 2px solid #fff; outline-offset: -2px; z-index: 2; }
+.iq-root .hm2-tile.dim { opacity: .2; }
+/* The "+N more" bundle: hatched, so it reads as a group of small stocks, not a company. */
+.iq-root .hm2-tile.more { background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, .24) 0 6px, rgba(0, 0, 0, 0) 6px 12px); }
+
+.iq-root .hm2-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; }
+.iq-root .hm2-empty .t { font-size: .92rem; font-weight: 700; color: var(--text-hi); }
+.iq-root .hm2-empty .d { max-width: 460px; font-size: .8rem; line-height: 1.55; color: var(--text-dim-solid); }
+.iq-root .hm2-note { margin: 8px 0 24px; font-size: .78rem; color: var(--text-dim-solid); }
+
+.iq-root .hm2-tip { position: fixed; z-index: 150; width: 260px; padding: 14px 16px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-2); box-shadow: 0 14px 36px rgba(0, 0, 0, .55); pointer-events: none; }
+.iq-root .hm2-tip .top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-family: var(--f-mono); font-weight: 800; font-size: 1.05rem; color: var(--text-hi); }
+.iq-root .hm2-tip .top .s { font-size: 1.15rem; }
+.iq-root .hm2-tip .sub { margin: 3px 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); font-size: .8rem; color: var(--text-dim-solid); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iq-root .hm2-tip dl { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.iq-root .hm2-tip dl > div { display: flex; justify-content: space-between; gap: 12px; font-size: .84rem; }
+.iq-root .hm2-tip dt { color: var(--text-dim-solid); }
+.iq-root .hm2-tip dd { margin: 0; font-family: var(--f-mono); font-weight: 700; color: var(--text-hi); }
+.iq-root .hm2-tip .foot { margin-top: 10px; font-size: .74rem; color: var(--text-dim-solid); }
+@media (max-width: 700px) {
+  .iq-root .hm2-map { height: 70vh; }
+  .iq-root .hm2-search { width: 100%; }
+}
+.iq-root .hm2-page { padding: 12px 18px 0; }
+

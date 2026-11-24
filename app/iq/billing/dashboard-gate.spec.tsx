@@ -1,6 +1,7 @@
 // Dashboard widgets for Free users: the three Starter widgets (Insider &
 // Institutional, Analyst Actions, Portfolio Pulse) check entitlements BEFORE fetching and show a
-// lock card; recaps and earnings announcements are Free and always fetched.
+// lock card; earnings announcements are Free and always fetched. (The Recaps
+// card is gone from the dashboard; the Recaps page is reached from the sidebar.)
 // The browser-level proof (zero 403s, three lock cards) is
 // tests/e2e/dashboard-free-user.e2e.mjs against a local stack.
 import { describe, it } from "node:test";
@@ -59,13 +60,18 @@ describe("dashboard wiring", () => {
     });
   }
 
-  for (const endpoint of ["recaps", "earnings-announcements"]) {
+  for (const endpoint of ["earnings-announcements"]) {
     it(`${endpoint} is Free: always fetched, no gate`, () => {
       const lines = fetchOf(endpoint);
       assert.equal(lines.length, 1);
       assert.match(lines[0], new RegExp(`useApiList<[^>]+>\\("/market-data/${endpoint}"\\)`));
     });
   }
+
+  it("recaps: the dashboard no longer renders a Recaps card, so it does not download the recaps either", () => {
+    assert.equal(fetchOf("recaps").length, 0);
+    assert.doesNotMatch(src, /<h3>Recaps<\/h3>/);
+  });
 
   it("Portfolio Pulse (Starter): /api/portfolio fetched only when 'portfolio' is allowed, widget gated", () => {
     const lines = src.split("\n").filter((l) => l.includes('"/api/portfolio"'));

@@ -6,13 +6,12 @@ import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
 import { useIQActions, ExpandBtn } from "../shell";
 import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem, maPostureLabel, isLeveragedProduct } from "../data";
-import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, cleanCatalystText, headlineLeadsWithTicker } from "../utils";
+import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, cleanCatalystText } from "../utils";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
 import { EntitlementGate, LockedFeature } from "../entitlement-gate";
 import { LaunchingSoonBanner } from "../billing/launching-soon-banner";
-import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
 import { useApiResource } from "../hooks/useApiResource";
 import { WmnCarousel, type WmnSlide } from "../wmn-carousel";
 import { CommunityPulse } from "../community-pulse";
@@ -25,17 +24,15 @@ import { AlphaDashboardCard } from "./alpha-dashboard-card";
 import type {
   LiveMoverDoc, LiveEarningsDoc, CompanyDoc, SectorApiDoc,
   InsiderTxDoc, AnalystConsensusDoc, MarketSentimentDoc, MarketSentimentHistoryDoc, EarningsAnnouncementDoc,
-  HoldingDoc, NewsArticleDoc, RecapDoc, MoverCatalystDoc,
+  HoldingDoc, NewsArticleDoc, MoverCatalystDoc,
 } from "../types";
 
 // Insider mini-list, market internals and F&G history all had hardcoded mock
 // arrays here; nothing is invented any more. Insider transactions use the real
 // `insider_transactions` feed exclusively (no mock fallback). F&G composite
 // history is read from `/market-data/market-sentiment-history`. Market
-// internals reach this screen two ways: the Recaps card prints the latest
-// recap's `internals` (universe-wide advancers/decliners, TRIN, breadth %), and
-// the Market Breadth card counts advancers/decliners per index client-side from
-// the synced `companies` quotes. TICK, McClellan and put/call still have no
+// internals reach this screen via the Market Breadth card, which counts
+// advancers/decliners per index client-side from the synced `companies` quotes. TICK, McClellan and put/call still have no
 // `/market-data/*` route, so no widget here shows them.
 
 // "View all" widgets now navigate to /menu/{screen} (see the <Link> controls);
@@ -472,8 +469,6 @@ export function DashboardScreen() {
   // EDGAR 8-K earnings announcements (session + price reaction).
   const { data: earningsAnnouncements } = useApiList<EarningsAnnouncementDoc>("/market-data/earnings-announcements");
   const { data: consensusLive, loading: consensusLoading } = useApiList<AnalystConsensusDoc>(analystAllowed ? "/market-data/analyst-actions" : null);
-  const { data: recaps, loading: recapsLoading } = useApiList<RecapDoc>("/market-data/recaps");
-  const latestRecap = [...recaps].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0] ?? null;
   const { data: mostSearched, loading: mostSearchedLoading } = useApiResource<{ results: Array<{ ticker: string; count: number }> }>("/live/most-searched-tickers?limit=18");
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
   // Dedupe: merge repeated tickers and collapse dual-class share listings
@@ -790,8 +785,11 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── 2. What Matters Now + Most Searched (left) · Market Catalyst Pulse (right) ── */}
-        <div className="col-8 wmn-left" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* ── 2. Left column: What Matters Now, Alpha Signals, Most Searched and every card below.
+              Right column: Market Catalyst Pulse, running the full height of the page. ── */}
+        <div className="col-12 dash-split">
+        <div className="dash-left">
+        <div className="col-12 wmn-left" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <div className="wmn open">
             <div className="wmnc-head">
               <div className="t">
@@ -887,9 +885,6 @@ export function DashboardScreen() {
             </div>}
           </div>
         </div>
-        </div>
-        <div className="col-4 cpulse-col" style={{ minWidth: 0, display: "flex" }}>
-          <CommunityPulse />
         </div>
 
         {/* ── 3. Earnings Today ── */}
@@ -1344,80 +1339,8 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── 11. Live Market Feed ── */}
-        <div className="col-4">
-          <div className="card" style={{ height: "100%" }}>
-            <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Live Market Feed</h3><VendorTag v={["fmp", "polygon"]} /></div>
-              <Link className="link" href="/menu/commentary">Live Feed →</Link>
-            </div>
-            <div className="card-b" style={{ paddingTop: 2 }}>
-              <LiveFeedList companyByTicker={companyByTicker} />
-            </div>
-          </div>
-        </div>
-
-        {/* ── 12. Recaps ── */}
-        <div className="col-4">
-          <div className="card" style={{ height: "100%" }}>
-            <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Recaps</h3><VendorTag v={["fmp", "polygon"]} /></div>
-              <Link className="link" href="/menu/recap">View all →</Link>
-            </div>
-            <div className="card-b">
-              {latestRecap == null ? (
-                <DataState loading={recapsLoading} label="No market recap synced yet." height={80} />
-              ) : (() => {
-                const r = latestRecap;
-                const intr = r.internals;
-                const wanted = ["Dow", "S&P 500", "Nasdaq"];
-                const picked = (r.indices ?? []).filter(i => wanted.includes(i.label));
-                const idx = (picked.length ? picked : (r.indices ?? []).slice(0, 3));
-                const lead = (r.sectorLeaders ?? [])[0] ?? null;
-                const lag = (r.sectorLaggards ?? [])[0] ?? null;
-                const gain = (r.topGainers ?? [])[0] ?? null;
-                const dateLabel = fmtDate(r.date);
-                return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-                    <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Market recap · {dateLabel}</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                      {idx.map(i => (
-                        <div key={i.label} className="minirow" style={{ padding: "2px 0" }}>
-                          <span className="tkr" style={{ width: 130 }}>{i.label}</span>
-                          <span className="mid" />
-                          <span className={`r ${cls(i.pctChange ?? 0)}`}>{sign(i.pctChange ?? 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {intr && (
-                      <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", display: "flex", gap: 12, flexWrap: "wrap" }}>
-                        <span><b className="up">{intr.advancers ?? "—"}</b> adv</span>
-                        <span><b className="down">{intr.decliners ?? "—"}</b> dec</span>
-                        {intr.trin != null && <span>TRIN <b style={{ color: "var(--text-hi)" }}>{intr.trin.toFixed(2)}</b></span>}
-                        {intr.breadthPct != null && <span>Breadth <b style={{ color: "var(--text-hi)" }}>{Math.round(intr.breadthPct * 100)}%</b></span>}
-                      </div>
-                    )}
-                    {(lead || lag) && (
-                      <div style={{ fontSize: ".74rem", display: "flex", gap: 14, flexWrap: "wrap" }}>
-                        {lead && <span style={{ color: "var(--text-dim-solid)" }}>Leader <b className="up">{lead.sector} {sign(lead.pctChange)}</b></span>}
-                        {lag && <span style={{ color: "var(--text-dim-solid)" }}>Laggard <b className="down">{lag.sector} {sign(lag.pctChange)}</b></span>}
-                      </div>
-                    )}
-                    {gain && (
-                      <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
-                        Top gainer <b style={{ color: "var(--text-hi)", cursor: "pointer" }} onClick={() => openStock(gain.ticker)}>{gain.ticker}</b> <span className="up">{sign(gain.pctChange ?? 0)}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-
-        {/* ── 12b. Market Breadth (advancers vs decliners by index) ──
-            Sits beside Recaps, which prints the universe-wide counts. Counted
-            here from the same `companies` day change the Market Heatmap card
+        {/* ── 12. Market Breadth (advancers vs decliners by index) ──
+            Counted from the same `companies` day change the Market Heatmap card
             colours its tiles with, so the two cards cannot disagree. */}
         <div className="col-4">
           <div className="card" style={{ height: "100%" }}>
@@ -1478,31 +1401,6 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── 13. VIX · Volatility ── */}
-        <div className="col-4">
-          <div className="card vix" style={{ height: "100%" }}>
-            <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <h3>VIX · Volatility</h3>
-                {(() => { const src = liveIndices.find(i => i.id === "VIX")?.source; return src && <VendorTag v={src} />; })()}
-              </div>
-              <Link className="link" href="/menu/macro">View all →</Link>
-            </div>
-            <div className="card-b">
-              {(() => {
-                const vix = liveIndices.find(i => i.id === "VIX");
-                if (!vix) return <DataState loading={!tapeFrame} label="VIX not synced yet." height={100} />;
-                return <>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                    <span className="big">{vix.value.toFixed(2)}</span>
-                    <span className={`mono ${cls(vix.pctChange)}`} style={{ fontWeight: 600 }}>{sign(vix.pctChange)}</span>
-                  </div>
-                </>;
-              })()}
-            </div>
-          </div>
-        </div>
-
         {/* ── 14. Fear & Greed ── */}
         <div className="col-4">
           <div className="card" style={{ height: "100%" }}>
@@ -1548,7 +1446,11 @@ export function DashboardScreen() {
             </div>
           </div>
         </div>
-
+        </div>{/* /dash-left */}
+        <div className="cpulse-col">
+          <CommunityPulse />
+        </div>
+        </div>{/* /dash-split */}
 
       </div>
 
@@ -1696,40 +1598,4 @@ export function DashboardScreen() {
       )}
     </div>
   );
-}
-
-/** Live Market Feed — real synced news only; honest empty state when none are synced. */
-function LiveFeedList({ companyByTicker }: { companyByTicker: Map<string, CompanyDoc> }) {
-  const showVendor = useShowVendorTags();
-  const { data: news, loading } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
-  // Same sort + dedupe as the Live Feed screen (news-feed.ts), so these four
-  // rows are exactly the top four there, under the same ticker.
-  const recent = dedupeNews(sortNewsDesc(news), companyByTicker).slice(0, 4);
-
-  // No mock fallback: when there's no live news, show an honest empty state
-  // rather than fabricated headlines that read as real market events.
-  if (recent.length === 0) {
-    return <DataState loading={loading} label="No market-moving news right now." />;
-  }
-
-  return <>
-    {recent.map((f, i) => (
-      <div key={f.id} style={{
-        display: "flex", gap: 10, padding: "9px 0", alignItems: "flex-start",
-        borderBottom: i < recent.length - 1 ? "1px solid var(--border-soft)" : undefined,
-      }}>
-        <StockLogo sym={f.ticker} size={28} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: ".8rem", color: "var(--text)", lineHeight: 1.4 }}>
-            {f.ticker && !headlineLeadsWithTicker(f.headline, f.ticker) && <><b style={{ color: "var(--text-hi)" }}>{f.ticker}</b> · </>}{f.headline}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: ".66rem", color: "var(--text-dim-solid)", flexWrap: "wrap" }}>
-            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{catLabel(storyKind(f))}</span>
-            <span className="mono">{etTimeLabel(f.publishedAt)} ET</span>
-            {vendorText(f.source, showVendor) && <span>· {f.source}</span>}
-          </div>
-        </div>
-      </div>
-    ))}
-  </>;
 }

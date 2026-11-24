@@ -70,25 +70,42 @@ const monthLabel = (iso: string) => fmtDate(iso, { month: "short", year: "2-digi
 const epsTxt = (v: number | null) => (v == null ? "—" : v.toFixed(2));
 const chgClass = (s: string) => (s.startsWith("-") ? "down" : s.startsWith("+") ? "up" : "dim");
 
+/** The chart's drawing box: 500 wide, VB_H tall. */
+export const VB_H = 270;
+
+/**
+ * Vertical layout of one panel. The angled period labels hang down-left from
+ * their anchor, so they get a fixed strip at the bottom (`axisY` down to VB_H);
+ * the bars end above it. When any bar is negative its value is printed BELOW the
+ * bar, so the bars stop that much higher — otherwise that label (and the bar
+ * itself) ran off the chart, as a negative EPS quarter did on HPE.
+ */
+export function panelLayout(hasNegative: boolean, font: number) {
+  const TOP = 30;                       // room for the tallest bar's value above it
+  const axisY = VB_H - 46;              // period labels hang from just under here
+  const BOTTOM = axisY - 6 - (hasNegative ? font + 8 : 0); // where the lowest bar ends
+  return { TOP, BOTTOM, axisY, labelY: axisY + 8 };
+}
+
 /** One panel of bars (EPS or Sales), value on top, label angled below. The card heading names it. */
 function Panel({ x, w, bars, value, fmt }: {
   x: number; w: number; bars: Bar[];
   value: (b: Bar) => number | null; fmt: (v: number) => string;
 }) {
-  const TOP = 30, BOTTOM = 232;
   const vals = bars.map(value).filter((v): v is number => v != null);
   const max = Math.max(0, ...vals), min = Math.min(0, ...vals);
   const span = max - min || 1;
-  const y = (v: number) => TOP + ((max - v) / span) * (BOTTOM - TOP);
   const gw = w / Math.max(1, bars.length);
   const bw = Math.min(gw * 0.78, 34);
   const font = Math.max(8, Math.min(12, gw / 3.6));
+  const { TOP, BOTTOM, labelY } = panelLayout(min < 0, font);
+  const y = (v: number) => TOP + ((max - v) / span) * (BOTTOM - TOP);
   return (
     <g>
       {bars.map((b, i) => {
         const v = value(b);
         const cx = x + gw * i + gw / 2;
-        const lx = cx - 2, ly = BOTTOM + 14;
+        const lx = cx - 2, ly = labelY;
         return (
           <g key={`${b.label}-${i}`}>
             {v != null && (<>
@@ -246,11 +263,11 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
     img.onload = () => {
       const scale = 2;
       const c = document.createElement("canvas");
-      c.width = 1000 * scale; c.height = 270 * scale;
+      c.width = 1000 * scale; c.height = VB_H * 2 * scale;
       const ctx = c.getContext("2d");
       if (!ctx) return;
       ctx.scale(scale, scale);
-      ctx.drawImage(img, 0, 0, 1000, 270);
+      ctx.drawImage(img, 0, 0, 1000, VB_H * 2);
       URL.revokeObjectURL(url);
       const a = document.createElement("a");
       a.download = `${sym}-eps-sales-${period === "Q" ? "quarterly" : "annual"}.png`;
@@ -319,8 +336,8 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                 </div>
               </div>
             </div>
-            <svg ref={svgRef} viewBox="0 0 500 240" width="100%" role="img" aria-label={`${sym} EPS`} style={{ display: "block" }}>
-              <Panel x={10} w={480} bars={bars} value={(b) => b.eps} fmt={(v) => v.toFixed(2)} />
+            <svg ref={svgRef} viewBox={`0 0 500 ${VB_H}`} width="100%" role="img" aria-label={`${sym} EPS`} style={{ display: "block" }}>
+              <Panel x={30} w={462} bars={bars} value={(b) => b.eps} fmt={(v) => v.toFixed(2)} />
             </svg>
             <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "4px 4px 2px" }}>
               <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ACTUAL, marginRight: 6 }} />Reported</span>
@@ -335,8 +352,8 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>{sd.title}</h3>
             </div>
-            <svg viewBox="0 0 500 240" width="100%" role="img" aria-label={`${sym} Sales`} style={{ display: "block" }}>
-              <Panel x={10} w={480} bars={bars} value={(b) => b.sales} fmt={sd.bar} />
+            <svg viewBox={`0 0 500 ${VB_H}`} width="100%" role="img" aria-label={`${sym} Sales`} style={{ display: "block" }}>
+              <Panel x={30} w={462} bars={bars} value={(b) => b.sales} fmt={sd.bar} />
             </svg>
             <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "4px 4px 2px" }}>
               <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ACTUAL, marginRight: 6 }} />Reported</span>

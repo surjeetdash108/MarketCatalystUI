@@ -1,13 +1,15 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { useIQActions } from "../shell";
-import { sign, heatCol, fmt, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
+import { sign, fmt, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
 import { tilePctLabel } from "../heatmap-label";
+import { heatTile, heatGradient, framePct, asOfLabel, squarify, packStocks, tileFontRem, MORE_KEY, type HmFrame, type LRect } from "../heatmap-design";
 import { useApiList } from "../hooks/useApiList";
-import { useLiveQuotes } from "../live-quotes-context";
+import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
+import { useLiveQuotes, QUOTE_DELAY_LABEL } from "../live-quotes-context";
+import { latestSessionDate } from "../market-status";
 import { buildSectorList } from "../live-market-indices";
 import { INDEX_MEMBERS, HEATMAP_TAB_KEYS } from "../index-constituents";
 import type { CompanyDoc, SectorApiDoc } from "../types";
@@ -17,89 +19,58 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
 
+/** Index names as other screens link to them (`?index=Nasdaq`), so keep these keys. */
 const TABS = ["Stocks", "S&P 500", "Nasdaq", "Dow", "Russell 2000"];
-
-/**
- * One fixed colour per sector (the backend's TradingView taxonomy), so a sector
- * keeps its colour across index tabs and visits. Unknown sectors fall back to a
- * hash into the same palette.
- */
-const SECTOR_COLORS: Record<string, string> = {
-  "Electronic Technology":  "#3B82F6",
-  "Technology Services":    "#8B5CF6",
-  "Finance":                "#0D9488",
-  "Retail Trade":           "#F59E0B",
-  "Health Technology":      "#EC4899",
-  "Producer Manufacturing": "#64748B",
-  "Energy Minerals":        "#EA580C",
-  "Consumer Durables":      "#CA8A04",
-  "Consumer Defensive":     "#65A30D",
-  "Non-Energy Minerals":    "#A16207",
-  "Consumer Services":      "#E11D48",
-  "Utilities":              "#0891B2",
-  "Transportation":         "#0284C7",
-  "Health Services":        "#C026D3",
-  "Industrial Services":    "#78716C",
-  "Communications":         "#4F46E5",
-  "Process Industries":     "#16A34A",
-  "Distribution Services":  "#DB2777",
-  "Commercial Services":    "#059669",
-  "Miscellaneous":          "#94A3B8",
+/** What the buttons say. */
+const TAB_LABELS = ["All stocks", "S&P 500", "Nasdaq 100", "Dow 30", "Russell 2000"];
+const FRAMES: HmFrame[] = ["1D", "1W", "1M", "YTD"];
+const FRAME_TITLES: Record<HmFrame, string> = {
+  "1D": "Change today",
+  "1W": "5-session change",
+  "1M": "21-session change (about a month)",
+  "YTD": "Year-to-date isn't synced yet",
 };
-const SECTOR_FALLBACK = Object.values(SECTOR_COLORS);
-function sectorColor(name: string): string {
-  if (SECTOR_COLORS[name]) return SECTOR_COLORS[name];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return SECTOR_FALLBACK[h % SECTOR_FALLBACK.length];
-}
-/** Sector fill for a tile, with dark or light ink picked by the fill's luminance. */
-function sectorCol(name: string): { bg: string; fg: string } {
-  const hex = sectorColor(name);
-  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-  return { bg: hex, fg: 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#0E1013" : "#ffffff" };
-}
-type ColorBy = "change" | "sector";
-const HEADER_H = 24;
+type SizeBy = "cap" | "volume";
+
+const HEADER_H = 26;
+/** Gap kept right of and below each sector (matches .hm2-sec padding). */
+const SEC_PAD = 2;
 const APPROX_W = 1100;
 const APPROX_H = 620;
-
-interface LItem { key: string; weight: number; }
-interface LRect  { key: string; x: number; y: number; w: number; h: number; }
-
-function bisect(items: LItem[], x: number, y: number, w: number, h: number): LRect[] {
-  if (items.length === 0) return [];
-  if (items.length === 1) return [{ key: items[0].key, x, y, w, h }];
-  if (items.length === 2) {
-    const total = items[0].weight + items[1].weight;
-    const f = items[0].weight / total;
-    return w >= h
-      ? [{ key: items[0].key, x, y, w: w * f, h }, { key: items[1].key, x: x + w * f, y, w: w * (1 - f), h }]
-      : [{ key: items[0].key, x, y, w, h: h * f }, { key: items[1].key, x, y: y + h * f, w, h: h * (1 - f) }];
-  }
-  const total = items.reduce((s, i) => s + i.weight, 0);
-  let cum = 0; let split = 0;
-  for (let i = 0; i < items.length - 1; i++) {
-    cum += items[i].weight; split = i;
-    if (cum >= total / 2) break;
-  }
-  const first = items.slice(0, split + 1);
-  const rest  = items.slice(split + 1);
-  const frac  = first.reduce((s, i) => s + i.weight, 0) / total;
-  return w >= h
-    ? [...bisect(first, x, y, w * frac, h), ...bisect(rest, x + w * frac, y, w * (1 - frac), h)]
-    : [...bisect(first, x, y, w, h * frac), ...bisect(rest, x, y + h * frac, w, h * (1 - frac))];
-}
 
 function capFmt(mcap: number) {
   return mcap >= 1000 ? `$${(mcap / 1000).toFixed(1)}T` : `$${Math.round(mcap)}B`;
 }
 
-interface HoverStock {
-  sym: string; chg: number; mcap: number; x: number; y: number;
-  sector: string;
-  peers: [string, number, number][];
+/** One stock on the map. `weight` is what sizes the tile ($B of market cap, or of traded value). */
+interface HmStock {
+  sym: string;
+  /** Market cap, $B. */
+  mcap: number;
+  /** Move over the chosen time frame; null when not synced. */
+  chg: number | null;
+  /** Dollars traded today, $B; null when no volume is synced. */
+  vol: number | null;
+  weight: number;
 }
+interface HmGroup {
+  name: string;
+  stocks: HmStock[];
+  weight: number;
+  /** Cap-weighted move of the stocks shown; null when none has one. */
+  pct: number | null;
+}
+
+/** Cap-weighted move of the stocks that have one; null when none does. */
+function avgChg(stocks: HmStock[]): number | null {
+  const withChg = stocks.filter(s => s.chg != null);
+  const cap = withChg.reduce((n, s) => n + s.mcap, 0);
+  return cap > 0 ? withChg.reduce((n, s) => n + s.mcap * (s.chg as number), 0) / cap : null;
+}
+
+/** Smallest tile worth labelling on the all-sectors map, and the smallest "+N more" bundle. */
+const OVERALL_MIN_TILE = (sym: string): [number, number] => [Math.max(26, sym.length * 5.6 + 8), 17];
+const OVERALL_MIN_MORE: [number, number] = [30, 18];
 
 /** Tab named by `?index=` (e.g. from the Dashboard index pop-up), else "Stocks". */
 function tabFromParam(v: string | null): number {
@@ -120,14 +91,46 @@ export function HeatmapScreen() {
   );
 }
 
+/** One tile. Memoised: hovering re-renders the screen, and there are ~1,300 of these. */
+interface TileProps {
+  sym: string;
+  x: number; y: number; w: number; h: number;
+  bg: string; fg: string;
+  showText: boolean; fs: number; pctText: string | null;
+  dim: boolean; mark: boolean;
+  label?: string;
+  onEnter?: (e: React.MouseEvent, sym: string) => void;
+  onLeave?: () => void;
+  onPick: (sym: string) => void;
+}
+const Tile = memo(function Tile(p: TileProps) {
+  return (
+    <div
+      className={`hm2-tile${p.dim ? " dim" : ""}${p.mark ? " mark" : ""}`}
+      onClick={e => { e.stopPropagation(); p.onPick(p.sym); }}
+      onMouseEnter={p.onEnter ? e => p.onEnter!(e, p.sym) : undefined}
+      onMouseLeave={p.onLeave}
+      style={{ left: p.x, top: p.y, width: p.w, height: p.h, background: p.bg, color: p.fg }}
+    >
+      {p.showText && (
+        <>
+          <span className="sym" style={{ fontSize: `${p.fs}rem` }}>{p.label ?? p.sym}</span>
+          {p.pctText != null && <span className="pct" style={{ fontSize: `${p.fs * 0.82}rem` }}>{p.pctText}</span>}
+        </>
+      )}
+    </div>
+  );
+});
+
 function HeatmapInner() {
-  const { openSector } = useIQActions();
   // Clicking a tile opens the stock in a slide-in drawer (same as Movers),
   // rather than navigating away to the full stock page.
   const [selectedSym, setSelectedSym] = useState<string | null>(null);
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: sectorsLive, loading: sectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
-  const fullSectorList = buildSectorList(companies, sectorsLive);
+  const fullSectorList = useMemo(() => buildSectorList(companies, sectorsLive), [companies, sectorsLive]);
+  const companyBySym = useMemo(() => new Map(companies.map(c => [c.ticker, c])), [companies]);
+  const mkt = useBackendMarketStatus();
 
   // The URL picks the starting tab; a tab the user clicks wins until the URL
   // asks for a different index (e.g. another pop-up link while already here).
@@ -138,18 +141,19 @@ function HeatmapInner() {
   const [picked, setPicked] = useState<{ tab: number; urlTab: number } | null>(null);
   const tab = picked && picked.urlTab === urlTab ? picked.tab : urlTab;
 
-  // Sector selection: "Overall" or null = All Sectors Heatmap; string = Dedicated Sector Heatmap Screen
-  const [selectedSector, setSelectedSector] = useState<string | null>(urlSector || "Overall");
-  const [moreModal, setMoreModal] = useState<[string, number, number][] | null>(null);
-  // Tile colour: the day's % change (default) or the stock's sector.
-  const [colorBy, setColorByState] = useState<ColorBy>(() => {
-    try { return localStorage.getItem("iq-heatmap-color") === "sector" ? "sector" : "change"; } catch { return "change"; }
+  // "Overall" = every sector on one map; a sector name zooms into that sector.
+  const [selectedSector, setSelectedSector] = useState<string>(urlSector || "Overall");
+  const [moreModal, setMoreModal] = useState<{ sector: string; stocks: HmStock[] } | null>(null);
+  const [frame, setFrame] = useState<HmFrame>("1D");
+  const [sizeBy, setSizeBy] = useState<SizeBy>("cap");
+  const [find, setFind] = useState("");
+  const [colorBlind, setColorBlindState] = useState<boolean>(() => {
+    try { return localStorage.getItem("iq-heatmap-cb") === "1"; } catch { return false; }
   });
-  const setColorBy = (c: ColorBy) => {
-    setColorByState(c);
-    try { localStorage.setItem("iq-heatmap-color", c); } catch { /* storage unavailable */ }
+  const setColorBlind = (v: boolean) => {
+    setColorBlindState(v);
+    try { localStorage.setItem("iq-heatmap-cb", v ? "1" : "0"); } catch { /* storage unavailable */ }
   };
-  const tileCol = (chg: number, sector: string) => (colorBy === "sector" ? sectorCol(sector) : heatCol(chg));
 
   useEffect(() => {
     if (!moreModal) return;
@@ -171,18 +175,20 @@ function HeatmapInner() {
   const tabKey    = HEATMAP_TAB_KEYS[tab];
   const memberSet = tabKey && tabKey !== "RUT" ? INDEX_MEMBERS[tabKey] : null;
 
-  const baseSectorList = memberSet
-    ? fullSectorList
+  const baseSectorList = useMemo(() => {
+    if (memberSet) {
+      return fullSectorList
         .map(g => ({ ...g, items: g.items.filter(([sym]) => memberSet.has(sym)) }))
-        .filter(g => g.items.length > 0)
-    : tabKey === "RUT"
-    ? (() => {
-        const smallCaps = fullSectorList
-          .map(g => ({ ...g, items: g.items.filter(([, mcap]) => mcap < 40) }))
-          .filter(g => g.items.length > 0);
-        return smallCaps.length > 0 ? smallCaps : fullSectorList;
-      })()
-    : fullSectorList;
+        .filter(g => g.items.length > 0);
+    }
+    if (tabKey === "RUT") {
+      const smallCaps = fullSectorList
+        .map(g => ({ ...g, items: g.items.filter(([, mcap]) => mcap < 40) }))
+        .filter(g => g.items.length > 0);
+      return smallCaps.length > 0 ? smallCaps : fullSectorList;
+    }
+    return fullSectorList;
+  }, [fullSectorList, memberSet, tabKey]);
 
   // LIVE overlay. The tiles' stored %change comes from the `companies` docs,
   // which a per-ticker sweep only refreshes slowly — so a tile could show a
@@ -191,470 +197,303 @@ function HeatmapInner() {
   // cache: one upstream refresh per interval regardless of how many browsers
   // are watching, and no vendor calls at all outside the extended session.
   // Tickers with no live quote keep their stored value rather than blanking.
-  const liveTickers = baseSectorList.flatMap(g => g.items.map(([sym]) => sym));
+  const liveTickers = useMemo(() => baseSectorList.flatMap(g => g.items.map(([sym]) => sym)), [baseSectorList]);
   const liveQuotes = useLiveQuotes(liveTickers);
-  const mergedSectorList = liveQuotes.size === 0
-    ? baseSectorList
-    : baseSectorList.map(g => ({
-        ...g,
-        items: g.items.map(([sym, mcap, pct]) => {
-          const lq = liveQuotes.get(sym);
-          return [sym, mcap, lq?.pctChange ?? pct] as [string, number, number];
-        }),
-      }));
-  const membersShown = mergedSectorList.reduce((n, g) => n + g.items.length, 0);
-  const [hover, setHover] = useState<HoverStock | null>(null);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showHover = (e: React.MouseEvent, sym: string, chg: number, mcap: number) => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    const sector = mergedSectorList.find(g => g.items.some(([s]) => s === sym));
-    const peers  = sector ? [...sector.items].sort((a, b) => b[1] - a[1]) : [];
-    const estH   = 160 + 34 + peers.length * 27; // header rows + label + peer rows
-    const maxH   = Math.min(estH, window.innerHeight - 16);
-    const x = e.clientX + 14 + 318 > window.innerWidth ? e.clientX - 326 : e.clientX + 14;
-    const y = Math.max(8, Math.min(e.clientY - 10, window.innerHeight - maxH - 8));
-    setHover({ sym, chg, mcap, x, y, sector: sector?.name ?? "", peers });
-  };
-  const hideHover   = () => { hoverTimer.current = setTimeout(() => setHover(null), 200); };
-  const cancelHover = () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); };
+  // The map's data: per stock the move for the chosen time frame and the weight
+  // that sizes it. A stock with nothing to size it by is left off (zero area).
+  const { groups, bySym } = useMemo(() => {
+    const out: HmGroup[] = [];
+    const lookup = new Map<string, { stock: HmStock; sector: string }>();
+    for (const g of baseSectorList) {
+      const stocks: HmStock[] = [];
+      for (const [sym, mcap, storedPct] of g.items) {
+        const lq = liveQuotes.get(sym);
+        const c = companyBySym.get(sym);
+        const day = lq?.pctChange ?? storedPct ?? null;
+        const price = lq?.price ?? c?.price ?? null;
+        const shares = lq?.dayVolume ?? c?.dayVolume ?? null;
+        const vol = shares != null && shares > 0 && price != null && price > 0 ? (shares * price) / 1e9 : null;
+        const weight = sizeBy === "cap" ? mcap : (vol ?? 0);
+        if (!(weight > 0)) continue;
+        const stock: HmStock = { sym, mcap, chg: framePct(frame, day, c), vol, weight };
+        stocks.push(stock);
+        lookup.set(sym, { stock, sector: g.name });
+      }
+      if (stocks.length === 0) continue;
+      stocks.sort((a, b) => b.weight - a.weight);
+      const withChg = stocks.filter(s => s.chg != null);
+      const capSum = withChg.reduce((n, s) => n + s.mcap, 0);
+      out.push({
+        name: g.name,
+        stocks,
+        weight: stocks.reduce((n, s) => n + s.weight, 0),
+        pct: capSum > 0 ? withChg.reduce((n, s) => n + s.mcap * (s.chg as number), 0) / capSum : null,
+      });
+    }
+    out.sort((a, b) => b.weight - a.weight);
+    return { groups: out, bySym: lookup };
+  }, [baseSectorList, liveQuotes, companyBySym, frame, sizeBy]);
 
-  const sorted = [...mergedSectorList].sort(
-    (a, b) => b.items.reduce((s, i) => s + i[1], 0) - a.items.reduce((s, i) => s + i[1], 0)
-  );
-
-  const isOverall = !selectedSector || selectedSector === "Overall";
-  const activeSector = !isOverall ? (sorted.find(g => g.name === selectedSector) ?? null) : null;
+  const membersShown = groups.reduce((n, g) => n + g.stocks.length, 0);
+  const activeSector = selectedSector !== "Overall" ? (groups.find(g => g.name === selectedSector) ?? null) : null;
+  const isOverall = activeSector == null;
   const isLoading = companies.length === 0 && (companiesLoading || sectorsLoading);
+  const noFrameData = frame !== "1D" && membersShown > 0 && groups.every(g => g.stocks.every(s => s.chg == null));
+
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: APPROX_W, h: APPROX_H });
+  useEffect(() => {
+    const el = mapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => {
+      const { width, height } = e.contentRect;
+      if (width > 0 && height > 0) {
+        setBox(b => (Math.abs(b.w - width) < 1 && Math.abs(b.h - height) < 1 ? b : { w: Math.round(width), h: Math.round(height) }));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Squarified layout in pixels: sectors fill the map, then each sector's stocks
+  // fill what is left under its header strip. Stocks too small to read are
+  // bundled into one "+N more" tile per sector. Needs the map's measured size.
+  const layout = useMemo(() => {
+    const sectorRect = new Map(squarify(groups.map(g => ({ key: g.name, weight: g.weight })), 0, 0, box.w, box.h).map(r => [r.key, r]));
+    const packs = new Map(groups.map(g => {
+      const r = sectorRect.get(g.name);
+      return [g.name, r
+        ? packStocks(g.stocks, r.w - SEC_PAD, r.h - SEC_PAD - HEADER_H, OVERALL_MIN_TILE, OVERALL_MIN_MORE)
+        : packStocks([], 0, 0, OVERALL_MIN_TILE, OVERALL_MIN_MORE)];
+    }));
+    return { sectorRect, packs };
+  }, [groups, box.w, box.h]);
+
+  // Hover card. Not interactive, so it needs no leave delay.
+  const [hover, setHover] = useState<{ sym: string; x: number; y: number } | null>(null);
+  const onEnter = useCallback((e: React.MouseEvent, sym: string) => {
+    const W = 260;
+    const x = e.clientX + 16 + W > window.innerWidth ? e.clientX - W - 16 : e.clientX + 16;
+    const y = Math.max(8, Math.min(e.clientY - 20, window.innerHeight - 200));
+    setHover({ sym, x, y });
+  }, []);
+  const onLeave = useCallback(() => setHover(null), []);
+  const onPick = useCallback((sym: string) => { setHover(null); setSelectedSym(sym); }, []);
+
+  const query = find.trim().toUpperCase();
+
+  /** Builds one tile; `zoom` is the single-sector map, which packs smaller labels. */
+  const tile = (s: HmStock, r: LRect, cw: number, ch: number, zoom: boolean) => {
+    const hc = heatTile(s.chg, colorBlind);
+    const showText = zoom ? cw >= Math.max(13, s.sym.length * 4) && ch >= 10 : Math.min(cw, ch) > 16 && cw > 20;
+    const fs = tileFontRem(cw, ch);
+    const hit = query !== "" && s.sym.includes(query);
+    // Two lines (ticker, move) need about 29px at full size; shrink the text to the
+    // tile's height, and drop the move only when even the smallest text won't fit.
+    const wantPct = tilePctLabel(s.chg, cw, ch);
+    const pctText = wantPct != null && ch >= 20 ? wantPct : null;
+    const fit = (ch - (pctText != null ? 7 : 4)) / (16 * (pctText != null ? 1.82 : 1));
+    const fsFit = Math.max(0.45, Math.min(fs, fit));
+    return (
+      <Tile key={s.sym} sym={s.sym} x={r.x} y={r.y} w={r.w} h={r.h} bg={hc.bg} fg={hc.fg}
+        showText={showText} fs={fsFit} pctText={pctText}
+        dim={query !== "" && !hit} mark={hit || s.sym === selectedSym}
+        onEnter={onEnter} onLeave={onLeave} onPick={onPick} />
+    );
+  };
+
+  /** The "+N more" tile: the stocks too small to label, coloured by their average move. */
+  const moreTile = (sector: string, more: HmStock[], r: LRect) => {
+    const avg = avgChg(more);
+    const hc = heatTile(avg, colorBlind);
+    const fs = Math.min(tileFontRem(r.w, r.h), 1);
+    const hitMore = query !== "" && more.some(st => st.sym.includes(query));
+    // The longest wording that fits the tile (mono type: about 0.6em a character).
+    const labels = [`+${more.length} smaller stocks`, `+${more.length} more`, `+${more.length}`];
+    const label = labels.find(t => t.length * fs * 16 * 0.62 + 12 <= r.w) ?? labels[2];
+    return (
+      <div key={MORE_KEY} role="button" tabIndex={0}
+        className={`hm2-tile more${query !== "" && !hitMore ? " dim" : ""}${hitMore ? " mark" : ""}`}
+        onClick={e => { e.stopPropagation(); setMoreModal({ sector, stocks: more }); }}
+        onKeyDown={e => { if (e.key === "Enter") setMoreModal({ sector, stocks: more }); }}
+        title={`+${more.length} smaller ${sector} stocks${avg == null ? "" : ` (${sign(avg)} on average)`} — click to see them`}
+        style={{ left: r.x, top: r.y, width: r.w, height: r.h, backgroundColor: hc.bg, color: hc.fg }}>
+        <span className="sym" style={{ fontSize: `${fs}rem` }}>{label}</span>
+        {r.w >= 34 && r.h >= 30 && avg != null && <span className="pct" style={{ fontSize: `${fs * 0.82}rem` }}>{sign(avg)}</span>}
+      </div>
+    );
+  };
+
+  /** The zoomed single-sector map, with the smallest names bundled into "+N more". */
+  const renderSector = (sector: HmGroup) => {
+    const pack = packStocks(sector.stocks, box.w - 32, box.h - 24, sym => [Math.max(14, sym.length * 4.2), 10.5], [28, 14]);
+    return (
+      <div className="hm2-zoom">
+        {pack.visible.map(s => {
+          const r = pack.rects.get(s.sym);
+          return r ? tile(s, r, r.w, r.h, true) : null;
+        })}
+        {pack.more.length > 0 && (() => {
+          const r = pack.rects.get(MORE_KEY);
+          return r ? moreTile(sector.name, pack.more, r) : null;
+        })()}
+      </div>
+    );
+  };
+
+  const subtitle = [
+    asOfLabel(mkt.phase, latestSessionDate(), QUOTE_DELAY_LABEL),
+    `${membersShown.toLocaleString("en-US")} ${isOverall ? (tab === 0 ? "stocks" : `${TAB_LABELS[tab]} members`) : `${activeSector!.name} stocks`}`,
+    `sized by ${sizeBy === "cap" ? "market cap" : "dollar volume"}`,
+  ].join(" · ");
+
+  const hov = hover ? bySym.get(hover.sym) : undefined;
+  const hovCo = hover ? companyBySym.get(hover.sym) : undefined;
+  const hovQ = hover ? liveQuotes.get(hover.sym) : undefined;
+  const hovPrice = hovQ?.price ?? hovCo?.price ?? null;
+  const hovDay = hovQ?.dayVolume ?? hovCo?.dayVolume ?? null;
+  const hovVsAvg = hovDay != null && hovCo?.avgVolume20 ? hovDay / hovCo.avgVolume20 : (hovCo?.rvol ?? null);
 
   return (
     <>
-      <div className="page-head" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {/* Level 1: Index Selection */}
-        <div className="tabs" style={{ maxWidth: "100%", overflowX: "auto", flexWrap: "nowrap" }}>
-          {TABS.map((t, i) => (
-            <button key={t} className={`tab${i === tab ? " on" : ""}`} onClick={() => setTab(i)} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>{t}</button>
+      <div className="hm2-page">
+      <div className="hm2-head">
+        <div>
+          <h1 className="hm2-h1">Market Heatmap</h1>
+          <p className="hm2-sub">{subtitle}</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <VendorTag v={["fmp", "polygon"]} />
+          <label className="hm2-search">
+            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+            <input
+              type="search"
+              value={find}
+              onChange={e => setFind(e.target.value)}
+              onKeyDown={e => { if (e.key === "Escape") setFind(""); }}
+              placeholder="Highlight a ticker"
+              aria-label="Highlight a ticker on the map"
+              maxLength={10}
+            />
+            {find && <button type="button" className="clr" aria-label="Clear" onClick={() => setFind("")}>×</button>}
+          </label>
+        </div>
+      </div>
+
+      <div className="hm2-controls">
+        <div className="hm2-seg" role="group" aria-label="Stocks shown">
+          {TAB_LABELS.map((t, i) => (
+            <button key={t} type="button" className={i === tab ? "on" : ""} aria-pressed={i === tab} onClick={() => setTab(i)}>{t}</button>
           ))}
         </div>
+        <div className="hm2-seg" role="group" aria-label="Time frame">
+          {FRAMES.map(f => (
+            <button key={f} type="button" className={f === frame ? "on" : ""} aria-pressed={f === frame}
+              disabled={f === "YTD"} title={FRAME_TITLES[f]} onClick={() => setFrame(f)}>{f}</button>
+          ))}
+        </div>
+        <div className="hm2-seg" role="group" aria-label="Size tiles by">
+          <button type="button" className={sizeBy === "cap" ? "on" : ""} aria-pressed={sizeBy === "cap"} onClick={() => setSizeBy("cap")}>Market cap</button>
+          <button type="button" className={sizeBy === "volume" ? "on" : ""} aria-pressed={sizeBy === "volume"} onClick={() => setSizeBy("volume")}
+            title="Dollars traded today (shares × price)">Volume</button>
+        </div>
+        <label className="hm2-sector">
+          <span>Sector</span>
+          <select value={activeSector?.name ?? "Overall"} onChange={e => setSelectedSector(e.target.value)} aria-label="Sector">
+            <option value="Overall">All sectors ({groups.length})</option>
+            {groups.map(g => <option key={g.name} value={g.name}>{g.name}</option>)}
+          </select>
+        </label>
+        {!isOverall && (
+          <button type="button" className="hm2-back" onClick={() => setSelectedSector("Overall")}>← All sectors</button>
+        )}
+      </div>
 
-        {/* Level 2: Sector Selection (Overall + individual sectors) */}
-        {sorted.length > 0 && (
-          <div className="tabs hm-sectors" style={{ maxWidth: "100%", flexWrap: "wrap", gap: 6 }}>
-            <button
-              className={`tab${isOverall ? " on" : ""}`}
-              onClick={() => setSelectedSector("Overall")}
-              style={{ flexShrink: 0, whiteSpace: "nowrap" }}
-            >
-              Overall
-            </button>
-            {sorted.map(s => {
-              const isSelected = !isOverall && s.name === selectedSector;
+      <div className="hm2-legend">
+        <div className="hm2-scale" aria-hidden>
+          <div className="hm2-bar" style={{ background: heatGradient(colorBlind) }} />
+          <div className="hm2-ticks">{["−3%", "−2%", "−1%", "0%", "+1%", "+2%", "+3%"].map(t => <span key={t}>{t}</span>)}</div>
+        </div>
+        <label className="hm2-cb">
+          <input type="checkbox" checked={colorBlind} onChange={e => setColorBlind(e.target.checked)} />
+          Color-blind palette
+        </label>
+      </div>
+
+      {/* ── Treemap ── */}
+      <div className="hm2-map" ref={mapRef}>
+        {groups.length === 0 && isLoading && (
+          <div className="hm2-empty"><DataState loading label="Loading heatmap…" /></div>
+        )}
+        {groups.length === 0 && !isLoading && (
+          <div className="hm2-empty">
+            <div className="t">{sizeBy === "volume" ? "No volume synced yet" : `No ${TABS[tab]} stocks to show yet`}</div>
+            <div className="d">
+              {sizeBy === "volume"
+                ? "Today's traded volume hasn't loaded for these stocks. Switch back to Market cap, or check back shortly."
+                : "This index's member stocks haven't loaded yet. Please check back shortly."}
+            </div>
+          </div>
+        )}
+        {noFrameData && (
+          <div className="hm2-empty">
+            <div className="t">No {frame} change synced yet</div>
+            <div className="d">Switch back to 1D, or check back after the next technicals run.</div>
+          </div>
+        )}
+
+        {/* ── All sectors ── */}
+        {isOverall && groups.length > 0 && !noFrameData && (
+          <div className="hm2-all">
+            {groups.map(g => {
+              const lr = layout.sectorRect.get(g.name);
+              const pack = layout.packs.get(g.name);
+              if (!lr || !pack) return null;
               return (
-                <button
-                  key={s.name}
-                  className={`tab${isSelected ? " on" : ""}`}
-                  onClick={() => setSelectedSector(s.name)}
-                  style={{ flexShrink: 0, whiteSpace: "nowrap" }}
-                >
-                  {s.name}
-                </button>
+                <div key={g.name} className="hm2-sec" style={{ left: lr.x, top: lr.y, width: lr.w, height: lr.h }}>
+                  <div className="hm2-sec-in">
+                    <button type="button" className="hm2-sec-h" onClick={() => setSelectedSector(g.name)} title={`Zoom in on ${g.name}`}>
+                      <span className="name">{g.name}</span>
+                      <span className={`pct ${g.pct == null ? "" : g.pct >= 0 ? "up" : "down"}`}>{g.pct == null ? "—" : sign(g.pct)}</span>
+                    </button>
+                    <div className="hm2-sec-body">
+                      {pack.visible.map(s => {
+                        const r = pack.rects.get(s.sym);
+                        return r ? tile(s, r, r.w, r.h, false) : null;
+                      })}
+                      {pack.more.length > 0 && (() => {
+                        const r = pack.rects.get(MORE_KEY);
+                        return r ? moreTile(g.name, pack.more, r) : null;
+                      })()}
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>
         )}
+        {!isOverall && !noFrameData && renderSector(activeSector!)}
+      </div>
+      <p className="hm2-note">Click a sector name to zoom in. Hover any tile for details, click it to open the stock.</p>
       </div>
 
-      <div className="fbar">
-        <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center" }}>Color:</span>
-        <button className={`chip${colorBy === "change" ? " on" : ""}`} onClick={() => setColorBy("change")}>% change</button>
-        <button className={`chip${colorBy === "sector" ? " on" : ""}`} onClick={() => setColorBy("sector")}>Sector</button>
-        {isOverall ? (
-          <span style={{ fontSize: ".72rem", color: "var(--text-hi)", transform: "translateY(10px)" }}>
-            {`${membersShown} ${tab === 0 ? "stocks" : `${TABS[tab]} member${membersShown === 1 ? "" : "s"}`} in the live universe`}
-          </span>
-        ) : activeSector ? (
-          <span style={{ fontSize: ".72rem", color: "var(--text-hi)", transform: "translateY(10px)" }}>
-            {`${activeSector.items.length} ${activeSector.name} member${activeSector.items.length === 1 ? "" : "s"} in the live universe`}
-          </span>
-        ) : null}
-        <div className="spacer" />
-        <div
-          style={{
-            transform: "scaleY(1) translateY(6px)",
-            transformOrigin: "center",
-          }}
-        >
-          <VendorTag v={["fmp", "polygon"]} />
-        </div>
-        {colorBy === "change" && <div className="legend" style={{ gap: 4 }}>
-          <span style={{ fontSize: ".66rem", color: "var(--down)" }}>−3%</span>
-          {(["rgba(138,46,21,.85)", "rgba(138,46,21,.4)", "#2A3037", "rgba(31,122,70,.4)", "rgba(31,122,70,.85)"] as const).map((bg, i) => (
-            <i key={i} style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: bg }} />
-          ))}
-          <span style={{ fontSize: ".66rem", color: "var(--up)" }}>+3%</span>
-        </div>}
-      </div>
-
-      {/* Sector colour key — only while tiles are coloured by sector. */}
-      {colorBy === "sector" && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", margin: "0 0 10px" }}>
-          {(isOverall ? sorted : activeSector ? [activeSector] : []).map(g => (
-            <button key={g.name} onClick={() => setSelectedSector(g.name)} title={`Focus on ${g.name}`}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: 0, padding: 0, cursor: "pointer", fontSize: ".7rem", color: "var(--text-hi)" }}>
-              <i style={{ width: 10, height: 10, borderRadius: 2, background: sectorColor(g.name), display: "inline-block" }} />
-              {g.name}
-            </button>
-          ))}
+      {/* ── Hover card ── */}
+      {hover && hov && (
+        <div className="hm2-tip" style={{ left: hover.x, top: hover.y }}>
+          <div className="top">
+            <span className="s">{hover.sym}</span>
+            <span className={hov.stock.chg == null ? "" : hov.stock.chg >= 0 ? "up" : "down"}>{hov.stock.chg == null ? "—" : sign(hov.stock.chg)}</span>
+          </div>
+          <div className="sub">{[hovCo?.name, hov.sector].filter(Boolean).join(" · ")}</div>
+          <dl>
+            <div><dt>Price</dt><dd>{hovPrice != null ? `$${fmt(hovPrice)}` : <NotAvailable />}</dd></div>
+            <div><dt>Market cap</dt><dd>{capFmt(hov.stock.mcap)}</dd></div>
+            <div><dt>Volume vs avg</dt><dd>{hovVsAvg != null ? `${hovVsAvg.toFixed(1)}×` : <NotAvailable />}</dd></div>
+          </dl>
+          <div className="foot">Click to open stock details</div>
         </div>
       )}
-
-      {/* ── Treemap ── */}
-      <div style={{
-        position: "relative", width: "100%",
-        height: "calc(100vh - 220px)", minHeight: 520,
-        borderRadius: 10, overflow: "hidden",
-        border: "1px solid var(--border)", background: "var(--bg)",
-        marginBottom: 24,
-      }}>
-        {mergedSectorList.length === 0 && isLoading && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <DataState loading label="Loading heatmap…" />
-          </div>
-        )}
-        {mergedSectorList.length === 0 && !isLoading && (
-          <div style={{
-            position: "absolute", inset: 0, display: "flex",
-            flexDirection: "column", alignItems: "center", justifyContent: "center",
-            gap: 8, textAlign: "center", padding: 24,
-          }}>
-            <div style={{ fontSize: ".92rem", fontWeight: 700, color: "var(--text-hi)" }}>
-              No {TABS[tab]} stocks to show yet
-            </div>
-            <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", maxWidth: 460, lineHeight: 1.55 }}>
-              This index's member stocks haven't loaded yet. Please check back shortly.
-            </div>
-          </div>
-        )}
-        {/* ── Overall Multi-Sector Treemap ── */}
-        {isOverall && sorted.length > 0 && (() => {
-          const sectorItems   = sorted.map(g => ({ key: g.name, weight: g.items.reduce((s, i) => s + i[1], 0) }));
-          const sectorLayout  = bisect(sectorItems, 0, 0, 100, 100);
-          const sectorRectMap = Object.fromEntries(sectorLayout.map(r => [r.key, r]));
-
-          return (
-            <div style={{ position: "absolute", inset: 0, padding: 2, boxSizing: "border-box" }}>
-              {sorted.map(g => {
-                const lr = sectorRectMap[g.name];
-                if (!lr) return null;
-                const stocksSorted = [...g.items].sort((a, b) => b[1] - a[1]);
-                const stockLayout  = bisect(stocksSorted.map(([sym, mc]) => ({ key: sym, weight: mc })), 0, 0, 100, 100);
-                const stockMap     = Object.fromEntries(stockLayout.map(r => [r.key, r]));
-                const sectPxW      = (lr.w / 100) * APPROX_W;
-                const sectPxH      = (lr.h / 100) * APPROX_H;
-
-                return (
-                  <div key={g.name} style={{
-                    position: "absolute",
-                    left: `${lr.x}%`, top: `${lr.y}%`,
-                    width: `${lr.w}%`, height: `${lr.h}%`,
-                    padding: 2, boxSizing: "border-box",
-                  }}>
-                    <div style={{
-                      width: "100%", height: "100%", borderRadius: 6,
-                      overflow: "hidden", border: "1px solid rgba(255,255,255,.07)",
-                      position: "relative", background: "var(--surface-0)",
-                      display: "flex", flexDirection: "column",
-                    }}>
-                      {/* Sector header */}
-                      <div
-                        onClick={() => setSelectedSector(g.name)}
-                        title={`Click to focus on ${g.name}`}
-                        style={{
-                          height: HEADER_H, minHeight: HEADER_H, flexShrink: 0,
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "0 7px", cursor: "pointer",
-                          background: "rgba(0,0,0,.35)", borderBottom: "1px solid rgba(255,255,255,.06)", gap: 4,
-                          // Sector colour key, in both colour modes.
-                          boxShadow: `inset 3px 0 0 ${sectorColor(g.name)}`,
-                        }}
-                      >
-                        <span style={{
-                          fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em",
-                          textTransform: "uppercase", color: "var(--text-hi)",
-                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                        }}>{g.name}</span>
-                        <span style={{
-                          fontSize: ".62rem", fontFamily: "var(--f-mono)", fontWeight: 700,
-                          color: g.pctChange == null ? "var(--text-dim-solid)" : g.pctChange >= 0 ? "var(--up)" : "var(--down)", flexShrink: 0,
-                        }}>{g.pctChange == null ? <NotAvailable /> : sign(g.pctChange)}</span>
-                      </div>
-
-                      {/* Stock cells */}
-                      <div style={{ position: "relative", flex: 1 }}>
-                        {stocksSorted.map(([sym, mcap, chg]) => {
-                          const sr = stockMap[sym];
-                          if (!sr) return null;
-                          const hc      = tileCol(chg, g.name);
-                          const cellPxW = (sr.w / 100) * sectPxW;
-                          const cellPxH = (sr.h / 100) * (sectPxH - HEADER_H);
-                          const minDim  = Math.min(cellPxW, cellPxH);
-                          const showText   = minDim > 16 && cellPxW > 20;
-                          const fs = Math.max(0.56, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 72));
-
-                          return (
-                            <div key={sym}
-                              onClick={e => { e.stopPropagation(); setSelectedSym(sym); }}
-                              onMouseEnter={e => showHover(e, sym, chg, mcap)}
-                              onMouseLeave={hideHover}
-                              title={`${sym}  ${sign(chg)}`}
-                              style={{
-                                position: "absolute",
-                                left: `${sr.x}%`, top: `${sr.y}%`,
-                                width: `${sr.w}%`, height: `${sr.h}%`,
-                                background: hc.bg, cursor: "pointer",
-                                display: "flex", flexDirection: "column",
-                                justifyContent: "center", alignItems: "center",
-                                boxSizing: "border-box", border: "1px solid rgba(0,0,0,.18)",
-                                overflow: "hidden", padding: 2, transition: "filter .1s",
-                              }}
-                              onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
-                              onMouseOut={e => (e.currentTarget.style.filter = "")}
-                            >
-                              {showText && (
-                                <>
-                                  <span style={{
-                                    fontFamily: "var(--f-mono)", fontWeight: 700,
-                                    color: hc.fg, fontSize: `${fs}rem`,
-                                    lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
-                                  }}>{sym}</span>
-                                  {tilePctLabel(chg, cellPxW, cellPxH) != null && (
-                                    <span style={{
-                                      fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
-                                      fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 3,
-                                    }}>{tilePctLabel(chg, cellPxW, cellPxH)}</span>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-        {!isOverall && activeSector && (() => {
-          const stocksSorted = [...activeSector.items].sort((a, b) => b[1] - a[1]);
-
-          const checkLayout = (cutoff: number) => {
-            const visible = stocksSorted.slice(0, cutoff);
-            const more = stocksSorted.slice(cutoff);
-            const moreWeight = more.reduce((s, i) => s + i[1], 0);
-
-            const items: LItem[] = visible.map(([sym, mc]) => ({ key: sym, weight: mc }));
-            if (more.length > 0) {
-              items.push({ key: "__more__", weight: moreWeight });
-            }
-
-            const layout = bisect(items, 0, 0, 100, 100);
-            const map = Object.fromEntries(layout.map(r => [r.key, r]));
-
-            for (const [sym] of visible) {
-              const r = map[sym];
-              if (!r) return false;
-              const cellPxW = (r.w / 100) * (APPROX_W - 32);
-              const cellPxH = (r.h / 100) * (APPROX_H - 24);
-              const minW = Math.max(14, sym.length * 4.2);
-              if (cellPxW < minW || cellPxH < 10.5) return false;
-            }
-
-            if (more.length > 0) {
-              const rMore = map["__more__"];
-              if (!rMore) return false;
-              const cellPxW = (rMore.w / 100) * (APPROX_W - 32);
-              const cellPxH = (rMore.h / 100) * (APPROX_H - 24);
-              if (cellPxW < 28 || cellPxH < 14) return false;
-            }
-
-            return true;
-          };
-
-          let bestCutoff = stocksSorted.length;
-          if (stocksSorted.length > 1 && !checkLayout(stocksSorted.length)) {
-            let low = 1;
-            let high = stocksSorted.length - 1;
-            bestCutoff = 1;
-            while (low <= high) {
-              const mid = Math.floor((low + high) / 2);
-              if (checkLayout(mid)) {
-                bestCutoff = mid;
-                low = mid + 1; // Try to include more visible stocks
-              } else {
-                high = mid - 1; // Too many stocks, shrink
-              }
-            }
-          }
-
-          const visibleStocks = stocksSorted.slice(0, bestCutoff);
-          const moreStocks    = stocksSorted.slice(bestCutoff);
-          const moreWeight    = moreStocks.reduce((sum, s) => sum + s[1], 0);
-
-          const finalItems: LItem[] = visibleStocks.map(([sym, mc]) => ({ key: sym, weight: mc }));
-          if (moreStocks.length > 0) {
-            finalItems.push({ key: "__more__", weight: moreWeight });
-          }
-
-          const stockLayout = bisect(finalItems, 0, 0, 100, 100);
-          const stockMap    = Object.fromEntries(stockLayout.map(r => [r.key, r]));
-
-          const moreAvgChg = moreStocks.length > 0
-            ? (moreWeight > 0
-                ? moreStocks.reduce((sum, s) => sum + s[1] * s[2], 0) / moreWeight
-                : moreStocks.reduce((sum, s) => sum + s[2], 0) / moreStocks.length)
-            : 0;
-
-          return (
-            <div style={{ position: "absolute", top: 8, bottom: 16, left: 16, right: 16 }}>
-              {visibleStocks.map(([sym, mcap, chg]) => {
-                const sr = stockMap[sym];
-                if (!sr) return null;
-                const hc      = tileCol(chg, activeSector.name);
-                const cellPxW = (sr.w / 100) * (APPROX_W - 32);
-                const cellPxH = (sr.h / 100) * (APPROX_H - 24);
-                const showText   = cellPxW >= Math.max(13, sym.length * 4) && cellPxH >= 10;
-                const fs = Math.max(0.48, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 70));
-
-                return (
-                  <div key={sym}
-                    onClick={e => { e.stopPropagation(); setSelectedSym(sym); }}
-                    onMouseEnter={e => showHover(e, sym, chg, mcap)}
-                    onMouseLeave={hideHover}
-                    title={`${sym}  ${sign(chg)}`}
-                    style={{
-                      position: "absolute",
-                      left: `${sr.x}%`, top: `${sr.y}%`,
-                      width: `${sr.w}%`, height: `${sr.h}%`,
-                      background: hc.bg, cursor: "pointer",
-                      display: "flex", flexDirection: "column",
-                      justifyContent: "center", alignItems: "center",
-                      boxSizing: "border-box", border: "1px solid rgba(0,0,0,.18)",
-                      overflow: "hidden", padding: 1, transition: "filter .1s",
-                    }}
-                    onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
-                    onMouseOut={e => (e.currentTarget.style.filter = "")}
-                  >
-                    {showText && (
-                      <>
-                        <span style={{
-                          fontFamily: "var(--f-mono)", fontWeight: 700,
-                          color: hc.fg, fontSize: `${fs}rem`,
-                          lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
-                        }}>{sym}</span>
-                        {tilePctLabel(chg, cellPxW, cellPxH) != null && (
-                          <span style={{
-                            fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
-                            fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 2,
-                          }}>{tilePctLabel(chg, cellPxW, cellPxH)}</span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-
-              {moreStocks.length > 0 && (() => {
-                const sr = stockMap["__more__"];
-                if (!sr) return null;
-                const hc      = tileCol(moreAvgChg, activeSector.name);
-                const cellPxW = (sr.w / 100) * (APPROX_W - 32);
-                const cellPxH = (sr.h / 100) * (APPROX_H - 24);
-                const showChange = cellPxW >= 34 && cellPxH >= 24;
-                const fs = Math.max(0.48, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 70));
-
-                return (
-                  <div key="__more__"
-                    onClick={e => { e.stopPropagation(); setMoreModal(moreStocks); }}
-                    title={`+${moreStocks.length} more stocks (${sign(moreAvgChg)}) — Click to view`}
-                    style={{
-                      position: "absolute",
-                      left: `${sr.x}%`, top: `${sr.y}%`,
-                      width: `${sr.w}%`, height: `${sr.h}%`,
-                      background: hc.bg, cursor: "pointer",
-                      display: "flex", flexDirection: "column",
-                      justifyContent: "center", alignItems: "center",
-                      boxSizing: "border-box", border: "1px solid rgba(0,0,0,.25)",
-                      overflow: "hidden", padding: 1, transition: "filter .1s",
-                    }}
-                    onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
-                    onMouseOut={e => (e.currentTarget.style.filter = "")}
-                  >
-                    <span style={{
-                      fontFamily: "var(--f-mono)", fontWeight: 700,
-                      color: hc.fg, fontSize: `${fs}rem`,
-                      lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
-                    }}>+{moreStocks.length} more</span>
-                    {showChange && (
-                      <span style={{
-                        fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
-                        fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 2,
-                      }}>{sign(moreAvgChg)}</span>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          );
-        })()}
-      </div>
-
-      {/* ── Hover tooltip ── */}
-      {hover && (() => {
-        const c = companies.find(x => x.ticker === hover.sym);
-        return (
-          <div className="dash-pop"
-            style={{ left: hover.x, top: hover.y, cursor: "default", width: 310, maxHeight: `${window.innerHeight - hover.y - 8}px`, overflowY: "auto" }}
-            onMouseEnter={cancelHover}
-            onMouseLeave={hideHover}
-          >
-            {/* Hovered stock header */}
-            <div className="dp-head" style={{ cursor: "pointer" }} onClick={() => { setHover(null); setSelectedSym(hover.sym); }}>
-              <StockLogo sym={hover.sym} size={28} />
-              <span className="dp-sym">{hover.sym}</span>
-              <VendorTag v={["fmp", "polygon"]} />
-              <span className={`pill ${hover.chg >= 0 ? "up" : "dn"}`}>{sign(hover.chg)}</span>
-            </div>
-            <div className="dp-row"><span>Mkt Cap</span><b>{capFmt(hover.mcap)}</b></div>
-            <div className="dp-row"><span>Price</span><b>{c?.price != null ? `$${fmt(c.price)}` : <NotAvailable />}</b></div>
-            <div className="dp-row"><span>RVOL</span><b className={c?.rvol != null && c.rvol >= 2 ? "up" : ""}>{c?.rvol != null ? `${c.rvol.toFixed(1)}×` : <NotAvailable />}</b></div>
-            <div className="dp-row"><span>RS Rating</span><b>{c?.rsRating != null ? `${c.rsRating}/99` : <NotAvailable />}</b></div>
-
-            {/* Same-sector stock list */}
-            {hover.peers.length > 0 && (
-              <>
-                <div className="hpop-label" onClick={() => { setHover(null); setSelectedSector(hover.sector); }}>
-                  <span>{hover.sector}</span>
-                  <span className="link" style={{ fontSize: ".62rem" }}>Open sector heatmap →</span>
-                </div>
-                {hover.peers.map(([psym, pmcap, pchg]) => (
-                  <div key={psym}
-                    className={`hpop-row${psym === hover.sym ? " hpop-row-hi" : ""}`}
-                    onClick={() => { setHover(null); setSelectedSym(psym); }}
-                  >
-                    <StockLogo sym={psym} size={16} />
-                    <span className="hpop-sym">{psym}</span>
-                    <span className="hpop-mcap">{capFmt(pmcap)}</span>
-                    <span className={`hpop-chg ${pchg >= 0 ? "up" : "down"}`}>{sign(pchg)}</span>
-                    <i className="hpop-bar" style={{ background: heatCol(pchg).bg, width: `${Math.min(56, Math.abs(pchg) * 14)}px` }} />
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        );
-      })()}
 
       {/* Bundled small-cap stocks modal */}
       {moreModal && (
@@ -700,10 +539,10 @@ function HeatmapInner() {
                     color: "var(--text-hi)",
                   }}
                 >
-                  +{moreModal.length} More {activeSector?.name ? `${activeSector.name} ` : ""}Stocks
+                  +{moreModal.stocks.length} More {moreModal.sector} Stocks
                 </div>
                 <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                  Smaller market-cap constituents bundled for readability · Click to view stock details
+                  Too small to label at this map size, largest first · Click to view stock details
                 </div>
               </div>
               <button
@@ -734,7 +573,7 @@ function HeatmapInner() {
                 gap: 6,
               }}
             >
-              {[...moreModal].sort((a, b) => b[1] - a[1]).map(([sym, mcap, chg]) => {
+              {[...moreModal.stocks].sort((a, b) => b.weight - a.weight).map(({ sym, mcap, chg }) => {
                 const comp = companies.find((x) => x.ticker === sym);
                 return (
                   <div
@@ -799,8 +638,8 @@ function HeatmapInner() {
                       <span style={{ fontSize: ".76rem", color: "var(--text-dim-solid)", fontFamily: "var(--f-mono)" }}>
                         {capFmt(mcap)}
                       </span>
-                      <span className={`pill ${chg >= 0 ? "up" : "dn"}`} style={{ minWidth: 54, textAlign: "center" }}>
-                        {sign(chg)}
+                      <span className={`pill ${chg == null ? "" : chg >= 0 ? "up" : "dn"}`} style={{ minWidth: 54, textAlign: "center" }}>
+                        {chg == null ? "—" : sign(chg)}
                       </span>
                     </div>
                   </div>

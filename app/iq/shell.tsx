@@ -1,7 +1,7 @@
 "use client";
 
 // iq.css is imported globally via app/layout.tsx
-import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -44,7 +44,7 @@ const navItemsByGroup = Object.fromEntries(
   ]),
 ) as Record<NavGroup, { label: string; slug: string; group: string; icon: string; badge: string | null }[]>;
 
-import { type PulseItem } from "./data";
+import { type PulseItem, isLeveragedProduct } from "./data";
 import { fmt, sign, cls, arr, SemiGauge, DataState, NotAvailable, VendorTag, titleCaseLabel, StockLogo, CandleChart, ChartSelect, TF_OPTIONS, CHART_TYPE_OPTIONS } from "./utils";
 import { useBackendBars } from "./hooks/useBackendBars";
 import { NotificationBell } from "./notification-bell";
@@ -57,7 +57,7 @@ import { useApiResource } from "./hooks/useApiResource";
 import { useWatchlists, WatchlistsContext } from "./hooks/useWatchlists";
 import { WatchlistPicker } from "./watchlist-picker";
 import { pulseFromLive, tapeItemsToIndexDocs } from "./live-market-indices";
-import type { CompanyDoc, SectorApiDoc, LiveEarningsDoc } from "./types";
+import type { CompanyDoc, SectorApiDoc, LiveEarningsDoc, LiveMoverDoc } from "./types";
 import { surprisePct } from "./types";
 import { LiveQuotesProvider } from "./live-quotes-context";
 import { SIProvider, useSI } from "./si/si-context";
@@ -1244,7 +1244,28 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const { frame: tapeFrame } = useTapeStream();
   const liveIndices = tapeFrame ? tapeItemsToIndexDocs(tapeFrame.items) : [];
   const livePulse = pulseFromLive(liveIndices);
-  const tickerItems = [...livePulse, ...livePulse];
+
+  // The top strip scrolls today's 20 biggest gainers then 20 biggest losers, from
+  // the same /market-data/movers feed (and the same leveraged/inverse-ETF filter)
+  // as the Movers screen. The index tape above still feeds the index drawer.
+  // Polled once a minute: it is on every page, so a faster poll multiplies.
+  const { data: tapeMovers } = useApiList<LiveMoverDoc>(planRequired ? null : "/market-data/movers", 60_000);
+  const tickerStocks = useMemo(() => {
+    const seen = new Set<string>();
+    const rows = tapeMovers.filter(m => {
+      const t = m.ticker?.trim().toUpperCase();
+      if (!t || seen.has(t) || m.price == null || m.pctChange == null || isLeveragedProduct(m.name)) return false;
+      seen.add(t);
+      return true;
+    });
+    const top = (dir: "gainer" | "loser") => rows
+      .filter(m => m.direction === dir)
+      .sort((a, b) => (dir === "gainer" ? b.pctChange - a.pctChange : a.pctChange - b.pctChange))
+      .slice(0, 20);
+    return [...top("gainer"), ...top("loser")];
+  }, [tapeMovers]);
+  // Two copies, so the -50% scroll loops seamlessly.
+  const tickerItems = [...tickerStocks, ...tickerStocks];
 
   // Shared live data for the shell-level drawers (stock/sector/earnings/index
   // quick-preview popups reachable from every screen via useIQActions()).
@@ -1632,12 +1653,17 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               </div>
               {/* Ticker tape lives in the top row; search + module switcher moved to the sub-bar below. */}
               <div className="ticker">
-                <div className="ticker-track">
+                {/* ~3.2 s per tile keeps the old scroll speed however many tiles there are. */}
+                <div className="ticker-track" style={{ animationDuration: `${Math.max(35, tickerStocks.length * 3.2)}s` }}>
                   {tickerItems.map((x, i) => (
-                    <div key={i} className="tk">
-                      <span className="lbl">{x.label}</span>
-                      <span className="val">{fmt(x.value, 2)}</span>
-                      <span className={`chg ${cls(x.change)}`}>{arr(x.change)} {Math.abs(x.change).toFixed(2)}%</span>
+                    <div key={`${x.ticker}-${i}`} className="tk" role="button" tabIndex={0}
+                      style={{ cursor: "pointer" }}
+                      title={x.name ? `${x.name} — open ${x.ticker}` : `Open ${x.ticker}`}
+                      onClick={() => setDrawer({ type: "stock", sym: x.ticker })}
+                      onKeyDown={e => { if (e.key === "Enter") setDrawer({ type: "stock", sym: x.ticker }); }}>
+                      <span className="lbl">{x.ticker}</span>
+                      <span className="val">{fmt(x.price, 2)}</span>
+                      <span className={`chg ${cls(x.pctChange)}`}>{arr(x.pctChange)} {Math.abs(x.pctChange).toFixed(2)}%</span>
                     </div>
                   ))}
                 </div>
