@@ -817,8 +817,9 @@ export function StockScreen({
   // The Peers tab's table: the column header last clicked, and whether the user
   // has asked for every peer instead of the largest PEER_DEFAULT_LIMIT.
   const [peerTbl, setPeerTbl] = useState<PeerSort>(DEFAULT_PEER_SORT);
-  const [peersShowAll, setPeersShowAll] = useState(false);
-  useEffect(() => { setPeersShowAll(false); }, [sym]);
+  // How many of the largest peers the Peers tab shows: 25, then 25 more per "Load more".
+  const [peersShown, setPeersShown] = useState(PEER_DEFAULT_LIMIT);
+  useEffect(() => { setPeersShown(PEER_DEFAULT_LIMIT); }, [sym]);
   const [peerQuery, setPeerQuery] = useState<string>("");
   // News tab period; null = the first period that has any stories.
   const [newsPeriod, setNewsPeriod] = useState<NewsPeriod | null>(null);
@@ -1595,8 +1596,8 @@ export function StockScreen({
   // The Peers tab's table: the largest 25 by default, ordered by the column header
   // last clicked; a search or "Show all" lifts the cap (see peer-table.ts).
   const peerTable = useMemo(
-    () => peerView(peersAllFull, { query: peerQuery, by: peerTbl.by, dir: peerTbl.dir, showAll: peersShowAll }),
-    [peersAllFull, peerQuery, peerTbl, peersShowAll], // eslint-disable-line react-hooks/exhaustive-deps
+    () => peerView(peersAllFull, { query: peerQuery, by: peerTbl.by, dir: peerTbl.dir, showAll: false, limit: peersShown }),
+    [peersAllFull, peerQuery, peerTbl, peersShown], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const displayPeers = peerTable.rows;
   // Leader / Laggard tags in the table are judged among the rows it shows.
@@ -3463,18 +3464,13 @@ export function StockScreen({
                         </tbody>
                       </table>
                     </div>
-                    {/* Default is the largest PEER_DEFAULT_LIMIT by market cap; the rest are one click away. */}
-                    {(peerTable.limited || (peersShowAll && !peerQuery.trim() && peersTotal > PEER_DEFAULT_LIMIT)) && (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderTop: "1px solid var(--border-soft)", fontSize: ".76rem", color: "var(--text-dim-solid)" }}>
-                        <span>
-                          {peerTable.limited
-                            ? `Showing the ${displayPeers.length} largest by market cap, of ${peerTable.matched} peers.`
-                            : `Showing all ${peerTable.matched} peers.`}
-                        </span>
-                        <button type="button" className="link" onClick={() => setPeersShowAll(v => !v)}
-                          style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }}>
-                          {peerTable.limited ? `Show all ${peerTable.matched} →` : `Show the largest ${PEER_DEFAULT_LIMIT}`}
+                    {/* The largest PEER_DEFAULT_LIMIT by market cap first; "Load more" adds the next PEER_DEFAULT_LIMIT. */}
+                    {peerTable.limited && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 14px", borderTop: "1px solid var(--border-soft)", fontSize: ".76rem", color: "var(--text-dim-solid)" }}>
+                        <button type="button" className="btn" onClick={() => setPeersShown(n => n + PEER_DEFAULT_LIMIT)}>
+                          Load {Math.min(PEER_DEFAULT_LIMIT, peerTable.matched - displayPeers.length)} more
                         </button>
+                        <span>Showing {displayPeers.length} of {peerTable.matched} peers, largest by market cap first.</span>
                       </div>
                     )}
                     </>
