@@ -27,6 +27,20 @@ export const BULLISH_GRADE = /buy|outperform|overweight|positive|accumulate/i;
 export const BEARISH_GRADE = /sell|underperform|underweight|negative|reduce/i;
 export const pctTxt = (v: number | null) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`);
 
+/**
+ * One entry per stock, however many calls it drew: the highest-signal call stands
+ * for the stock (its direction sets the colour), strongest first. The Portfolio and
+ * Watchlist cards list tickers from this, so "NVDA NVDA NVDA NVDA" can't happen.
+ */
+export function oneCallPerStock<T extends { t: string; score: number }>(calls: readonly T[]): T[] {
+  const best = new Map<string, T>();
+  for (const c of calls) {
+    const cur = best.get(c.t);
+    if (!cur || c.score > cur.score) best.set(c.t, c);
+  }
+  return Array.from(best.values()).sort((a, b) => b.score - a.score);
+}
+
 export interface ProcessedAction {
   id: string;
   t: string; // Ticker

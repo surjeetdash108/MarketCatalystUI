@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { DataState } from "./utils";
 import { useApiResource } from "./hooks/useApiResource";
 import { fmtDate } from "./calendar-range";
 import type { FinancialsDoc } from "./types";
-import { annualEpsSalesRows, epsSalesSeries, forwardAnnualEstimates, pctChangeStr, quarterlyEpsSalesRows, salesDisplay } from "./eps-sales-data";
+import { annualEpsSalesRows, epsSalesSeries, forwardAnnualEstimates, hasReportedEarnings, pctChangeStr, quarterlyEpsSalesRows, salesDisplay } from "./eps-sales-data";
 
 /** GET /live/estimates — FMP quarterly analyst consensus (oldest first). */
 interface QuarterlyEstimate {
@@ -65,6 +65,8 @@ const ACTUAL = "#6c9dff";
 const ESTIMATE = "#3a4252";
 const TEXT = "#c9d3e6";
 const MUTED = "#8a96ad";
+/** Analyst-forecast text (the starred rows and their chart bars): the app's warning yellow. */
+const FORECAST = "var(--warn)";
 
 const monthLabel = (iso: string) => fmtDate(iso, { month: "short", year: "2-digit" }).replace(" ", "-");
 const epsTxt = (v: number | null) => (v == null ? "—" : v.toFixed(2));
@@ -113,11 +115,11 @@ function Panel({ x, w, bars, value, fmt }: {
                 fill={b.est ? ESTIMATE : ACTUAL}>
                 <title>{`${b.label}${b.est ? " (estimate)" : ""}: ${fmt(v)}`}</title>
               </rect>
-              <text x={cx} y={v >= 0 ? y(v) - 5 : y(v) + font + 3} textAnchor="middle" fill={b.est ? MUTED : TEXT} fontSize={font} fontWeight={600}>
+              <text x={cx} y={v >= 0 ? y(v) - 5 : y(v) + font + 3} textAnchor="middle" fill={b.est ? FORECAST : TEXT} fontSize={font} fontWeight={600}>
                 {fmt(v)}
               </text>
             </>)}
-            <text x={lx} y={ly} transform={`rotate(-40 ${lx} ${ly})`} textAnchor="end" fill={MUTED} fontSize={11}>{b.label}</text>
+            <text x={lx} y={ly} transform={`rotate(-40 ${lx} ${ly})`} textAnchor="end" fill={b.est ? FORECAST : MUTED} fontSize={11}>{b.label}</text>
           </g>
         );
       })}
@@ -139,8 +141,6 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
   loading: boolean;
 }) {
   const [period, setPeriod] = useState<"Q" | "A">("Q");
-  const [note, setNote] = useState<string | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
   const { data: est } = useApiResource<{ quarterly: QuarterlyEstimate[]; next?: NextReportEstimate | null }>(
     sym ? `/live/estimates?ticker=${encodeURIComponent(sym)}` : null,
   );
@@ -238,62 +238,28 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
     ...fwdARows.map((r) => r.sales),
   ]);
 
-  const flash = (msg: string) => { setNote(msg); setTimeout(() => setNote(null), 2200); };
-
-  const copyData = async () => {
-    const lines = [
-      `${sym} — ${period === "Q" ? "Quarterly" : "Annual"} EPS & Sales (${sd.heading})`,
-      ["Period", "EPS", `Sales (${sd.heading})`, "Type"].join("\t"),
-      ...bars.map((b) => [b.label, epsTxt(b.eps), sd.cell(b.sales), b.est ? "Estimate" : "Reported"].join("\t")),
-    ];
-    try { await navigator.clipboard.writeText(lines.join("\n")); flash("Copied"); }
-    catch { flash("Copy failed"); }
-  };
-
-  const savePng = () => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    bg.setAttribute("width", "100%"); bg.setAttribute("height", "100%"); bg.setAttribute("fill", "#121a2b");
-    clone.insertBefore(bg, clone.firstChild);
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml" }));
-    const img = new Image();
-    img.onload = () => {
-      const scale = 2;
-      const c = document.createElement("canvas");
-      c.width = 1000 * scale; c.height = VB_H * 2 * scale;
-      const ctx = c.getContext("2d");
-      if (!ctx) return;
-      ctx.scale(scale, scale);
-      ctx.drawImage(img, 0, 0, 1000, VB_H * 2);
-      URL.revokeObjectURL(url);
-      const a = document.createElement("a");
-      a.download = `${sym}-eps-sales-${period === "Q" ? "quarterly" : "annual"}.png`;
-      a.href = c.toDataURL("image/png");
-      a.click();
-      flash("Image saved");
-    };
-    img.src = url;
-  };
-
-  const iconBtn: React.CSSProperties = {
-    width: 34, height: 30, display: "grid", placeItems: "center", borderRadius: 8,
-    border: "1px solid var(--border-soft)", background: "transparent", color: "var(--text-dim-solid)", cursor: "pointer",
-  };
   const segBtn = (on: boolean): React.CSSProperties => ({
     padding: "6px 14px", borderRadius: 8, border: 0, cursor: "pointer", fontWeight: 600, fontSize: ".82rem",
     background: on ? "var(--surface-3)" : "transparent", color: on ? "var(--text-hi)" : "var(--text-dim-solid)",
   });
-  const th: React.CSSProperties = { padding: "10px 14px", fontSize: ".72rem", letterSpacing: ".06em", color: "var(--text-dim-solid)", fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" };
-  const td: React.CSSProperties = { padding: "9px 14px", textAlign: "right", fontFamily: "var(--f-mono, ui-monospace, monospace)", whiteSpace: "nowrap" };
+  const th: React.CSSProperties = { padding: "10px 12px", fontSize: ".72rem", letterSpacing: ".06em", color: "var(--text-dim-solid)", fontWeight: 700, textAlign: "right", whiteSpace: "nowrap", verticalAlign: "bottom" };
+  const td: React.CSSProperties = { padding: "9px 12px", textAlign: "right", fontFamily: "var(--f-mono, ui-monospace, monospace)", whiteSpace: "nowrap" };
   const firstCol: React.CSSProperties = { ...td, textAlign: "left", fontWeight: 700, color: "var(--text-hi)" };
 
-  if (!financialsDoc || (qRows.length === 0 && aRows.length === 0)) {
+  // Nothing reported yet — a company that just listed, or one with no earnings on file.
+  // Say so plainly instead of drawing an empty EPS chart over a table of blanks: a new
+  // listing still carries quarters of revenue from its IPO filing, so "are there rows"
+  // is not the test (see hasReportedEarnings).
+  if (!financialsDoc || !hasReportedEarnings(financialsDoc) || (qRows.length === 0 && aRows.length === 0)) {
+    const nextDate = est?.next?.date ?? null;
     return (
       <div className="card"><div className="card-b">
-        <DataState loading={loading} label={`No earnings history synced for ${sym} yet.`} />
+        <DataState loading={loading} label={`No reported earnings for ${sym} yet.`} />
+        {!loading && (
+          <div className="sd-note" style={{ textAlign: "center", paddingBottom: 14 }}>
+            EPS, sales and surprise history will appear here after its first earnings report{nextDate ? ` (expected ${fmtDate(nextDate)})` : ""}.
+          </div>
+        )}
       </div></div>
     );
   }
@@ -309,34 +275,36 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
     };
   };
 
+  // Forward (*) rows are analyst forecasts: every figure reads yellow, whatever its sign.
+  const fcTd: React.CSSProperties = { ...td, color: FORECAST };
+  const fcFirst: React.CSSProperties = { ...firstCol, color: FORECAST };
+  const fcVal = (s: string): React.CSSProperties =>
+    !s || s === "—" ? { ...td, color: "var(--text-dim-solid)" } : { ...fcTd, fontWeight: /^[+\-−]/.test(s) ? 700 : 500 };
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: 16, alignItems: "start" }}>
+    // Two halves side by side while they fit, stacked once they don't. Flex-wrap with
+    // `minWidth: 0` on both halves, not a grid of `minmax(440px, 1fr)` columns: a grid
+    // column can't shrink below its content, and the table's cells don't wrap, so the
+    // table's column grew past the screen (the Earnings Hub pane) and its own
+    // `overflowX: auto` never got the chance to scroll. The table half gets the bigger
+    // share (its seven columns need ~570px, so it is never given less than 600px side by
+    // side, else it stacks); the charts scale with their viewBox.
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
       {/* LEFT HALF: EPS on top, Sales on bottom */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ flex: "1 1 380px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
         {/* EPS Chart Card */}
         <div className="card">
           <div className="card-b" style={{ paddingBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>EPS</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {note && <span style={{ fontSize: ".75rem", color: "var(--up)" }}>{note}</span>}
-                <button type="button" style={iconBtn} onClick={copyData} title="Copy chart data">
-                  <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                  </svg>
-                </button>
-                <button type="button" style={iconBtn} onClick={savePng} title="Save chart as image">
-                  <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
-                  </svg>
-                </button>
                 <div style={{ display: "flex", gap: 2, padding: 2, borderRadius: 10, background: "var(--surface-1)" }}>
                   <button type="button" style={segBtn(period === "Q")} onClick={() => setPeriod("Q")}>Quarterly</button>
                   <button type="button" style={segBtn(period === "A")} onClick={() => setPeriod("A")}>Annual</button>
                 </div>
               </div>
             </div>
-            <svg ref={svgRef} viewBox={`0 0 500 ${VB_H}`} width="100%" role="img" aria-label={`${sym} EPS`} style={{ display: "block" }}>
+            <svg viewBox={`0 0 500 ${VB_H}`} width="100%" role="img" aria-label={`${sym} EPS`} style={{ display: "block" }}>
               <Panel x={30} w={462} bars={bars} value={(b) => b.eps} fmt={(v) => v.toFixed(2)} />
             </svg>
             <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "4px 4px 2px" }}>
@@ -364,7 +332,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
       </div>
 
       {/* RIGHT HALF: Fiscal Year on top, Quarterly on bottom */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ flex: "1.3 1 600px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
         {/* Fiscal-year table */}
         <div className="card">
           <div className="card-b" style={{ padding: 0, overflowX: "auto" }}>
@@ -390,11 +358,11 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                 ))}
                 {fwdARows.map((r) => (
                   <tr key={`e${r.year}`} title="Analyst consensus estimate">
-                    <td style={firstCol}>*{r.year}</td>
-                    <td style={td}>{epsTxt(r.eps)}</td>
-                    <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
-                    <td style={td}>{sd.cell(r.sales)}</td>
-                    <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
+                    <td style={fcFirst}>*{r.year}</td>
+                    <td style={fcTd}>{epsTxt(r.eps)}</td>
+                    <td style={fcVal(r.epsChg)}>{r.epsChg}</td>
+                    <td style={fcTd}>{sd.cell(r.sales)}</td>
+                    <td style={fcVal(r.salesChg)}>{r.salesChg}</td>
                   </tr>
                 ))}
               </tbody>
@@ -411,10 +379,12 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                   <th style={{ ...th, textAlign: "left" }}>Quarter</th>
                   <th style={th}>EPS</th>
                   <th style={th}>% Chg</th>
-                  <th style={th}>Surprise</th>
+                  {/* These two wrap onto a second line when the pane is tight, so the
+                      table keeps fitting instead of scrolling sideways. */}
+                  <th style={{ ...th, whiteSpace: "normal", lineHeight: 1.3 }}>EPS Surprise</th>
                   <th style={th}>Sales ({sd.heading})</th>
                   <th style={th}>% Chg</th>
-                  <th style={th}>Surprise</th>
+                  <th style={{ ...th, whiteSpace: "normal", lineHeight: 1.3 }}>Sales Surprise</th>
                 </tr>
               </thead>
               <tbody>
@@ -431,19 +401,19 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                 ))}
                 {fwdQRows.map((r) => (
                   <tr key={`e${r.label}`} title={`Analyst consensus estimate${r.analysts ? ` (${r.analysts} analysts)` : ""}`}>
-                    <td style={firstCol}>*{r.label}</td>
-                    <td style={td}>{epsTxt(r.eps)}</td>
-                    <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
+                    <td style={fcFirst}>*{r.label}</td>
+                    <td style={fcTd}>{epsTxt(r.eps)}</td>
+                    <td style={fcVal(r.epsChg)}>{r.epsChg}</td>
                     <td style={td} className="dim">—</td>
-                    <td style={td}>{sd.cell(r.sales)}</td>
-                    <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
+                    <td style={fcTd}>{sd.cell(r.sales)}</td>
+                    <td style={fcVal(r.salesChg)}>{r.salesChg}</td>
                     <td style={td} className="dim">—</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div style={{ padding: "8px 14px 12px", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-              * Analyst consensus estimate (FMP). % Chg is year-over-year; Surprise is reported vs. the consensus estimate for that report.
+              * Analyst consensus estimate (FMP). % Chg is year-over-year; EPS Surprise and Sales Surprise are reported vs. the consensus estimate for that report.
             </div>
           </div>
         </div>

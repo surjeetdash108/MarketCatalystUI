@@ -887,133 +887,8 @@ export function DashboardScreen() {
         </div>
         </div>
 
-        {/* ── 3. Earnings Today ── */}
-        <div className="col-4">
-          <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-            <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Earnings Today</h3><VendorTag v={["fmp", "polygon"]} /></div>
-              <Link className="link" href="/menu/earnings">View all →</Link>
-            </div>
-            <div className="card-b" style={{ paddingTop: 4, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
-              {earningsToday.length === 0
-                ? <DataState loading={earningsLoading} label="No earnings reported today." height={100} />
-                : earningsToday.slice(0, 10).map(e => {
-                    const c = companyByTicker.get(e.ticker);
-                    const q = earningsLive.get(e.ticker);
-                    const { price, pctChange: pct } = pairedQuote(q, c);
-                    const ann = earningsAnnouncements.find(a => a.ticker === e.ticker);
-                    const rawSession = e.session || ann?.session || (liveEarnings.find(l => l.ticker === e.ticker)?.session) || null;
-
-                    return (
-                      <div key={e.ticker} className="minirow" style={{
-                        cursor: "pointer",
-                        display: "grid",
-                        gridTemplateColumns: "auto minmax(0, 1fr) 92px 70px",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                        onClick={() => openEarnings(e.ticker, earningsToday.slice(0, 10).map(x => x.ticker))}
-                        {...mr(e.ticker, "earnings")}
-                      >
-                        <StockLogo sym={e.ticker} size={26} />
-                        <span className="tkr" style={{ width: "auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {e.ticker}<small title={e.name ?? c?.name ?? ""}>{e.name ?? c?.name ?? "—"}</small>
-                        </span>
-                        <span className="mid" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
-                          {e.epsActual != null ? (
-                            <span className="pill" style={{
-                              background: e.epsEstimate != null
-                                ? (e.epsActual >= e.epsEstimate ? "var(--up-dim)" : "var(--down-dim)")
-                                : "var(--surface-3)",
-                              color: e.epsEstimate != null
-                                ? (e.epsActual >= e.epsEstimate ? "var(--up)" : "var(--down)")
-                                : "var(--text-hi)",
-                              whiteSpace: "nowrap",
-                            }}>
-                              EPS ${e.epsActual.toFixed(2)}
-                            </span>
-                          ) : e.epsEstimate != null ? (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
-                              Est ${e.epsEstimate.toFixed(2)}
-                            </span>
-                          ) : rawSession ? (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", whiteSpace: "nowrap" }}>
-                              {rawSession}
-                            </span>
-                          ) : c?.marketCap != null ? (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
-                              {fmt(c.marketCap)} Cap
-                            </span>
-                          ) : (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
-                              Today
-                            </span>
-                          )}
-                        </span>
-                        <div className="r" style={{ textAlign: "right", minWidth: 0 }}>
-                          {e.revenueActual != null ? (
-                            <span style={{ color: "var(--text-hi)", fontFamily: "var(--f-mono)", fontSize: ".8rem" }}>
-                              ${e.revenueActual >= 1e9 ? (e.revenueActual / 1e9).toFixed(1) + "B" : (e.revenueActual / 1e6).toFixed(0) + "M"}
-                            </span>
-                          ) : price != null ? (
-                            <>
-                              <div className="mono" style={{ fontSize: ".8rem", color: "var(--text-hi)" }}>{fmt(price)}</div>
-                              {pct != null && <div className={`mono ${cls(pct)}`} style={{ fontSize: ".68rem" }}>{sign(pct)}</div>}
-                            </>
-                          ) : c?.marketCap != null ? (
-                            <span style={{ color: "var(--text-dim-solid)", fontSize: ".76rem", fontFamily: "var(--f-mono)" }}>
-                              ${fmt(c.marketCap)}
-                            </span>
-                          ) : (
-                            <span style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>—</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-            </div>
-          </div>
-        </div>
-
-        {/* ── 4. Market Movers ── */}
-        <div className="col-4">
-          <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-            <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Movers</h3><VendorTag v={["fmp", "polygon"]} /></div>
-              <Link className="link" href="/menu/movers">View all →</Link>
-            </div>
-            <div style={{ display: "flex", gap: 4, padding: "6px 13px 0" }}>
-              {(["Gainers", "Losers", "Most Active"] as const).map((label, i) => (
-                <button key={label}
-                  className={`chip${moversTab === i ? " on" : ""}`}
-                  style={{ fontSize: ".65rem", padding: "3px 9px" }}
-                  onClick={() => setMoversTab(i as 0 | 1 | 2)}
-                >{label}</button>
-              ))}
-            </div>
-            <div className="card-b" style={{ paddingTop: 8, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
-              {(moversTab === 0
-                ? [...movers].filter(m => m.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange)
-                : moversTab === 1
-                ? [...movers].filter(m => m.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange)
-                : [...movers].sort((a, b) => b.rvolRatio - a.rvolRatio)
-              ).slice(0, 40).map(m => (
-                <div key={m.ticker} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openMoverModal(m.ticker)}
-                  {...mr(m.ticker, "movers")}
-                >
-                  <StockLogo sym={m.ticker} size={26} />
-                  <span className="tkr">{m.ticker}</span>
-                  <span className="mid">{moversTab === 2 ? `${m.rvolRatio}× vol` : m.name}</span>
-                  <span className={`r ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ── 5. Market Heatmap ── */}
-        <div className="col-4">
+        {/* ── 3. Market Heatmap ── */}
+        <div className="col-12">
           <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market Heatmap</h3><VendorTag v={["fmp", "polygon"]} /></div>
@@ -1109,6 +984,131 @@ export function DashboardScreen() {
                 </div>
               );
             })()}
+          </div>
+        </div>
+
+        {/* ── 4. Earnings Today ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <div className="card-h">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Earnings Today</h3><VendorTag v={["fmp", "polygon"]} /></div>
+              <Link className="link" href="/menu/earnings">View all →</Link>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
+              {earningsToday.length === 0
+                ? <DataState loading={earningsLoading} label="No earnings reported today." height={100} />
+                : earningsToday.slice(0, 10).map(e => {
+                    const c = companyByTicker.get(e.ticker);
+                    const q = earningsLive.get(e.ticker);
+                    const { price, pctChange: pct } = pairedQuote(q, c);
+                    const ann = earningsAnnouncements.find(a => a.ticker === e.ticker);
+                    const rawSession = e.session || ann?.session || (liveEarnings.find(l => l.ticker === e.ticker)?.session) || null;
+
+                    return (
+                      <div key={e.ticker} className="minirow" style={{
+                        cursor: "pointer",
+                        display: "grid",
+                        gridTemplateColumns: "auto minmax(0, 1fr) 92px 70px",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                        onClick={() => openEarnings(e.ticker, earningsToday.slice(0, 10).map(x => x.ticker))}
+                        {...mr(e.ticker, "earnings")}
+                      >
+                        <StockLogo sym={e.ticker} size={26} />
+                        <span className="tkr" style={{ width: "auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {e.ticker}<small title={e.name ?? c?.name ?? ""}>{e.name ?? c?.name ?? "—"}</small>
+                        </span>
+                        <span className="mid" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+                          {e.epsActual != null ? (
+                            <span className="pill" style={{
+                              background: e.epsEstimate != null
+                                ? (e.epsActual >= e.epsEstimate ? "var(--up-dim)" : "var(--down-dim)")
+                                : "var(--surface-3)",
+                              color: e.epsEstimate != null
+                                ? (e.epsActual >= e.epsEstimate ? "var(--up)" : "var(--down)")
+                                : "var(--text-hi)",
+                              whiteSpace: "nowrap",
+                            }}>
+                              EPS ${e.epsActual.toFixed(2)}
+                            </span>
+                          ) : e.epsEstimate != null ? (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
+                              Est ${e.epsEstimate.toFixed(2)}
+                            </span>
+                          ) : rawSession ? (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", whiteSpace: "nowrap" }}>
+                              {rawSession}
+                            </span>
+                          ) : c?.marketCap != null ? (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
+                              {fmt(c.marketCap)} Cap
+                            </span>
+                          ) : (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
+                              Today
+                            </span>
+                          )}
+                        </span>
+                        <div className="r" style={{ textAlign: "right", minWidth: 0 }}>
+                          {e.revenueActual != null ? (
+                            <span style={{ color: "var(--text-hi)", fontFamily: "var(--f-mono)", fontSize: ".8rem" }}>
+                              ${e.revenueActual >= 1e9 ? (e.revenueActual / 1e9).toFixed(1) + "B" : (e.revenueActual / 1e6).toFixed(0) + "M"}
+                            </span>
+                          ) : price != null ? (
+                            <>
+                              <div className="mono" style={{ fontSize: ".8rem", color: "var(--text-hi)" }}>{fmt(price)}</div>
+                              {pct != null && <div className={`mono ${cls(pct)}`} style={{ fontSize: ".68rem" }}>{sign(pct)}</div>}
+                            </>
+                          ) : c?.marketCap != null ? (
+                            <span style={{ color: "var(--text-dim-solid)", fontSize: ".76rem", fontFamily: "var(--f-mono)" }}>
+                              ${fmt(c.marketCap)}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>—</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 5. Market Movers ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <div className="card-h">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Movers</h3><VendorTag v={["fmp", "polygon"]} /></div>
+              <Link className="link" href="/menu/movers">View all →</Link>
+            </div>
+            <div style={{ display: "flex", gap: 4, padding: "6px 13px 0" }}>
+              {(["Gainers", "Losers", "Most Active"] as const).map((label, i) => (
+                <button key={label}
+                  className={`chip${moversTab === i ? " on" : ""}`}
+                  style={{ fontSize: ".65rem", padding: "3px 9px" }}
+                  onClick={() => setMoversTab(i as 0 | 1 | 2)}
+                >{label}</button>
+              ))}
+            </div>
+            <div className="card-b" style={{ paddingTop: 8, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
+              {(moversTab === 0
+                ? [...movers].filter(m => m.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange)
+                : moversTab === 1
+                ? [...movers].filter(m => m.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange)
+                : [...movers].sort((a, b) => b.rvolRatio - a.rvolRatio)
+              ).slice(0, 40).map(m => (
+                <div key={m.ticker} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openMoverModal(m.ticker)}
+                  {...mr(m.ticker, "movers")}
+                >
+                  <StockLogo sym={m.ticker} size={26} />
+                  <span className="tkr">{m.ticker}</span>
+                  <span className="mid">{moversTab === 2 ? `${m.rvolRatio}× vol` : m.name}</span>
+                  <span className={`r ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

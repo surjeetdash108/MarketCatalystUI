@@ -2000,7 +2000,7 @@ function CandleChartInner({
         <span className="cc-hint" title="Scroll to zoom · drag to pan · double-click to reset">Scroll: zoom · Drag: pan · Double-click: reset</span>
         <span className="cc-spacer" />
         {toolbarEnd}
-        <button type="button" className="cc-tvbtn icon" aria-pressed={full}
+        <button type="button" className="cc-tvbtn icon cc-fullbtn" aria-pressed={full}
           title={full ? "Exit full screen (F)" : "Full screen (F)"}
           aria-label={full ? "Exit full screen" : "Expand chart to full screen"} onClick={toggleFull}>
           {full ? (

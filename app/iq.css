@@ -11694,6 +11694,22 @@ button.pill.lf-chip {
   padding: 5px 7px;
 }
 
+/* The full-screen button stays in the top-right corner of the toolbar. In a narrow
+   pop-up the toolbar wraps onto a second row, and the button used to drop to the
+   start of that row; pinned to the corner it stays put, and the toolbar leaves it
+   room. */
+.cc-tools {
+  position: relative;
+  padding-right: 38px;
+}
+
+.iq-root .cc-tools>.cc-fullbtn {
+  position: absolute;
+  top: 23px;
+  right: 0;
+  transform: translateY(-50%);
+}
+
 .cc-tvbtn svg {
   opacity: .75;
 }
@@ -12745,9 +12761,15 @@ table.sd-ftab {
   color: var(--warn);
 }
 
+/* The forward (*) row is an analyst forecast: every figure reads yellow, whatever its sign. */
+.sd-ftab tr.est td,
+.sd-ftab tr.est td .up,
+.sd-ftab tr.est td .down {
+  color: var(--warn);
+}
+
 .sd-ftab tr.est td {
   background: var(--up-dim);
-  color: var(--text-dim-solid);
 }
 
 .sd-ftab .up {
@@ -12971,6 +12993,11 @@ table.sd-ftab {
 
 .sd-kv {
   margin: 0;
+}
+
+/* Key levels (Overview): a small heading above each part of the grid. */
+.sd-kv-grid h6.sd-sec {
+  padding: 8px 2px 4px;
 }
 
 .sd-kv-row {
@@ -14332,4 +14359,65 @@ h6.sd-sec {
 .ipo-tabs .tab.on {
   background: var(--brand);
   color: var(--on-brand);
+}
+
+/* ── Live Feed: story boxes + the "NEW" arrival cue ─────────────────────────
+   Each story sits in its own softly tinted box so neighbouring stories read as
+   separate items. A story that just arrived flashes brand-green for ~3 s and
+   carries a NEW chip until it ages out (useFreshStories); useArrivalMotion drops
+   the row in from above and slides the rest down. Ported from the Live Feed
+   preview. */
+.lfb-row {
+  --lfb-bg: color-mix(in srgb, var(--text-hi) 3.5%, transparent);
+  position: relative;
+  margin: 0 0 9px;
+  border: 1px solid var(--border-soft, var(--border));
+  border-radius: 12px;
+  background: var(--lfb-bg);
+  overflow: hidden;
+  transition: border-color .18s ease;
+}
+
+.lfb-row:hover {
+  border-color: var(--border-strong, var(--border));
+}
+
+/* The row's own divider and padding give way to the box. */
+.lfb-row>article {
+  border-bottom: none !important;
+  padding-top: 8px !important;
+  padding-bottom: 12px !important;
+}
+
+.lfb-fresh {
+  animation: lfb-flash 3.2s ease-out;
+}
+
+@keyframes lfb-flash {
+  0% {
+    background: color-mix(in srgb, var(--brand) 26%, transparent);
+  }
+
+  100% {
+    background: var(--lfb-bg);
+  }
+}
+
+.lfb-new {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 2;
+  font: 800 .6rem/1 var(--f-mono, monospace);
+  letter-spacing: .08em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--brand);
+  color: #04110a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lfb-fresh {
+    animation: none;
+  }
 }
