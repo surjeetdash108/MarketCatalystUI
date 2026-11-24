@@ -738,6 +738,8 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .pl-count{text-align:right;font:500 10px var(--f-mono);color:var(--dim2);margin-top:4px}
 .pl-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 /* ── Content pipeline (Blog / Pulse / Live Feed) ─────────────────────────── */
+/* The cp-* rules set display, which beats the browser's [hidden] rule: keep hidden things hidden. */
+#content [hidden]{display:none !important}
 .cp-switch{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:11px;background:var(--surface);margin-bottom:14px}
 .cp-switch button{border:0;border-radius:8px;padding:9px 16px;font:700 13px var(--f-body);background:transparent;color:var(--dim);cursor:pointer;display:inline-flex;gap:8px;align-items:center}
 .cp-switch button.on{background:var(--brand);color:var(--on-brand)}
@@ -5764,6 +5766,9 @@ function cpPost(m){ parent.postMessage(m, location.origin); }
 
 function cpOpen(){
   cpPaintSections();
+  // The browser can restore old checkbox state on reload: show the blocks that match the boxes as they are now.
+  cpDests();
+  cpShow(CP.view);
   if (!CP.items && !CP.loading) cpLoad();
   clearInterval(CP.poll);
   CP.poll = setInterval(function(){ if (document.querySelector('.view.on') && document.querySelector('.view.on').id === 'content') cpLoad(true); }, 15000);
@@ -5882,6 +5887,8 @@ function cpPicker(host){
 }
 document.querySelectorAll('[data-cp-picker]').forEach(cpPicker);
 cpPaintSections();
+cpDests();
+window.addEventListener('pageshow', function(){ cpDests(); });
 
 /* ── Status table, side panel ── */
 const CP_FILTERS = [['all','All'],['review','Needs review'],['pulse','Pulse'],['feed','Live Feed']].concat(CP_SECTIONS.map(function(s){ return ['blog-'+s, 'Blog · '+s]; }));
