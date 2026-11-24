@@ -5,13 +5,14 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { sign, fmt, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
 import { tilePctLabel } from "../heatmap-label";
-import { heatTile, heatGradient, framePct, dayMovePct, asOfLabel, floorWeights, sectorHeaderPlan, squarify, packStocks, tileFontRem, MORE_KEY, type HeaderPlan, type HmFrame, type LRect } from "../heatmap-design";
+import { heatTile, heatGradient, framePct, dayMovePct, liveCapBillions, asOfLabel, floorWeights, sectorHeaderPlan, squarify, packStocks, tileFontRem, MORE_KEY, type HeaderPlan, type HmFrame, type LRect } from "../heatmap-design";
 import { useApiList } from "../hooks/useApiList";
+import { useApiResource } from "../hooks/useApiResource";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useLiveQuotes, QUOTE_DELAY_LABEL } from "../live-quotes-context";
 import { latestSessionDate } from "../market-status";
 import { buildSectorList } from "../live-market-indices";
-import { INDEX_MEMBERS, HEATMAP_TAB_KEYS } from "../index-constituents";
+import { indexMemberSet, HEATMAP_TAB_KEYS, type LiveIndexMembers } from "../index-constituents";
 import type { CompanyDoc, SectorApiDoc } from "../types";
 
 const StockScreenEmbed = dynamic<{ initialSym?: string }>(
@@ -21,8 +22,13 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 
 /** Index names as other screens link to them (`?index=Nasdaq`), so keep these keys. */
 const TABS = ["Stocks", "S&P 500", "Nasdaq", "Dow", "Russell 2000"];
-/** What the buttons say. */
-const TAB_LABELS = ["All stocks", "S&P 500", "Nasdaq 100", "Dow 30", "Russell 2000"];
+/**
+ * What the buttons say. The last tab keeps its `?index=Russell 2000` URL key above,
+ * but it is not the Russell 2000 (no feed supplies that index): it is every stock
+ * under $40B in our data, and is labelled as exactly that.
+ */
+const TAB_LABELS = ["All stocks", "S&P 500", "Nasdaq 100", "Dow 30", "Small & mid caps"];
+const SMALL_MID_TAB = 4;
 const FRAMES: HmFrame[] = ["1D", "1W", "1M", "YTD"];
 const FRAME_TITLES: Record<HmFrame, string> = {
   "1D": "Change today",
@@ -165,13 +171,6 @@ function HeatmapInner() {
   const [frame, setFrame] = useState<HmFrame>("1D");
   const [sizeBy, setSizeBy] = useState<SizeBy>("cap");
   const [find, setFind] = useState("");
-  const [colorBlind, setColorBlindState] = useState<boolean>(() => {
-    try { return localStorage.getItem("iq-heatmap-cb") === "1"; } catch { return false; }
-  });
-  const setColorBlind = (v: boolean) => {
-    setColorBlindState(v);
-    try { localStorage.setItem("iq-heatmap-cb", v ? "1" : "0"); } catch { /* storage unavailable */ }
-  };
 
   useEffect(() => {
     if (!moreModal) return;
@@ -189,9 +188,15 @@ function HeatmapInner() {
   };
 
   // Tab 0 = all synced stocks; 1-3 filter to the S&P 500 / Nasdaq-100 / Dow-30.
-  // 4 (Russell 2000) filters to small/mid caps (<$40B) or falls back to full list so all tabs have data.
+  // 4 (small & mid caps) filters to stocks under $40B, falling back to the full list so every tab has data.
+  // Membership is the live constituent list (index-members job); the static
+  // 2024 lists only until it answers or if it is thin (see indexMemberSet).
+  const { data: liveMembers } = useApiResource<LiveIndexMembers>("/market-data/index-members");
   const tabKey    = HEATMAP_TAB_KEYS[tab];
-  const memberSet = tabKey && tabKey !== "RUT" ? INDEX_MEMBERS[tabKey] : null;
+  const memberSet = useMemo(
+    () => (tabKey && tabKey !== "RUT" ? indexMemberSet(tabKey, liveMembers) : null),
+    [tabKey, liveMembers],
+  );
 
   const baseSectorList = useMemo(() => {
     if (memberSet) {
@@ -229,16 +234,22 @@ function HeatmapInner() {
     const lookup = new Map<string, { stock: HmStock; sector: string }>();
     for (const g of baseSectorList) {
       const stocks: HmStock[] = [];
-      for (const [sym, mcap, storedPct] of g.items) {
+      for (const [sym, storedCap, storedPct] of g.items) {
         const lq = liveQuotes.get(sym);
         const c = companyBySym.get(sym);
         const day = dayMovePct(lq, storedPct, c?.week5Closes, sessionIso, mkt.phase);
+        // The stored cap lags its job (AMD $744B beside a live $680B after a -9% day).
+        const mcap = liveCapBillions(lq?.marketCap, storedCap);
         const price = lq?.price ?? c?.price ?? null;
         const shares = lq?.dayVolume ?? c?.dayVolume ?? null;
         const vol = shares != null && shares > 0 && price != null && price > 0 ? (shares * price) / 1e9 : null;
         const weight = sizeBy === "cap" ? mcap : (vol ?? 0);
         if (!(weight > 0)) continue;
-        const stock: HmStock = { sym, mcap, chg: framePct(frame, day, c), vol, weight };
+        // 1W / 1M are measured to the live price (the regular close outside the session),
+        // not read from the technicals job's move, which ends at the last stored bar.
+        const sessionOpen = lq?.marketStatus === "open" || (lq?.marketStatus == null && mkt.phase === "open");
+        const frameLive = frame === "1D" || !lq ? null : { price: sessionOpen ? lq.price : (lq.regularClose ?? null), dateIso: sessionIso };
+        const stock: HmStock = { sym, mcap, chg: framePct(frame, day, c, frameLive), vol, weight };
         stocks.push(stock);
         lookup.set(sym, { stock, sector: g.name });
       }
@@ -322,7 +333,7 @@ function HeatmapInner() {
 
   /** Builds one tile; `zoom` is the single-sector map, which packs smaller labels. */
   const tile = (s: HmStock, r: LRect, cw: number, ch: number, zoom: boolean) => {
-    const hc = heatTile(s.chg, colorBlind);
+    const hc = heatTile(s.chg);
     const showText = zoom ? cw >= Math.max(13, s.sym.length * 4) && ch >= 10 : Math.min(cw, ch) > 16 && cw > 20;
     const fs = tileFontRem(cw, ch);
     const hit = query !== "" && s.sym.includes(query);
@@ -343,7 +354,7 @@ function HeatmapInner() {
   /** The "+N more" tile: the stocks too small to label, coloured by their average move. */
   const moreTile = (sector: string, more: HmStock[], r: LRect) => {
     const avg = avgChg(more);
-    const hc = heatTile(avg, colorBlind);
+    const hc = heatTile(avg);
     const fs = Math.min(tileFontRem(r.w, r.h), 1);
     const hitMore = query !== "" && more.some(st => st.sym.includes(query));
     // The longest wording that fits the tile (mono type: about 0.6em a character).
@@ -381,7 +392,7 @@ function HeatmapInner() {
 
   const subtitle = [
     asOfLabel(mkt.phase, latestSessionDate(), QUOTE_DELAY_LABEL),
-    `${membersShown.toLocaleString("en-US")} ${isOverall ? (tab === 0 ? "stocks" : `${TAB_LABELS[tab]} members`) : `${activeSector!.name} stocks`}`,
+    `${membersShown.toLocaleString("en-US")} ${isOverall ? (tab === 0 ? "stocks" : tab === SMALL_MID_TAB ? "stocks under $40B" : `${TAB_LABELS[tab]} members`) : `${activeSector!.name} stocks`}`,
     `sized by ${sizeBy === "cap" ? "market cap" : "dollar volume"}`,
   ].join(" · ");
 
@@ -404,21 +415,8 @@ function HeatmapInner() {
           <h1 className="hm2-h1">Market Heatmap</h1>
           <p className="hm2-sub">{subtitle}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", minHeight: 35 }}>
           <VendorTag v={["fmp", "polygon"]} />
-          <label className="hm2-search">
-            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-            <input
-              type="search"
-              value={find}
-              onChange={e => setFind(e.target.value)}
-              onKeyDown={e => { if (e.key === "Escape") setFind(""); }}
-              placeholder="Highlight a ticker"
-              aria-label="Highlight a ticker on the map"
-              maxLength={10}
-            />
-            {find && <button type="button" className="clr" aria-label="Clear" onClick={() => setFind("")}>×</button>}
-          </label>
         </div>
       </div>
 
@@ -449,16 +447,27 @@ function HeatmapInner() {
         {!isOverall && (
           <button type="button" className="hm2-back" onClick={() => setSelectedSector("Overall")}>← All sectors</button>
         )}
-      </div>
-
-      <div className="hm2-legend">
+        {/* Colour legend sits on the same row as the Sector picker. */}
         <div className="hm2-scale" aria-hidden>
-          <div className="hm2-bar" style={{ background: heatGradient(colorBlind) }} />
+          <div className="hm2-bar" style={{ background: heatGradient() }} />
           <div className="hm2-ticks">{["−3%", "−2%", "−1%", "0%", "+1%", "+2%", "+3%"].map(t => <span key={t}>{t}</span>)}</div>
         </div>
-        <label className="hm2-cb">
-          <input type="checkbox" checked={colorBlind} onChange={e => setColorBlind(e.target.checked)} />
-          Color-blind palette
+      </div>
+
+      {/* Ticker highlight sits under the filters. */}
+      <div className="hm2-find-row">
+        <label className="hm2-search">
+          <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          <input
+            type="search"
+            value={find}
+            onChange={e => setFind(e.target.value)}
+            onKeyDown={e => { if (e.key === "Escape") setFind(""); }}
+            placeholder="Highlight a ticker"
+            aria-label="Highlight a ticker on the map"
+            maxLength={10}
+          />
+          {find && <button type="button" className="clr" aria-label="Clear" onClick={() => setFind("")}>×</button>}
         </label>
       </div>
 
@@ -469,7 +478,7 @@ function HeatmapInner() {
         )}
         {groups.length === 0 && !isLoading && (
           <div className="hm2-empty">
-            <div className="t">{sizeBy === "volume" ? "No volume synced yet" : `No ${TABS[tab]} stocks to show yet`}</div>
+            <div className="t">{sizeBy === "volume" ? "No volume synced yet" : `No ${tab === SMALL_MID_TAB ? "small & mid cap" : TABS[tab]} stocks to show yet`}</div>
             <div className="d">
               {sizeBy === "volume"
                 ? "Today's traded volume hasn't loaded for these stocks. Switch back to Market cap, or check back shortly."

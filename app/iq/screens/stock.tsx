@@ -1,7 +1,7 @@
 "use client";
 
 import { StockCatalystSummary } from "../mover-news-modal";
-import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties, type ReactNode } from "react";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { summarizeInsiders, compactUsd } from "../insider-summary";
 import { useIQActions, ExpandBtn } from "../shell";
@@ -44,6 +44,7 @@ import type {
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, gaapQuarterEps, quarterLabel, ADJUSTED_SURPRISE_LABEL } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, salesDisplay, type EpsSalesPt } from "../eps-sales-data";
+import { hasPublicEarningsReport, salesChangeNote, salesSurpriseNote, type SalesCellNote } from "../sales-table-notes";
 import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 import { range52, fiftyTwoWeekBars } from "../range52";
@@ -450,6 +451,12 @@ function EpsSalesBars({ data }: { data: EpsSalesPt[] }) {
   );
 }
 
+/** A table figure as text, or a dim "No data" when the source has none. The data layer hands
+ *  back "—" (or null) for a missing figure; a bare dash read like a rendering bug. */
+const orNoData = (v: string | null | undefined): ReactNode => (!v || v === "—" ? <NotAvailable label="No data" /> : v);
+
+/** News tab: stories drawn at first, and added by each "Show more". */
+const NEWS_PAGE = 50;
 type NewsPeriod = "w" | "pw" | "m" | "q" | "y";
 const NEWS_PERIODS: Array<[NewsPeriod, string]> = [
   ["w", "This week"], ["pw", "Prev week"], ["m", "This month"], ["q", "This quarter"], ["y", "This year"],
@@ -537,12 +544,12 @@ function SalesBars({ data }: { data: Array<{ label: string; v: number; est?: boo
               <rect x={(cx - bw / 2).toFixed(1)} y={(baseY - h).toFixed(1)} width={bw.toFixed(1)} height={h.toFixed(1)}
                 rx="3" style={{ fill: d.est ? "var(--border-strong)" : "var(--brand)" }} />
               <text x={cx.toFixed(1)} y={(baseY - h - 6).toFixed(1)} textAnchor="middle"
-                style={{ fill: d.est ? "var(--text-dim-solid)" : "var(--text)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
+                style={{ fill: d.est ? "var(--warn)" : "var(--text)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
                 {fmtBillions(d.v)}
               </text>
               <text x={cx.toFixed(1)} y={ly.toFixed(1)} textAnchor="end"
                 transform={`rotate(-40 ${cx.toFixed(1)} ${ly.toFixed(1)})`}
-                style={{ fill: "var(--text-dim-solid)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
+                style={{ fill: d.est ? "var(--warn)" : "var(--text-dim-solid)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
                 {d.est ? "*" : ""}{d.label}
               </text>
             </g>
@@ -670,6 +677,7 @@ export function StockScreen({
   headerActions,
   visibleTabs,
   initialTab,
+  onTabChange,
   barInterval: barIntervalProp,
 }: {
   initialSym?: string;
@@ -683,6 +691,8 @@ export function StockScreen({
   visibleTabs?: StockTab[];
   /** Tab to open on (default Overview) — Earnings Hub opens on Earnings. */
   initialTab?: StockTab;
+  /** Called with the tab that is showing, on mount and on every change. */
+  onTabChange?: (tab: StockTab) => void;
   /** Candle size owned by a chart OUTSIDE this screen (the list+chart panels,
    *  which pass hideChart). Drives the technical rating so it re-rates when
    *  that chart's interval changes, exactly as it does on the full page. */
@@ -823,6 +833,9 @@ export function StockScreen({
   const [peerQuery, setPeerQuery] = useState<string>("");
   // News tab period; null = the first period that has any stories.
   const [newsPeriod, setNewsPeriod] = useState<NewsPeriod | null>(null);
+  // How many stories the News tab draws. Remembered with the ticker + period it
+  // was raised for, so switching either starts back at NEWS_PAGE without an effect.
+  const [newsShown, setNewsShown] = useState<{ key: string; n: number }>({ key: "", n: NEWS_PAGE });
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
 
   // Tab shown below the persistent header + chart, in the full (non-embedded)
@@ -843,6 +856,10 @@ export function StockScreen({
       setActiveTab(visibleTabs[0]);
     }
   }, [visibleTabs, activeTab]);
+
+  // Tell a host which tab is showing (the Earnings-today popover keeps its EPS line
+  // and Open buttons to Overview only).
+  useEffect(() => { onTabChange?.(activeTab); }, [activeTab, onTabChange]);
 
   // Watchlists are backend-synced (multiple named lists). The star beside the
   // ticker name is "filled" when the ticker is in ANY list. See toggleWatch for
@@ -1610,7 +1627,7 @@ export function StockScreen({
   // data (quarters on file / articles fetched / peer counts), not decorative.
   const ALL_TABS: { id: StockTab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
-    { id: "analysis", label: "AI Read" },
+    { id: "analysis", label: "AI Summary" },
     ...(!isEtf ? [{ id: "analyst" as StockTab, label: "Analyst Actions" }] : []),
     { id: "peers", label: "Peers", count: peersTotal || undefined },
     { id: "earnings", label: "Earnings", count: hist10.length || undefined },
@@ -1628,10 +1645,8 @@ export function StockScreen({
     if (!visibleTabs || visibleTabs.length === 0) return ALL_TABS;
     return ALL_TABS.filter(t => visibleTabs.includes(t.id));
   }, [visibleTabs, isEtf, hist10.length, peersTotal]);
-  // Rail cards belong to Analysis (Technical rating / Indicators / analyst actions / Key levels).
-  // Overview no longer carries Peers in rail — Peers has its own dedicated comparison section.
-  // Every other tab gets a full-width main column instead of an empty track.
-  const showRail = !hideHeader && activeTab === "analysis";
+  // The tabbed full view has no right rail any more: Technical rating and Indicators
+  // moved to Overview (beside Key levels), so every tab gets a full-width column.
 
   function selectSym(s: string) {
     setSym(s);
@@ -1882,7 +1897,7 @@ export function StockScreen({
 
       <div
         className="sd-grid"
-        style={hideHeader ? { paddingTop: 0 } : (showRail ? undefined : { gridTemplateColumns: "minmax(0, 1fr)" })}
+        style={hideHeader ? { paddingTop: 0 } : { gridTemplateColumns: "minmax(0, 1fr)" }}
       >
 
         {/* ── Tab bar — Chart / Overview / Analysis / Earnings / Financials / Holdings /
@@ -2680,7 +2695,7 @@ export function StockScreen({
           Earnings Growth/Playbook; Dividend history vs. Stock splits) to match
           how the tabs divide the data. */}
       {!hideHeader && (<>
-        <div ref={leftColRef} style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "start", gridColumn: showRail ? undefined : "1 / -1" }}>
+        <div ref={leftColRef} style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "start", gridColumn: "1 / -1" }}>
 
           {activeTab === "overview" && (() => {
             // Two label/value columns, one stat per row (quote-page style)
@@ -2777,6 +2792,22 @@ export function StockScreen({
                 ))}
               </dl>
             );
+            // Key levels (pivots): moved here from the AI Read rail. The same two
+            // lists, laid out as two parts side by side in the Key statistics
+            // style (the rail's narrow row layout would stretch across the full
+            // width), and the same "View all" drawer.
+            const pivotWeekly = klWeekly;
+            const pivotRows = (["R2", "R1", "Pivot", "S1", "S2"] as const).map(label => ({
+              k: label,
+              v: pivotWeekly ? ({ R2: pivotWeekly.r2, R1: pivotWeekly.r1, Pivot: pivotWeekly.pivot, S1: pivotWeekly.s1, S2: pivotWeekly.s2 } as Record<string, number | null>)[label] : null,
+              tone: label.startsWith("R") ? "var(--down)" : label.startsWith("S") ? "var(--up)" : "var(--text-hi)",
+            }));
+            const rangeRows = ([
+              ["52W High", hi,     isUp ? "up"   : "dim"],
+              ["EMA 50",   ema50,  ema50 == null || sigPx == null ? "dim" : sigPx > ema50 ? "up" : "down"],
+              ["SMA 200",  sma200, sma200 == null || sigPx == null ? "dim" : sigPx > sma200 ? "up" : "down"],
+              ["52W Low",  lo,     isUp ? "dim"  : "down"],
+            ] as [string, number | null, string][]);
             return (<>
               <div className="card">
                 <div className="card-h">
@@ -2802,6 +2833,125 @@ export function StockScreen({
                   )}
                 </div>
               )}
+
+              <div className="card">
+                <div className="card-h">
+                  <h3>Key levels (pivots)</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <VendorTag v={["fmp", "polygon"]} />
+                    <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
+                  </div>
+                </div>
+                <div className="sd-kv-grid">
+                  <div>
+                    <h6 className="sd-sec">Weekly pivots</h6>
+                    <dl className="sd-kv">
+                      {pivotRows.map(r => (
+                        <div key={r.k} className="sd-kv-row">
+                          <dt style={{ color: r.tone }}>{r.k}</dt>
+                          <dd>{r.v != null ? `$${r.v.toFixed(2)}` : <NotAvailable />}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                  <div>
+                    <h6 className="sd-sec">Moving averages &amp; range</h6>
+                    {hi == null && lo == null && ema50 == null && sma200 == null ? (
+                      <DataState loading={liveCompanyLoading || yearBarsLoading} label="No historical price data synced for this ticker yet." />
+                    ) : (
+                      <dl className="sd-kv">
+                        {rangeRows.map(x => (
+                          <div key={x[0]} className="sd-kv-row">
+                            <dt>{x[0]}</dt>
+                            <dd style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
+                              {x[1] != null ? `$${nf(x[1])}` : <NotAvailable />}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical rating + Indicators: moved here from the AI Read rail,
+                  side by side (they stack when the column is narrow). */}
+              <div className="sd-two">
+                <div className="card">
+                  <div className="card-h">
+                    <h3>Technical rating</h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <VendorTag v={["fmp", "polygon"]} />
+                      <span className="link" onClick={() => setInnerDrawer("techrating")}>View all →</span>
+                    </div>
+                  </div>
+                  <div className="sd-gauge">
+                    <div className="cap">Summary · {ratingBasis}</div>
+                    <TrGauge val={gv} label={rating} />
+                    {techRating && <RatingTally t={techRating.all} />}
+                  </div>
+                  {consensusDoc && (<>
+                    <div className="sd-consensus">
+                      <div className="cap">Analyst consensus</div>
+                      <div className="big" style={{ color: consensusTone(consensusDoc.consensus) }}>{consensusDoc.consensus}</div>
+                      <div className="split">
+                        <span style={{ color: "var(--down)" }}><i>Sell</i>{consensusDoc.sell + consensusDoc.strongSell}</span>
+                        <span style={{ color: "var(--text-dim-solid)" }}><i>Hold</i>{consensusDoc.hold}</span>
+                        <span style={{ color: "var(--up)" }}><i>Buy</i>{consensusDoc.strongBuy + consensusDoc.buy}</span>
+                      </div>
+                    </div>
+                    {consensusDoc.priceTargetConsensus != null && consensusDoc.priceTargetConsensus > 0 && (
+                      <div className="sd-target">
+                        <div><span>Target</span>${consensusDoc.priceTargetConsensus.toFixed(0)}</div>
+                        {dispPrice != null && dispPrice > 0 && (
+                          <div>
+                            <span>Upside</span>
+                            <b style={{ color: consensusDoc.priceTargetConsensus >= dispPrice ? "var(--up)" : "var(--down)" }}>
+                              {consensusDoc.priceTargetConsensus >= dispPrice ? "+" : ""}{(((consensusDoc.priceTargetConsensus - dispPrice) / dispPrice) * 100).toFixed(1)}%
+                            </b>
+                          </div>
+                        )}
+                        {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetLow > 0 && consensusDoc.priceTargetHigh != null && consensusDoc.priceTargetHigh > 0 && (
+                          <div><span>Range</span>${consensusDoc.priceTargetLow.toFixed(0)}–${consensusDoc.priceTargetHigh.toFixed(0)}</div>
+                        )}
+                      </div>
+                    )}
+                  </>)}
+                </div>
+
+                <div className="card">
+                  <div className="card-h">
+                    <h3>Indicators</h3>
+                    <VendorTag v={["fmp", "polygon"]} />
+                  </div>
+                  {indRows.map(r => (
+                    <div key={r[0]} className="sd-ind">
+                      <span className="name">
+                        {r[0]}
+                        {r[0] === "RSI (14)" && rsiSeries && rsiSeries.length > 1 && (() => {
+                          const pts = rsiSeries.slice(-40);
+                          const W = 62, H = 16;
+                          const d = pts
+                            .map((v, i) => `${(i / (pts.length - 1)) * W},${H - (Math.min(100, Math.max(0, v)) / 100) * H}`)
+                            .join(" ");
+                          return (
+                            <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginLeft: 8, verticalAlign: "middle", overflow: "visible" }} aria-hidden="true">
+                              <line x1="0" y1={H - 0.7 * H} x2={W} y2={H - 0.7 * H} stroke="var(--border-soft)" strokeWidth="1" />
+                              <line x1="0" y1={H - 0.3 * H} x2={W} y2={H - 0.3 * H} stroke="var(--border-soft)" strokeWidth="1" />
+                              <polyline points={d} fill="none" stroke="var(--ai)" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
+                            </svg>
+                          );
+                        })()}
+                      </span>
+                      <span className="val">{r[1] ?? <NotAvailable />}</span>
+                      <span className="verdict" style={{ color: ac(r[2]) }}>{r[2]}</span>
+                    </div>
+                  ))}
+                  <div className="sd-foot">
+                    RSI/MACD/Stoch %K/ADX from technical-indicators.job · RSI sparkline is the last 40 sessions on a 0-100 scale with the 30/70 bands marked · EMA/SMA computed from a year of daily bars. Indicators only — not investment advice.
+                  </div>
+                </div>
+              </div>
             </>);
           })()}
 
@@ -2905,17 +3055,25 @@ export function StockScreen({
                   })()
                 : null;
               const back = isQ ? 4 : 1;
-              const pctCell = (v: number | null) => v == null
-                ? <span className="dim">—</span>
+              // An empty cell says why (see sales-table-notes.ts): N/A where the
+              // figure cannot apply, "No data" where it should exist but is missing.
+              const pctCell = (v: number | null, note: SalesCellNote) => v == null
+                ? <NotAvailable label={note.label} title={note.title} />
                 : <span className={v < 0 ? "down" : "up"}>{v > 0 ? "+" : ""}{Math.round(v)}%</span>;
               const chgVs = (cur: number | null, prior: number | null | undefined) =>
                 cur != null && prior != null && prior !== 0 ? ((cur - prior) / Math.abs(prior)) * 100 : null;
+              const surpNote = salesSurpriseNote({
+                reportedYet: hasPublicEarningsReport(financialsDoc),
+                nextReportLabel: upcomingEr?.date ? fmtDate(upcomingEr.date) : null,
+              });
               const tbl = series.map((r, i) => ({
                 ...r,
                 chg: chgVs(r.sales, series[i - back]?.sales),
+                chgNote: salesChangeNote({ isQ, hasPriorPeriod: i - back >= 0 }),
                 surp: isQ ? salesSurpriseFor(r.end) : null,
               }));
               const estChg = est ? chgVs(est.v * 1e3, series[series.length - back]?.sales) : null;
+              const estChgNote = salesChangeNote({ isQ, hasPriorPeriod: series.length - back >= 0 });
 
               return (<>
                 <div className="sd-two">
@@ -2982,23 +3140,23 @@ export function StockScreen({
                               <th>{isQ ? "Quarter" : "Fiscal year"}</th>
                               <th>Sales (B)</th>
                               <th>%Chg</th>
-                              {isQ && <th>Surp</th>}
+                              {isQ && <th>Sales Surprise</th>}
                             </tr>
                           </thead>
                           <tbody>
                             {tbl.map((r, i) => (
                               <tr key={r.label} className={i === tbl.length - 1 ? "latest" : undefined}>
                                 <td>{r.label}</td>
-                                <td>{r.sales != null ? (r.sales / 1e3).toFixed(2) : <span className="dim">—</span>}</td>
-                                <td>{pctCell(r.chg)}</td>
-                                {isQ && <td>{pctCell(r.surp)}</td>}
+                                <td>{r.sales != null ? (r.sales / 1e3).toFixed(2) : <NotAvailable label="No data" />}</td>
+                                <td>{pctCell(r.chg, r.chgNote)}</td>
+                                {isQ && <td>{pctCell(r.surp, surpNote)}</td>}
                               </tr>
                             ))}
                             {est && (
                               <tr className="est">
                                 <td>*{est.label}</td>
                                 <td>{est.v.toFixed(2)}</td>
-                                <td>{pctCell(estChg)}</td>
+                                <td>{pctCell(estChg, estChgNote)}</td>
                                 <td>•••</td>
                               </tr>
                             )}
@@ -3303,7 +3461,8 @@ export function StockScreen({
             ) as Record<NewsPeriod, number>;
             const period = newsPeriod ?? NEWS_PERIODS.find(([k]) => counts[k] > 0)?.[0] ?? "w";
             const list = items.filter(x => inNewsPeriod(period, x.ms, now)).sort((a, b) => b.ms - a.ms);
-            const CAP = 40;
+            const newsKey = `${sym}|${period}`;
+            const shown = newsShown.key === newsKey ? newsShown.n : NEWS_PAGE;
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {/* Summary — the same "Why It Moved" card as the Movers screen. */}
@@ -3328,7 +3487,7 @@ export function StockScreen({
                     </div>
                     {list.length === 0 ? (
                       <div className="sd-note" style={{ padding: "26px 16px", textAlign: "center" }}>No stories in this period.</div>
-                    ) : list.slice(0, CAP).map(({ n, ms }) => (
+                    ) : list.slice(0, shown).map(({ n, ms }) => (
                       <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="sd-news">
                         <h4>{n.headline}</h4>
                         <p>
@@ -3338,7 +3497,30 @@ export function StockScreen({
                         </p>
                       </a>
                     ))}
-                    {list.length > CAP && <div className="sd-foot">Showing the latest {CAP} of {list.length} stories in this period.</div>}
+                    {/* The latest NEWS_PAGE first; the rest are NEWS_PAGE more per click. */}
+                    {list.length > NEWS_PAGE && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "10px 16px", borderTop: "1px solid var(--border-soft)", fontSize: ".76rem", color: "var(--text-dim-solid)" }}>
+                        <span>
+                          {shown < list.length
+                            ? `Showing the latest ${shown} of ${list.length} stories in this period.`
+                            : `Showing all ${list.length} stories in this period.`}
+                        </span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                          {shown < list.length && (
+                            <button type="button" className="link" onClick={() => setNewsShown({ key: newsKey, n: shown + NEWS_PAGE })}
+                              style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }}>
+                              Show {Math.min(NEWS_PAGE, list.length - shown)} more →
+                            </button>
+                          )}
+                          {shown > NEWS_PAGE && (
+                            <button type="button" className="link" onClick={() => setNewsShown({ key: newsKey, n: NEWS_PAGE })}
+                              style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }}>
+                              Show the latest {NEWS_PAGE}
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    )}
                   </>)}
                 </div>
               </div>
@@ -3479,139 +3661,6 @@ export function StockScreen({
 
         </div>
 
-        {showRail && (
-          // Pinned to the left column's height on Analysis (so Key levels sits
-          // level with its last card); Overview's column is short, so its
-          // rail keeps its natural height and Peers scrolls inside its card.
-          <div className="sd-rail" style={{ height: rightColH, minHeight: 0, overflow: rightColH ? "auto" : undefined }}>
-
-
-            {activeTab === "analysis" && (
-              <div className="card sd-rail-full">
-                <div className="card-h">
-                  <h3>Technical rating</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <VendorTag v={["fmp", "polygon"]} />
-                    <span className="link" onClick={() => setInnerDrawer("techrating")}>View all →</span>
-                  </div>
-                </div>
-                <div className="sd-gauge">
-                  <div className="cap">Summary · {ratingBasis}</div>
-                  <TrGauge val={gv} label={rating} />
-                  {techRating && <RatingTally t={techRating.all} />}
-                </div>
-                {consensusDoc && (<>
-                  <div className="sd-consensus">
-                    <div className="cap">Analyst consensus</div>
-                    <div className="big" style={{ color: consensusTone(consensusDoc.consensus) }}>{consensusDoc.consensus}</div>
-                    <div className="split">
-                      <span style={{ color: "var(--down)" }}><i>Sell</i>{consensusDoc.sell + consensusDoc.strongSell}</span>
-                      <span style={{ color: "var(--text-dim-solid)" }}><i>Hold</i>{consensusDoc.hold}</span>
-                      <span style={{ color: "var(--up)" }}><i>Buy</i>{consensusDoc.strongBuy + consensusDoc.buy}</span>
-                    </div>
-                  </div>
-                  {consensusDoc.priceTargetConsensus != null && consensusDoc.priceTargetConsensus > 0 && (
-                    <div className="sd-target">
-                      <div><span>Target</span>${consensusDoc.priceTargetConsensus.toFixed(0)}</div>
-                      {dispPrice != null && dispPrice > 0 && (
-                        <div>
-                          <span>Upside</span>
-                          <b style={{ color: consensusDoc.priceTargetConsensus >= dispPrice ? "var(--up)" : "var(--down)" }}>
-                            {consensusDoc.priceTargetConsensus >= dispPrice ? "+" : ""}{(((consensusDoc.priceTargetConsensus - dispPrice) / dispPrice) * 100).toFixed(1)}%
-                          </b>
-                        </div>
-                      )}
-                      {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetLow > 0 && consensusDoc.priceTargetHigh != null && consensusDoc.priceTargetHigh > 0 && (
-                        <div><span>Range</span>${consensusDoc.priceTargetLow.toFixed(0)}–${consensusDoc.priceTargetHigh.toFixed(0)}</div>
-                      )}
-                    </div>
-                  )}
-                </>)}
-              </div>
-            )}
-
-            {activeTab === "analysis" && (
-              <div className="card">
-                <div className="card-h">
-                  <h3>Indicators</h3>
-                  <VendorTag v={["fmp", "polygon"]} />
-                </div>
-                {indRows.map(r => (
-                  <div key={r[0]} className="sd-ind">
-                    <span className="name">
-                      {r[0]}
-                      {r[0] === "RSI (14)" && rsiSeries && rsiSeries.length > 1 && (() => {
-                        const pts = rsiSeries.slice(-40);
-                        const W = 62, H = 16;
-                        const d = pts
-                          .map((v, i) => `${(i / (pts.length - 1)) * W},${H - (Math.min(100, Math.max(0, v)) / 100) * H}`)
-                          .join(" ");
-                        return (
-                          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginLeft: 8, verticalAlign: "middle", overflow: "visible" }} aria-hidden="true">
-                            <line x1="0" y1={H - 0.7 * H} x2={W} y2={H - 0.7 * H} stroke="var(--border-soft)" strokeWidth="1" />
-                            <line x1="0" y1={H - 0.3 * H} x2={W} y2={H - 0.3 * H} stroke="var(--border-soft)" strokeWidth="1" />
-                            <polyline points={d} fill="none" stroke="var(--ai)" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
-                          </svg>
-                        );
-                      })()}
-                    </span>
-                    <span className="val">{r[1] ?? <NotAvailable />}</span>
-                    <span className="verdict" style={{ color: ac(r[2]) }}>{r[2]}</span>
-                  </div>
-                ))}
-                <div className="sd-foot">
-                  RSI/MACD/Stoch %K/ADX from technical-indicators.job · RSI sparkline is the last 40 sessions on a 0-100 scale with the 30/70 bands marked · EMA/SMA computed from a year of daily bars. Indicators only — not investment advice.
-                </div>
-              </div>
-            )}
-
-
-            {activeTab === "analysis" && (
-              <div className="card">
-                <div className="card-h">
-                  <h3>Key levels (pivots)</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <VendorTag v={["fmp", "polygon"]} />
-                    <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
-                  </div>
-                </div>
-                <h6 className="sd-sec">Weekly pivots</h6>
-                {(["R2", "R1", "Pivot", "S1", "S2"] as const).map(label => {
-                  const wk = klWeekly;
-                  const v = wk ? ({ R2: wk.r2, R1: wk.r1, Pivot: wk.pivot, S1: wk.s1, S2: wk.s2 } as Record<string, number | null>)[label] : null;
-                  const tone = label.startsWith("R") ? "var(--down)" : label.startsWith("S") ? "var(--up)" : "var(--text-hi)";
-                  return (
-                    <div key={label} className="sd-row">
-                      <span className="grow num" style={{ color: tone }}>{label}</span>
-                      <span className="num">{v != null ? `$${v.toFixed(2)}` : <NotAvailable />}</span>
-                    </div>
-                  );
-                })}
-                <h6 className="sd-sec">Moving averages &amp; range</h6>
-                {hi == null && lo == null && ema50 == null && sma200 == null ? (
-                  <div className="card-b"><DataState loading={liveCompanyLoading || yearBarsLoading} label="No historical price data synced for this ticker yet." /></div>
-                ) : (
-                  ([
-                    ["52W High", hi,     isUp ? "up"   : "dim"],
-                    ["EMA 50",   ema50,  ema50 == null || sigPx == null ? "dim" : sigPx > ema50 ? "up" : "down"],
-                    ["SMA 200",  sma200, sma200 == null || sigPx == null ? "dim" : sigPx > sma200 ? "up" : "down"],
-                    ["52W Low",  lo,     isUp ? "dim"  : "down"],
-                  ] as [string, number | null, string][]).map(x => (
-                    <div key={x[0]} className="sd-row">
-                      <span className="grow num">{x[0]}</span>
-                      <span className="num" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
-                        {x[1] != null ? `$${nf(x[1])}` : <NotAvailable />}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-
-
-          </div>
-        )}
       </>)}
 
       </div>
@@ -4028,15 +4077,19 @@ export function StockScreen({
                               </tr>
                             </thead>
                             <tbody>
-                              {annualRows.map(r => (
+                              {annualRows.map(r => {
+                                // Forward (*) years are analyst forecasts: every figure reads yellow, whatever its sign.
+                                const fc: CSSProperties | undefined = r.year.startsWith("*") ? { color: "var(--warn)" } : undefined;
+                                return (
                                 <tr key={r.year}>
-                                  <td style={{ fontWeight: 700, color: "var(--text-hi)" }}>{r.year}</td>
-                                  <td className="num">{r.eps != null ? `$${r.eps.toFixed(2)}` : <NotAvailable />}</td>
-                                  <td className={`num${r.epsChg.startsWith("+") ? " up" : r.epsChg.startsWith("-") ? " down" : ""}`}>{r.epsChg}</td>
-                                  <td className="num">{r.sales != null ? sd.cell(r.sales) : <NotAvailable />}</td>
-                                  <td className={`num${r.salesChg.startsWith("+") ? " up" : r.salesChg.startsWith("-") ? " down" : ""}`}>{r.salesChg}</td>
+                                  <td style={{ fontWeight: 700, color: "var(--text-hi)", ...fc }}>{r.year}</td>
+                                  <td className="num" style={fc}>{r.eps != null ? `$${r.eps.toFixed(2)}` : <NotAvailable label="No data" />}</td>
+                                  <td className={`num${r.epsChg.startsWith("+") ? " up" : r.epsChg.startsWith("-") ? " down" : ""}`} style={fc}>{orNoData(r.epsChg)}</td>
+                                  <td className="num" style={fc}>{r.sales != null ? sd.cell(r.sales) : <NotAvailable label="No data" />}</td>
+                                  <td className={`num${r.salesChg.startsWith("+") ? " up" : r.salesChg.startsWith("-") ? " down" : ""}`} style={fc}>{orNoData(r.salesChg)}</td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -4074,12 +4127,12 @@ export function StockScreen({
                               {quarterlyRows.map((r, i) => (
                                 <tr key={`${r.label}-${i}`}>
                                   <td style={{ fontWeight: 700, color: "var(--text-hi)" }}>{r.label}</td>
-                                  <td className="num">{r.eps != null ? `$${r.eps.toFixed(2)}` : <NotAvailable />}</td>
-                                  <td className={`num${r.epsChg.startsWith("+") ? " up" : r.epsChg.startsWith("-") ? " down" : ""}`}>{r.epsChg}</td>
-                                  <td className={`num${r.epsSurp.startsWith("+") ? " up" : r.epsSurp.startsWith("-") ? " down" : ""}`}>{r.epsSurp}</td>
-                                  <td className="num">{r.sales != null ? sd.cell(r.sales) : <NotAvailable />}</td>
-                                  <td className={`num${r.salesChg.startsWith("+") ? " up" : r.salesChg.startsWith("-") ? " down" : ""}`}>{r.salesChg}</td>
-                                  <td className="num">{r.salesSurp}</td>
+                                  <td className="num">{r.eps != null ? `$${r.eps.toFixed(2)}` : <NotAvailable label="No data" />}</td>
+                                  <td className={`num${r.epsChg.startsWith("+") ? " up" : r.epsChg.startsWith("-") ? " down" : ""}`}>{orNoData(r.epsChg)}</td>
+                                  <td className={`num${r.epsSurp.startsWith("+") ? " up" : r.epsSurp.startsWith("-") ? " down" : ""}`}>{orNoData(r.epsSurp)}</td>
+                                  <td className="num">{r.sales != null ? sd.cell(r.sales) : <NotAvailable label="No data" />}</td>
+                                  <td className={`num${r.salesChg.startsWith("+") ? " up" : r.salesChg.startsWith("-") ? " down" : ""}`}>{orNoData(r.salesChg)}</td>
+                                  <td className="num">{orNoData(r.salesSurp)}</td>
                                 </tr>
                               ))}
                             </tbody>

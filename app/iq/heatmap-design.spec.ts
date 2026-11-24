@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { asOfLabel, framePct, lastSessionPct, dayMovePct, floorWeights, sectorHeaderPlan, heatGradient, heatTile, NO_DATA_TILE, squarify, packStocks, MORE_KEY, tileFontRem } from "./heatmap-design";
+import { asOfLabel, framePct, windowPctToLive, lastSessionPct, dayMovePct, floorWeights, sectorHeaderPlan, heatGradient, heatTile, NO_DATA_TILE, squarify, packStocks, MORE_KEY, tileFontRem } from "./heatmap-design";
 
 describe("heatTile", () => {
   it("is the same slate at 0%, saturates at ±3% and does not go past it", () => {
@@ -50,6 +50,55 @@ describe("framePct", () => {
     assert.equal(framePct("1W", 0.8, {}), null);
     assert.equal(framePct("1M", 0.8, undefined), null);
     assert.equal(framePct("YTD", 0.8, co), null);
+  });
+});
+
+// 24 Nov 2026, 15:45 ET: NVDA's 1W tile read +5.71% (the five sessions to Monday's close) while the
+// five sessions up to the live price were -1.33%. Synthetic closes with the same shape.
+describe("windowPctToLive", () => {
+  const w5 = [
+    { date: "2026-11-16", close: 100 }, { date: "2026-11-17", close: 101 }, { date: "2026-11-18", close: 102 },
+    { date: "2026-11-19", close: 103 }, { date: "2026-11-20", close: 104 }, { date: "2026-11-23", close: 105 },
+  ];
+  it("a later session is live: today counts as one of the five, so the base is the SECOND close", () => {
+    assert.equal(windowPctToLive(w5, 99, "2026-11-24")?.toFixed(2), ((99 / 101 - 1) * 100).toFixed(2));
+  });
+  it("the newest stored close is the live price's own session: the base is the FIRST close", () => {
+    assert.equal(windowPctToLive(w5, 105, "2026-11-23")?.toFixed(2), "5.00");
+  });
+  it("null (caller keeps the stored move) when the live price is older than the newest close, or anything is missing", () => {
+    assert.equal(windowPctToLive(w5, 99, "2026-11-20"), null);
+    assert.equal(windowPctToLive(null, 99, "2026-11-24"), null);
+    assert.equal(windowPctToLive(w5, null, "2026-11-24"), null);
+    assert.equal(windowPctToLive(w5, 99, null), null);
+    assert.equal(windowPctToLive([{ date: "2026-11-23", close: 0 }, { date: "2026-11-24", close: 1 }], 99, "2026-11-25"), null);
+  });
+  it("works for the 22-close monthly window the same way", () => {
+    const m21 = Array.from({ length: 22 }, (_, i) => ({ date: "2026-10-" + String(i + 1).padStart(2, "0"), close: 100 + i }));
+    assert.equal(windowPctToLive(m21, 130, "2026-11-24")?.toFixed(2), ((130 / 101 - 1) * 100).toFixed(2));
+  });
+});
+
+describe("framePct with the live price", () => {
+  const w5 = [
+    { date: "2026-11-16", close: 100 }, { date: "2026-11-17", close: 101 }, { date: "2026-11-18", close: 102 },
+    { date: "2026-11-19", close: 103 }, { date: "2026-11-20", close: 104 }, { date: "2026-11-23", close: 105 },
+  ];
+  const m21 = Array.from({ length: 22 }, (_, i) => ({ date: "2026-10-" + String(i + 1).padStart(2, "0"), close: 100 + i }));
+  const co = { week5ChangePct: 5.71, monthChangePct: 21, week5Closes: w5, month21Closes: m21 };
+  const live = { price: 99, dateIso: "2026-11-24" };
+  it("1W re-measures to the live price instead of reading the stored move", () => {
+    assert.equal(framePct("1W", 0.8, co, live)?.toFixed(2), ((99 / 101 - 1) * 100).toFixed(2));
+  });
+  it("1M uses the monthly closes when the job has written them, the stored move until then", () => {
+    assert.equal(framePct("1M", 0.8, co, live)?.toFixed(2), ((99 / 101 - 1) * 100).toFixed(2));
+    assert.equal(framePct("1M", 0.8, { ...co, month21Closes: null }, live), 21);
+  });
+  it("without a live price or closes the stored move stands; 1D and YTD are unchanged", () => {
+    assert.equal(framePct("1W", 0.8, co, null), 5.71);
+    assert.equal(framePct("1W", 0.8, { week5ChangePct: 5.71 }, live), 5.71);
+    assert.equal(framePct("1D", 0.8, co, live), 0.8);
+    assert.equal(framePct("YTD", 0.8, co, live), null);
   });
 });
 

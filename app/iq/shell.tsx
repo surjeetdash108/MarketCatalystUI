@@ -13,6 +13,8 @@ export const StockScreenEmbed = dynamic<{
   hideChart?: boolean;
   headerActions?: ReactNode;
   visibleTabs?: ("overview" | "analysis" | "analyst" | "peers" | "earnings" | "financials" | "holdings" | "13f" | "news")[];
+  /** The tab now showing (on mount and on every change). */
+  onTabChange?: (tab: string) => void;
 }>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
@@ -358,6 +360,9 @@ function EarningsDrawer({ sym, list, liveEarnings, loading, onNavigate, onClose 
   onClose: () => void;
 }) {
   const { exitToMC, enterSI } = useSI();
+  // The EPS line and the two Open buttons belong to Overview only: the embedded stock
+  // screen reports its tab, and every other tab gets the screen alone.
+  const [stockTab, setStockTab] = useState("overview");
   // Disabled (not wrapped) at either end, same as the stock-detail popover.
   const idx  = list?.indexOf(sym) ?? -1;
   const prev = idx > 0 ? list![idx - 1] : null;
@@ -392,8 +397,8 @@ function EarningsDrawer({ sym, list, liveEarnings, loading, onNavigate, onClose 
         </div>
 
         <div className="drawer-b">
-          <StockScreenEmbed initialSym={sym} />
-          <div style={{ padding: "14px 20px 22px", borderTop: "1px solid var(--border)" }}>
+          <StockScreenEmbed initialSym={sym} onTabChange={setStockTab} />
+          {stockTab === "overview" && (<div style={{ padding: "14px 20px 22px", borderTop: "1px solid var(--border)" }}>
           {!e ? (
             <DataState loading={loading} label={`No earnings data synced for ${sym} yet.`} />
           ) : (
@@ -443,7 +448,7 @@ function EarningsDrawer({ sym, list, liveEarnings, loading, onNavigate, onClose 
               Open {sym} in Stock Intelligence →
             </button>
           </div>
-          </div>
+          </div>)}
         </div>
       </div>
     </>

@@ -150,6 +150,34 @@ export function quartersFromEpsHistory(epsHistory: EpsHistoryRow[]): QuarterFina
     }));
 }
 
+/**
+ * Whether the company has reported earnings — an EPS actual from an earnings
+ * report, not just statement rows.
+ *
+ * A freshly listed company arrives with seven quarters of revenue and net
+ * income lifted from its IPO filing, so `quarters` is not empty but nothing was
+ * ever reported as a public company: ANT (listed 19 Nov 2026) had EPS empty in
+ * six quarters, a placeholder `0` in the seventh (against a $23B loss) and an
+ * `epsHistory` holding only its first report, still in the future. Judging by
+ * "are there rows" drew an empty EPS chart and a table of blanks for it.
+ *
+ * Reported = any FMP EPS actual (history, or the adjusted actual on a quarter),
+ * or a real GAAP quarterly EPS. A GAAP EPS of exactly 0 does not count: it is
+ * how a missing figure comes through, and a real $0.00 quarter always sits next
+ * to others that do count.
+ */
+export function hasReportedEarnings(
+  doc: (Pick<FinancialsDoc, "quarters"> & { epsHistory?: EpsHistoryRow[] | null }) | null | undefined,
+): boolean {
+  if (!doc) return false;
+  if ((doc.epsHistory ?? []).some(h => h.epsActual != null)) return true;
+  return (doc.quarters ?? []).some(q => {
+    if (q.epsActualReported != null) return true;
+    const eps = gaapQuarterEps(q);
+    return eps != null && eps !== 0;
+  });
+}
+
 /** `quarters` when the filer publishes them, else the reported-EPS history. */
 function quarterSource(doc: FinancialsDoc): QuarterFinancials[] {
   return doc.quarters.length > 0

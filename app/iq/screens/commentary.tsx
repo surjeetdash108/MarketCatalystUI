@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import { StockLogo, DataState, VendorTag, useShowVendorTags, vendorText, cls, sign, fmt, titleCaseLabel, headlineLeadsWithTicker } from "../utils";
 import { useIQActions } from "../shell";
@@ -9,6 +9,9 @@ import { useApiList } from "../hooks/useApiList";
 import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
 import { useApiResource } from "../hooks/useApiResource";
 import { useNewsWire } from "../hooks/useNewsWire";
+import { useFreshStories } from "../hooks/useFreshStories";
+import { useArrivalMotion } from "../hooks/useArrivalMotion";
+import { freshStoryKey, freshStoryKeys } from "../fresh-stories";
 import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
 import type { NewsArticleDoc, CompanyDoc, WatchlistDoc, HoldingDoc } from "../types";
@@ -303,7 +306,7 @@ function FeedItemAnalysis({ ticker }: { ticker: string }) {
    the metadata line, expanded it shows the full summary, the inline AI analysis
    for the ticker and the actions (◆ Analysis drawer, read the source article).
    The logo still opens the stock; the ticker prefix still filters the feed. */
-function FeedItem({ item, i, total, isOpen, onToggle, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight}: {
+function FeedItemBody({ item, i, total, isOpen, onToggle, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight}: {
   item: NewsArticleDoc;
   i: number;
   total: number;
@@ -662,6 +665,23 @@ function FeedItem({ item, i, total, isOpen, onToggle, onTicker, onStockOpen, onA
     </article>
   );
 }
+
+/* Each story sits in its own tinted box (.lfb-row). A story that just arrived
+   (`fresh`) flashes green for a few seconds and carries a NEW chip — the same
+   cue as the Live Feed preview. `data-fid` / `data-fresh` are what
+   useArrivalMotion reads to drop the row in and slide the others down. */
+function FeedItem({ fresh, ...rest }: ComponentProps<typeof FeedItemBody> & { fresh: boolean }) {
+  return (
+    <div
+      className={`lfb-row${fresh ? " lfb-fresh" : ""}`}
+      data-fid={rest.item.id}
+      data-fresh={fresh ? "1" : undefined}
+    >
+      {fresh && <span className="lfb-new">NEW</span>}
+      <FeedItemBody {...rest} />
+    </div>
+  );
+}
 /* ── Main commentary / Live Feed screen ── */
 
 
@@ -878,7 +898,7 @@ export function CommentaryScreen() {
   // gone nothing on this screen reads them, so the two requests go too rather
   // than loading data that is never rendered. The macro-regime read still has a
   // home on the Macro & VIX screen.
-  const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Announcement, 2 = Weekly, 3 = Monthly
+  const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Earnings Announcement, 2 = Weekly, 3 = Monthly
   const wire = useNewsWire(mainTab === 0);
   // Results companies have declared (today + yesterday), as news-shaped rows from
   // the stored earnings data — so an earnings release lands in the stream even
@@ -949,7 +969,33 @@ export function CommentaryScreen() {
     ...(earningsRows ?? []),
   ];
   const sorted = sortNewsDesc(liveNews);
-  const premarket  = sorted.filter(n => etHour(n.publishedAt) < 9.5);
+
+  /* Stories that arrive while the page is open get the green flash + NEW chip.
+     The baseline waits for the first full load (synced list, first wire poll,
+     earnings rows) so the wire's first batch is not flashed as "new"; if the
+     wire or earnings call never answers, stop waiting 6 s after the synced list
+     lands — counted only while the tab is visible, because the wire does not
+     poll in a hidden tab and would otherwise be skipped from the baseline.
+     Newness is judged on the whole feed, before any tab / filter / page, so a
+     story that arrives under a filter is still marked when it comes into view. */
+  const [stopWaiting, setStopWaiting] = useState(false);
+  useEffect(() => {
+    if (liveNewsLoading) return;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const start = () => { t = setTimeout(() => setStopWaiting(true), 6000); };
+    const onVisible = () => {
+      if (document.hidden) return;
+      document.removeEventListener("visibilitychange", onVisible);
+      start();
+    };
+    if (document.hidden) document.addEventListener("visibilitychange", onVisible);
+    else start();
+    return () => { clearTimeout(t); document.removeEventListener("visibilitychange", onVisible); };
+  }, [liveNewsLoading]);
+  const feedReady = !liveNewsLoading && ((wire.polledAt !== null && earningsRows !== null) || stopWaiting);
+  const freshKeys = useFreshStories(sorted.map(freshStoryKeys), feedReady);
+
+  const premarket = sorted.filter(n => etHour(n.publishedAt) < 9.5);
   const afterHours = sorted.filter(n => etHour(n.publishedAt) >= 16);
   // Macro = market-wide stories (FMP general news on the live wire). Synced
   // company news carries category null, which used to land every story here.
@@ -1037,6 +1083,9 @@ export function CommentaryScreen() {
     const hay = [p.header, p.summary, ...p.bullets.map(b => `${b.label} ${b.text}`), ...p.tickers].join(" ").toLowerCase();
     return hay.includes(q.replace(/^\$/, ""));
   });
+  // A new story drops in at the top and the rows under it slide down. Scope =
+  // which list this is, so a tab / filter / page change is not mistaken for an arrival.
+  useArrivalMotion(feedBodyRef, `${feedKey}|${pw.page}`);
   const goPage = (p: number) => { setFeedPage(p); setOpenId(null); feedBodyRef.current?.scrollTo({ top: 0 }); };
 
   // LIVE %change for the tickers actually rendered in the feed, via the app-wide
@@ -1068,7 +1117,7 @@ export function CommentaryScreen() {
       <div className="page-head">
         <div className="tabs">
           <button className={`tab${mainTab === 0 ? " on" : ""}`} style={mainTab === 0 ? SEL_TAB : undefined} onClick={() => setMainTab(0)}>News</button>
-          <button className={`tab${mainTab === 1 ? " on" : ""}`} style={mainTab === 1 ? SEL_TAB : undefined} onClick={() => setMainTab(1)}>Announcement</button>
+          <button className={`tab${mainTab === 1 ? " on" : ""}`} style={mainTab === 1 ? SEL_TAB : undefined} onClick={() => setMainTab(1)}>Earnings Announcement</button>
           <button className={`tab${mainTab === 2 ? " on" : ""}`} style={mainTab === 2 ? SEL_TAB : undefined} onClick={() => setMainTab(2)}>Weekly Summary</button>
           <button className={`tab${mainTab === 3 ? " on" : ""}`} style={mainTab === 3 ? SEL_TAB : undefined} onClick={() => setMainTab(3)}>Monthly Summary</button>
         </div>
@@ -1225,6 +1274,7 @@ export function CommentaryScreen() {
                 <FeedItem
                   key={item.id}
                   item={item}
+                  fresh={freshKeys.has(freshStoryKey(item))}
                   i={pw.from + i}
                   total={feed.length}
                   isOpen={openId === item.id}

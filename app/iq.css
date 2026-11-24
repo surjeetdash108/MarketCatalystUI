@@ -11694,6 +11694,22 @@ button.pill.lf-chip {
   padding: 5px 7px;
 }
 
+/* The full-screen button stays in the top-right corner of the toolbar. In a narrow
+   pop-up the toolbar wraps onto a second row, and the button used to drop to the
+   start of that row; pinned to the corner it stays put, and the toolbar leaves it
+   room. */
+.cc-tools {
+  position: relative;
+  padding-right: 38px;
+}
+
+.iq-root .cc-tools>.cc-fullbtn {
+  position: absolute;
+  top: 23px;
+  right: 0;
+  transform: translateY(-50%);
+}
+
 .cc-tvbtn svg {
   opacity: .75;
 }
@@ -12745,9 +12761,15 @@ table.sd-ftab {
   color: var(--warn);
 }
 
+/* The forward (*) row is an analyst forecast: every figure reads yellow, whatever its sign. */
+.sd-ftab tr.est td,
+.sd-ftab tr.est td .up,
+.sd-ftab tr.est td .down {
+  color: var(--warn);
+}
+
 .sd-ftab tr.est td {
   background: var(--up-dim);
-  color: var(--text-dim-solid);
 }
 
 .sd-ftab .up {
@@ -12971,6 +12993,11 @@ table.sd-ftab {
 
 .sd-kv {
   margin: 0;
+}
+
+/* Key levels (Overview): a small heading above each part of the grid. */
+.sd-kv-grid h6.sd-sec {
+  padding: 8px 2px 4px;
 }
 
 .sd-kv-row {
@@ -14273,7 +14300,7 @@ h6.sd-sec {
 .iq-root .hm2-search input::-webkit-search-cancel-button { display: none; }
 .iq-root .hm2-search .clr { border: 0; background: none; color: var(--text-dim-solid); font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 2px; }
 
-.iq-root .hm2-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 12px; }
+.iq-root .hm2-controls { container-type: inline-size; container-name: hm2c; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 12px; }
 .iq-root .hm2-seg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .iq-root .hm2-seg button { flex: none; padding: 8px 16px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: .88rem; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background .13s, color .13s; }
 .iq-root .hm2-seg button:hover:not(:disabled):not(.on) { background: var(--surface-2); color: var(--text-hi); }
@@ -14285,11 +14312,41 @@ h6.sd-sec {
 .iq-root .hm2-back { height: 42px; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; background: transparent; color: var(--brand); font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; }
 .iq-root .hm2-back:hover { background: var(--brand-dim); }
 
-.iq-root .hm2-legend { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 10px 24px; margin-bottom: 12px; }
-.iq-root .hm2-scale { width: min(360px, 100%); }
+.iq-root .hm2-scale { flex: none; width: 220px; max-width: 100%; }
 .iq-root .hm2-bar { height: 12px; border-radius: 6px; }
 .iq-root .hm2-ticks { display: flex; justify-content: space-between; margin-top: 5px; font-family: var(--f-mono); font-size: .7rem; color: var(--text-dim-solid); }
-.iq-root .hm2-cb { display: inline-flex; align-items: center; gap: 8px; font-size: .86rem; color: var(--text-hi); cursor: pointer; }
+.iq-root .hm2-find-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 12px; }
+
+/* The filters, Sector picker and colour scale share one line. When the row is short
+   of room the controls tighten in two steps (keyed to the row's own width, so a
+   collapsed sidebar is accounted for) rather than wrapping the scale onto a new line. */
+@container hm2c (max-width: 1640px) {
+  .iq-root .hm2-controls { gap: 10px 10px; }
+  .iq-root .hm2-seg { padding: 3px; gap: 3px; }
+  .iq-root .hm2-seg button { padding: 8px 12px; font-size: .84rem; }
+  .iq-root .hm2-sector { gap: 8px; font-size: .84rem; }
+  .iq-root .hm2-sector select { padding: 0 8px; font-size: .84rem; }
+  .iq-root .hm2-scale { width: 190px; }
+  .iq-root .hm2-ticks { font-size: .64rem; }
+}
+@container hm2c (max-width: 1440px) {
+  .iq-root .hm2-controls { gap: 10px 8px; }
+  .iq-root .hm2-seg button { padding: 8px 9px; font-size: .8rem; }
+  .iq-root .hm2-sector { gap: 6px; font-size: .8rem; }
+  .iq-root .hm2-sector select { width: 156px; height: 38px; padding: 0 6px; font-size: .8rem; }
+  .iq-root .hm2-back { height: 38px; padding: 0 10px; font-size: .8rem; }
+  .iq-root .hm2-scale { width: 160px; }
+  .iq-root .hm2-ticks { font-size: .6rem; }
+}
+@container hm2c (max-width: 1290px) {
+  .iq-root .hm2-controls { gap: 10px 6px; }
+  .iq-root .hm2-seg { padding: 2px; gap: 2px; }
+  .iq-root .hm2-seg button { padding: 8px 7px; font-size: .76rem; }
+  .iq-root .hm2-sector { gap: 5px; font-size: .76rem; }
+  .iq-root .hm2-sector select { width: 138px; font-size: .76rem; }
+  .iq-root .hm2-scale { width: 136px; }
+  .iq-root .hm2-ticks { font-size: .56rem; }
+}
 
 .iq-root .hm2-map { position: relative; width: 100%; height: calc(100vh - 380px); min-height: 480px; overflow: hidden; border-radius: 10px; background: var(--bg); }
 .iq-root .hm2-all { position: absolute; inset: 0; }
@@ -14313,8 +14370,6 @@ h6.sd-sec {
 .iq-root .hm2-tile .pct { margin-top: 3px; font-family: var(--f-mono); line-height: 1; opacity: .9; }
 .iq-root .hm2-tile:hover, .iq-root .hm2-tile.mark { outline: 2px solid #fff; outline-offset: -2px; z-index: 2; }
 .iq-root .hm2-tile.dim { opacity: .2; }
-/* The "+N more" bundle: hatched, so it reads as a group of small stocks, not a company. */
-.iq-root .hm2-tile.more { background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, .24) 0 6px, rgba(0, 0, 0, 0) 6px 12px); }
 
 .iq-root .hm2-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; }
 .iq-root .hm2-empty .t { font-size: .92rem; font-weight: 700; color: var(--text-hi); }
@@ -14332,4 +14387,65 @@ h6.sd-sec {
 .ipo-tabs .tab.on {
   background: var(--brand);
   color: var(--on-brand);
+}
+
+/* ── Live Feed: story boxes + the "NEW" arrival cue ─────────────────────────
+   Each story sits in its own softly tinted box so neighbouring stories read as
+   separate items. A story that just arrived flashes brand-green for ~3 s and
+   carries a NEW chip until it ages out (useFreshStories); useArrivalMotion drops
+   the row in from above and slides the rest down. Ported from the Live Feed
+   preview. */
+.lfb-row {
+  --lfb-bg: color-mix(in srgb, var(--text-hi) 3.5%, transparent);
+  position: relative;
+  margin: 0 0 9px;
+  border: 1px solid var(--border-soft, var(--border));
+  border-radius: 12px;
+  background: var(--lfb-bg);
+  overflow: hidden;
+  transition: border-color .18s ease;
+}
+
+.lfb-row:hover {
+  border-color: var(--border-strong, var(--border));
+}
+
+/* The row's own divider and padding give way to the box. */
+.lfb-row>article {
+  border-bottom: none !important;
+  padding-top: 8px !important;
+  padding-bottom: 12px !important;
+}
+
+.lfb-fresh {
+  animation: lfb-flash 3.2s ease-out;
+}
+
+@keyframes lfb-flash {
+  0% {
+    background: color-mix(in srgb, var(--brand) 26%, transparent);
+  }
+
+  100% {
+    background: var(--lfb-bg);
+  }
+}
+
+.lfb-new {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 2;
+  font: 800 .6rem/1 var(--f-mono, monospace);
+  letter-spacing: .08em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--brand);
+  color: #04110a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lfb-fresh {
+    animation: none;
+  }
 }

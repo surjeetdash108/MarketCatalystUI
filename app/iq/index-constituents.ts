@@ -1,20 +1,17 @@
 /**
- * Index-constituent membership — static reference config (public facts), NOT
- * market data. Same category as `screenerPresets`: it labels/organises the UI,
- * it does not carry prices or fundamentals. Prices/changes/market caps are all
- * still fetched live from the backend; these lists only decide WHICH of the
- * live companies a given heatmap tab includes.
+ * Index-constituent membership: the STATIC FALLBACK. The Heatmap reads the live
+ * lists (GET /market-data/index-members, written premarket by the index-members
+ * job from FMP's constituent endpoints) through indexMemberSet() at the bottom of
+ * this file, and uses these only until that answers or when it is thin. They are
+ * 2024 lists and have drifted: measured 24 Nov 2026, the S&P list lacked 55
+ * members (PLTR, CRWD, DELL…) and held 45 that had left, and the Nasdaq-100 list
+ * lacked SPCX and WMT. Do not rely on them where the live list is available.
+ * Static reference config, NOT market data: it only decides WHICH of the live
+ * companies a tab includes; prices, changes and caps come from the backend.
  *
- * Why static: the data plan does not authorise index products (Polygon
- * `I:NDX`/`I:SPX`/… are NOT_AUTHORIZED), so there is no dynamic membership feed.
- * Memberships drift on index reconstitutions — re-verify periodically. The
- * heatmap intersects these with the live 260-name universe, so a member we do
- * not sync simply does not appear, and a name we sync that is not a member is
- * filtered out.
- *
- * Russell 2000 is intentionally absent: it is 2000 small-caps and our synced
- * universe is large-caps, so the intersection is empty. The heatmap shows an
- * explicit "not available" note for that tab rather than an empty treemap.
+ * Russell 2000 has no set: no feed supplies it. The heatmap's fourth tab is
+ * therefore labelled "Small & mid caps" and shows every stock under $40B; it is
+ * not the index.
  */
 
 // Dow Jones Industrial Average — 30 components (as of 2024-11, after NVDA/SHW
@@ -108,3 +105,23 @@ export const INDEX_MEMBERS: Record<"SP500" | "NDX" | "DOW", Set<string>> = {
  */
 export type IndexTabKey = keyof typeof INDEX_MEMBERS | "RUT" | null;
 export const HEATMAP_TAB_KEYS: IndexTabKey[] = [null, "SP500", "NDX", "DOW", "RUT"];
+
+/** Live membership as `GET /market-data/index-members` serves it (index-members job). */
+export interface LiveIndexMembers {
+  sp500?: string[];
+  nasdaq100?: string[];
+  dow30?: string[];
+}
+
+/** Fewer than this many live names is a vendor hiccup, not an index: keep the static list. */
+const MIN_LIVE_MEMBERS: Record<"SP500" | "NDX" | "DOW", number> = { SP500: 400, NDX: 80, DOW: 25 };
+
+/**
+ * The tickers a heatmap index tab includes: the live constituent list when the
+ * backend has one that looks complete, else the static fallback above (also what
+ * shows while the request is in flight or if it fails).
+ */
+export function indexMemberSet(key: "SP500" | "NDX" | "DOW", live: LiveIndexMembers | null | undefined): Set<string> {
+  const list = key === "SP500" ? live?.sp500 : key === "NDX" ? live?.nasdaq100 : live?.dow30;
+  return list && list.length >= MIN_LIVE_MEMBERS[key] ? new Set(list) : INDEX_MEMBERS[key];
+}

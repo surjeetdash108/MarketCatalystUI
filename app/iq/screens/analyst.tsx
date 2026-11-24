@@ -16,6 +16,7 @@ import {
   buildAnalystActions,
   firmKey,
   pctTxt,
+  oneCallPerStock,
   resolveActionMeta,
   shownPrice,
 } from "../analyst-actions-engine";
@@ -548,6 +549,9 @@ export function AnalystScreen() {
     // Portfolio & Watchlist calls
     const portCalls = recentActions.filter(a => a.held);
     const watchCalls = recentActions.filter(a => a.watched);
+    // The tickers shown on those two cards: each stock once, however many calls it drew.
+    const portStocks = oneCallPerStock(portCalls);
+    const watchStocks = oneCallPerStock(watchCalls);
 
     return {
       bullPct,
@@ -564,6 +568,8 @@ export function AnalystScreen() {
       sortedSectors,
       portCalls,
       watchCalls,
+      portStocks,
+      watchStocks,
       highSignalCount: recentActions.filter(a => a.score >= 75).length,
       touchMyStocksCount: portCalls.length + watchCalls.length,
     };
@@ -1137,11 +1143,14 @@ export function AnalystScreen() {
                 </span>
               </div>
               <div style={{ display: "flex", gap: 6, overflow: "hidden" }}>
-                {summaryMetrics.portCalls.slice(0, 4).map(c => (
-                  <span key={c.id} style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: c.dir >= 0 ? G : R }}>
+                {summaryMetrics.portStocks.slice(0, 4).map(c => (
+                  <span key={c.t} style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: c.dir >= 0 ? G : R }}>
                     {c.t}
                   </span>
                 ))}
+                {summaryMetrics.portStocks.length > 4 && (
+                  <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: TEXT_MUTED }}>+{summaryMetrics.portStocks.length - 4}</span>
+                )}
                 {summaryMetrics.portCalls.length === 0 && <span style={{ fontSize: 12, color: TEXT_MUTED }}>No actions on held stocks</span>}
               </div>
 
@@ -1174,6 +1183,19 @@ export function AnalystScreen() {
                   WATCHLIST
                 </span>
               </div>
+              {/* The stocks behind those calls, each once however many calls it drew. */}
+              {summaryMetrics.watchStocks.length > 0 && (
+                <div style={{ display: "flex", gap: 6, overflow: "hidden" }}>
+                  {summaryMetrics.watchStocks.slice(0, 4).map(c => (
+                    <span key={c.t} style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: c.dir >= 0 ? G : R }}>
+                      {c.t}
+                    </span>
+                  ))}
+                  {summaryMetrics.watchStocks.length > 4 && (
+                    <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: TEXT_MUTED }}>+{summaryMetrics.watchStocks.length - 4}</span>
+                  )}
+                </div>
+              )}
               {summaryMetrics.watchCalls.length === 0 && (
                 <div style={{ fontSize: 12, color: TEXT_MUTED }}>
                   {watchedTickers.size === 0
@@ -1201,11 +1223,11 @@ export function AnalystScreen() {
 
           {/* Master / Detail Two-Column Layout — fills the screen below the summary; each column scrolls inside it */}
           <div ref={fillRemainingHeight} style={{ display: "grid", gridTemplateColumns: "minmax(300px, 1fr) minmax(520px, 1.45fr)", gap: 24, alignItems: "stretch", minHeight: 0 }}>
-            {/* ── LEFT COLUMN: Moving the needle today ── */}
+            {/* ── LEFT COLUMN: Moving the needle (calls from the last RECENT_DAYS days, not just today) ── */}
             <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "16px 18px 12px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em", color: TEXT_HI }}>Moving the needle today</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em", color: TEXT_HI }}>Moving the needle</span>
                   <span style={{ fontSize: 12, color: TEXT_MUTED }}>Calls in the last {RECENT_DAYS} days · signal 75+</span>
                 </div>
                 <span style={{ marginLeft: "auto", fontSize: 13, color: TEXT_MUTED, whiteSpace: "nowrap" }}>
