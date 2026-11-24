@@ -951,7 +951,7 @@ export function InsiderScreen() {
             alignItems: "center",
             gap: 8,
             flexWrap: "wrap",
-            fontSize: 12.5,
+            fontSize: 13.5,
             color: "var(--text-pure)",
           }}
         >
@@ -993,7 +993,7 @@ export function InsiderScreen() {
           <span
             style={{
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9.5,
+              fontSize: 11,
               fontWeight: 700,
               padding: "2px 6px",
               borderRadius: 4,
@@ -1032,7 +1032,7 @@ export function InsiderScreen() {
                 gap: 7,
                 padding: "6px 14px",
                 borderRadius: 999,
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: isActive ? 800 : 600,
                 cursor: "pointer",
                 border: `1px solid ${isActive ? UP : "var(--border)"}`,
@@ -1069,7 +1069,7 @@ export function InsiderScreen() {
               background: "var(--surface-1)",
             }}
           >
-            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: "var(--text-pure)", padding: "0 6px 0 8px" }}>
+            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", color: "var(--text-pure)", padding: "0 6px 0 8px" }}>
               MATCH
             </span>
             {(["any", "all"] as const).map((m) => {
@@ -1081,7 +1081,7 @@ export function InsiderScreen() {
                   onClick={() => setLensMode(m)}
                   title={m === "any" ? "Stocks on at least one selected lens" : "Only stocks on every selected lens"}
                   style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: on ? 800 : 600,
                     padding: "4px 10px",
                     borderRadius: 6,
@@ -1103,7 +1103,7 @@ export function InsiderScreen() {
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 800,
               letterSpacing: "0.06em",
               color: "var(--text-pure)",
@@ -1129,7 +1129,7 @@ export function InsiderScreen() {
                   onClick={() => setRangeDays(d)}
                   style={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: on ? 800 : 600,
                     padding: "4px 10px",
                     borderRadius: 6,
@@ -1184,14 +1184,14 @@ export function InsiderScreen() {
           >
             <div
               title={searchQ ? undefined : selectedDefs.map((d) => d.label).join(" + ")}
-              style={{ fontSize: 15, fontWeight: 800, color: "var(--text-pure)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              style={{ fontSize: 16, fontWeight: 800, color: "var(--text-pure)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
             >
               {searchQ ? "Search results" : lensTitle(selectedDefs.map((d) => d.label))}
             </div>
             <span
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9.5,
+                fontSize: 11,
                 fontWeight: 800,
                 padding: "2px 6px",
                 borderRadius: 4,
@@ -1201,7 +1201,7 @@ export function InsiderScreen() {
             >
               {searchQ ? "ALL" : lensSources(selectedDefs.map((d) => d.src))}
             </span>
-            <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "var(--text-pure-dim)" }}>
+            <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 600, color: "var(--text-pure-dim)" }}>
               {filteredStatsList.length} stocks
             </span>
           </div>
@@ -1227,7 +1227,7 @@ export function InsiderScreen() {
                 background: "var(--surface-2)",
               }}
             >
-              <span style={{ color: "var(--text-pure)", fontSize: 13, fontWeight: 700 }}>⌕</span>
+              <span style={{ color: "var(--text-pure)", fontSize: 14, fontWeight: 700 }}>⌕</span>
               <input
                 ref={searchInputRef}
                 value={searchQuery}
@@ -1244,14 +1244,14 @@ export function InsiderScreen() {
                   outline: "none",
                   color: "var(--text-pure)",
                   fontFamily: "'Manrope', sans-serif",
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 600,
                 }}
               />
               <span
                 style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10.5,
+                  fontSize: 11.5,
                   fontWeight: 600,
                   color: "var(--text-pure-dim)",
                   border: "1px solid var(--border)",
@@ -1262,7 +1262,7 @@ export function InsiderScreen() {
                 /
               </span>
             </div>
-            <div style={{ fontSize: 11.5, color: "var(--text-pure-dim)", fontWeight: 500, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 12.5, color: "var(--text-pure-dim)", fontWeight: 500, lineHeight: 1.4 }}>
               {searchQ
                 ? "Showing insider + 13F read for every match."
                 : !multiLens
@@ -1320,7 +1320,7 @@ export function InsiderScreen() {
                   <span
                     style={{
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 700,
                       color: "var(--text-pure-dim)",
                     }}
@@ -1355,12 +1355,12 @@ export function InsiderScreen() {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 14.5, fontWeight: 800, letterSpacing: "0.01em", flexShrink: 0, color: "var(--text-pure)" }}>
+                      <span style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: "0.01em", flexShrink: 0, color: "var(--text-pure)" }}>
                         {s.t}
                       </span>
                       <span
                         style={{
-                          fontSize: 9.5,
+                          fontSize: 11,
                           fontWeight: 700,
                           padding: "2px 5px",
                           borderRadius: 4,
@@ -1374,7 +1374,7 @@ export function InsiderScreen() {
                       {rowAlign && (
                         <span
                           title={rowAlign.text}
-                          style={{ fontSize: 10.5, fontWeight: 800, color: rowAlign.color, whiteSpace: "nowrap" }}
+                          style={{ fontSize: 11.5, fontWeight: 800, color: rowAlign.color, whiteSpace: "nowrap" }}
                         >
                           {rowAlign.short}
                         </span>
@@ -1382,7 +1382,7 @@ export function InsiderScreen() {
                     </div>
                     <span
                       style={{
-                        fontSize: 11.5,
+                        fontSize: 12.5,
                         fontWeight: 500,
                         color: "var(--text-pure-dim)",
                         whiteSpace: "nowrap",
@@ -1397,23 +1397,23 @@ export function InsiderScreen() {
                     <span
                       style={{
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 12.5,
+                        fontSize: 13.5,
                         fontWeight: 700,
                         color: metricColor,
                       }}
                     >
                       {metricText}
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-pure-dim)", whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-pure-dim)", whiteSpace: "nowrap" }}>
                       {metricSub}
                     </span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-pure)" }}>{comp.price != null ? `$${comp.price.toFixed(2)}` : "—"}</span>
+                    <span style={{ fontSize: 14.5, fontWeight: 700, color: "var(--text-pure)" }}>{comp.price != null ? `$${comp.price.toFixed(2)}` : "—"}</span>
                     {comp.chg != null && (
                       <span
                         style={{
-                          fontSize: 11.5,
+                          fontSize: 12.5,
                           fontWeight: 700,
                           color: comp.chg >= 0 ? UP : DN,
                         }}
@@ -1492,11 +1492,11 @@ export function InsiderScreen() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flexShrink: 0 }}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.1, color: "var(--text-pure)" }}>{deepDive.t}</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1, color: "var(--text-pure)" }}>{deepDive.t}</span>
                   {deepDive.hasAlign && (
                     <span
                       style={{
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: 700,
                         padding: "3px 8px",
                         borderRadius: 6,
@@ -1509,7 +1509,7 @@ export function InsiderScreen() {
                     </span>
                   )}
                 </span>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-pure-dim)", whiteSpace: "nowrap" }}>{deepDive.name}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-pure-dim)", whiteSpace: "nowrap" }}>{deepDive.name}</span>
               </div>
               <div
                 style={{
@@ -1523,7 +1523,7 @@ export function InsiderScreen() {
                 <span
                   style={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 21,
+                    fontSize: 22,
                     fontWeight: 800,
                     color: "var(--text-pure)",
                   }}
@@ -1533,7 +1533,7 @@ export function InsiderScreen() {
                 <span
                   style={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 13.5,
+                    fontSize: 14.5,
                     fontWeight: 700,
                     color: deepDive.chgColor,
                   }}
@@ -1545,7 +1545,7 @@ export function InsiderScreen() {
                 onClick={() => openStockFull(deepDive.t)}
                 style={{
                   marginLeft: "auto",
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 700,
                   padding: "7px 14px",
                   borderRadius: 8,
@@ -1589,7 +1589,7 @@ export function InsiderScreen() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 800,
                       letterSpacing: "0.08em",
                       color: "var(--text-pure)",
@@ -1611,10 +1611,10 @@ export function InsiderScreen() {
                     ))}
                   </div>
                 </div>
-                <div style={{ fontSize: 15.5, fontWeight: 800, color: deepDive.iColor }}>
+                <div style={{ fontSize: 16.5, fontWeight: 800, color: deepDive.iColor }}>
                   {deepDive.iVerdict}
                 </div>
-                <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-pure-dim)", lineHeight: 1.5 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-pure-dim)", lineHeight: 1.5 }}>
                   {deepDive.iWhy}
                 </div>
               </div>
@@ -1634,7 +1634,7 @@ export function InsiderScreen() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 800,
                       letterSpacing: "0.08em",
                       color: "var(--text-pure)",
@@ -1646,7 +1646,7 @@ export function InsiderScreen() {
                     style={{
                       marginLeft: "auto",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: 700,
                       color: deepDive.fColor,
                     }}
@@ -1654,10 +1654,10 @@ export function InsiderScreen() {
                     {deepDive.fNet}
                   </span>
                 </div>
-                <div style={{ fontSize: 15.5, fontWeight: 800, color: deepDive.fColor }}>
+                <div style={{ fontSize: 16.5, fontWeight: 800, color: deepDive.fColor }}>
                   {deepDive.fVerdict}
                 </div>
-                <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-pure-dim)", lineHeight: 1.5 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text-pure-dim)", lineHeight: 1.5 }}>
                   {deepDive.fWhy}
                 </div>
               </div>
@@ -1671,11 +1671,11 @@ export function InsiderScreen() {
                   alignItems: "center",
                   gap: 16,
                   flexWrap: "wrap",
-                  fontSize: 11.5,
+                  fontSize: 12.5,
                   color: "var(--text-pure-dim)",
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", color: "var(--text-pure)" }}>
+                <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", color: "var(--text-pure)" }}>
                   PRICE · 6M
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
@@ -1718,7 +1718,7 @@ export function InsiderScreen() {
                     left: 8,
                     top: 6,
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 600,
                     color: "var(--warn)",
                   }}
@@ -1765,7 +1765,7 @@ export function InsiderScreen() {
                         display: "grid",
                         placeItems: "center",
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 8,
+                        fontSize: 9,
                         fontWeight: 700,
                         color: m.fill === UP || m.fill === DN ? "var(--on-brand, #ffffff)" : "var(--text-hi)",
                         cursor: "pointer",
@@ -1798,19 +1798,19 @@ export function InsiderScreen() {
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-pure)" }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-pure)" }}>
                               {m.tip.name}
                             </span>
-                            <span style={{ fontSize: 11.5, fontWeight: 500, color: "var(--text-pure-dim)" }}>{m.tip.role}</span>
+                            <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-pure-dim)" }}>{m.tip.role}</span>
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: m.tip.color }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: m.tip.color }}>
                               {m.tip.type}
                             </span>
                             <span
                               style={{
                                 fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: 14,
+                                fontSize: 15,
                                 fontWeight: 800,
                                 color: m.tip.color,
                               }}
@@ -1823,7 +1823,7 @@ export function InsiderScreen() {
                               display: "grid",
                               gridTemplateColumns: "auto 1fr",
                               gap: "3px 12px",
-                              fontSize: 11.5,
+                              fontSize: 12.5,
                             }}
                           >
                             <span style={{ color: "var(--text-pure-dim)", fontWeight: 500 }}>Trade</span>
@@ -1852,7 +1852,7 @@ export function InsiderScreen() {
                           </div>
                           <div
                             style={{
-                              fontSize: 10.5,
+                              fontSize: 11.5,
                               color: "var(--text-pure-dim)",
                               fontWeight: 500,
                               paddingTop: 6,
@@ -1874,7 +1874,7 @@ export function InsiderScreen() {
                   display: "flex",
                   justifyContent: "space-between",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 600,
                   color: "var(--text-pure-dim)",
                   padding: "0 4px",
@@ -1902,10 +1902,10 @@ export function InsiderScreen() {
               {/* Left Sub-Panel: Form 4 Filings */}
               <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid var(--border-soft)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 20px 10px" }}>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-pure)" }}>Form 4 filings</span>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--text-pure)" }}>Form 4 filings</span>
                   <span
                     style={{
-                      fontSize: 10.5,
+                      fontSize: 11.5,
                       fontWeight: 700,
                       padding: "2px 7px",
                       borderRadius: 4,
@@ -1917,7 +1917,7 @@ export function InsiderScreen() {
                   </span>
                   <span
                     style={{
-                      fontSize: 10.5,
+                      fontSize: 11.5,
                       fontWeight: 700,
                       padding: "2px 7px",
                       borderRadius: 4,
@@ -1945,7 +1945,7 @@ export function InsiderScreen() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                       <span
                         style={{
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 700,
                           color: "var(--text-pure)",
                           whiteSpace: "nowrap",
@@ -1955,7 +1955,7 @@ export function InsiderScreen() {
                       >
                         {tr.name} <span style={{ fontWeight: 500, color: "var(--text-pure-dim)" }}>· {tr.role}</span>
                       </span>
-                      <span style={{ fontSize: 11.5, color: "var(--text-pure-dim)", fontWeight: 500 }}>
+                      <span style={{ fontSize: 12.5, color: "var(--text-pure-dim)", fontWeight: 500 }}>
                         {tr.typeLabel} · {tr.sharesStr} sh @ {tr.priceStr} · {tr.dateStr}
                       </span>
                     </div>
@@ -1963,7 +1963,7 @@ export function InsiderScreen() {
                       <span
                         style={{
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: 700,
                           padding: "3px 8px",
                           borderRadius: 5,
@@ -1977,7 +1977,7 @@ export function InsiderScreen() {
                       <span
                         style={{
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 12.5,
+                          fontSize: 13.5,
                           fontWeight: 700,
                           color: tr.color,
                         }}
@@ -1987,7 +1987,7 @@ export function InsiderScreen() {
                       <span
                         style={{
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 10.5,
+                          fontSize: 11.5,
                           fontWeight: 600,
                           color: tr.sinceColor,
                         }}
@@ -2001,7 +2001,7 @@ export function InsiderScreen() {
                   <div
                     style={{
                       padding: "16px 20px",
-                      fontSize: 12.5,
+                      fontSize: 13.5,
                       fontWeight: 500,
                       color: "var(--text-pure-dim)",
                       borderTop: "1px solid var(--border-soft)",
@@ -2016,8 +2016,8 @@ export function InsiderScreen() {
               {/* Right Sub-Panel: 13F Holders */}
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 20px 10px" }}>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-pure)" }}>13F holders</span>
-                  <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 600, color: "var(--text-pure-dim)" }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--text-pure)" }}>13F holders</span>
+                  <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 600, color: "var(--text-pure-dim)" }}>
                     {deepDive.holders} filers · {deepDive.own} inst.
                   </span>
                 </div>
@@ -2033,7 +2033,7 @@ export function InsiderScreen() {
                       display: "flex",
                       justifyContent: "space-between",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 700,
                     }}
                   >
@@ -2053,7 +2053,7 @@ export function InsiderScreen() {
                     gridTemplateColumns: "minmax(0,1fr) 56px 64px",
                     gap: 8,
                     padding: "6px 20px",
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 800,
                     letterSpacing: "0.06em",
                     color: "var(--text-pure)",
@@ -2079,7 +2079,7 @@ export function InsiderScreen() {
                   >
                     <span
                       style={{
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: 600,
                         color: "var(--text-pure)",
                         whiteSpace: "nowrap",
@@ -2092,7 +2092,7 @@ export function InsiderScreen() {
                     <span
                       style={{
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: 700,
                         textAlign: "right",
                         color: "var(--text-pure)",
@@ -2103,7 +2103,7 @@ export function InsiderScreen() {
                     <span
                       style={{
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 12,
+                        fontSize: 13,
                         textAlign: "right",
                         color: h.color,
                         fontWeight: 700,
@@ -2125,7 +2125,7 @@ export function InsiderScreen() {
           marginTop: "auto",
           padding: "12px 20px",
           borderTop: "1px solid var(--border-soft)",
-          fontSize: 11,
+          fontSize: 12,
           color: "var(--text-pure-dim)",
           lineHeight: 1.5,
           fontWeight: 500,
