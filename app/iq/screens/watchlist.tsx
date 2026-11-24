@@ -149,8 +149,9 @@ export function WatchlistScreen() {
               <>
                 <p style={{ marginBottom: 10, fontSize: ".88rem", lineHeight: 1.55 }}>{summary}</p>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <span className="src-chip">Up {up}/{priced.length}</span>
-                  <span className="src-chip">Synced to your account</span>
+                  <span className="src-chip" title="Watched stocks trading higher today, out of those with a live price">
+                    {up} of {priced.length} up today
+                  </span>
                 </div>
               </>
             )}
