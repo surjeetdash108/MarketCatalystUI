@@ -898,7 +898,7 @@ export function CommentaryScreen() {
   // gone nothing on this screen reads them, so the two requests go too rather
   // than loading data that is never rendered. The macro-regime read still has a
   // home on the Macro & VIX screen.
-  const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Announcement, 2 = Weekly, 3 = Monthly
+  const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Earnings Announcement, 2 = Weekly, 3 = Monthly
   const wire = useNewsWire(mainTab === 0);
   // Results companies have declared (today + yesterday), as news-shaped rows from
   // the stored earnings data — so an earnings release lands in the stream even
@@ -1117,7 +1117,7 @@ export function CommentaryScreen() {
       <div className="page-head">
         <div className="tabs">
           <button className={`tab${mainTab === 0 ? " on" : ""}`} style={mainTab === 0 ? SEL_TAB : undefined} onClick={() => setMainTab(0)}>News</button>
-          <button className={`tab${mainTab === 1 ? " on" : ""}`} style={mainTab === 1 ? SEL_TAB : undefined} onClick={() => setMainTab(1)}>Announcement</button>
+          <button className={`tab${mainTab === 1 ? " on" : ""}`} style={mainTab === 1 ? SEL_TAB : undefined} onClick={() => setMainTab(1)}>Earnings Announcement</button>
           <button className={`tab${mainTab === 2 ? " on" : ""}`} style={mainTab === 2 ? SEL_TAB : undefined} onClick={() => setMainTab(2)}>Weekly Summary</button>
           <button className={`tab${mainTab === 3 ? " on" : ""}`} style={mainTab === 3 ? SEL_TAB : undefined} onClick={() => setMainTab(3)}>Monthly Summary</button>
         </div>
