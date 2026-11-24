@@ -737,6 +737,58 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .pl-opt{text-transform:none;letter-spacing:0;font-weight:500;color:var(--dim2)}
 .pl-count{text-align:right;font:500 10px var(--f-mono);color:var(--dim2);margin-top:4px}
 .pl-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* ── Content pipeline (Blog / Pulse / Live Feed) ─────────────────────────── */
+.cp-switch{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:11px;background:var(--surface);margin-bottom:14px}
+.cp-switch button{border:0;border-radius:8px;padding:9px 16px;font:700 13px var(--f-body);background:transparent;color:var(--dim);cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.cp-switch button.on{background:var(--brand);color:var(--on-brand)}
+.cp-badge{font:700 11px var(--f-mono);padding:1px 7px;border-radius:999px;background:rgba(251,191,36,.18);color:#FCD34D}
+.cp-grid{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.cp-form{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.cp-side{flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.cp-dests{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.cp-dest{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);cursor:pointer}
+.cp-dest.on{border-color:var(--brand);background:rgba(74,222,128,.07)}
+.cp-dest input{width:17px;height:17px;margin:2px 0 0;accent-color:var(--brand)}
+.cp-dest b{display:block;font-size:13.5px;color:var(--text)}
+.cp-dest span{font-size:12px;color:var(--dim);line-height:1.45}
+.cp-block{border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--surface2);display:flex;flex-direction:column;gap:10px}
+.cp-block h4{margin:0;font-size:13.5px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cp-tagai{font:700 11px var(--f-body);padding:2px 8px;border-radius:999px;background:rgba(96,165,250,.14);color:#93C5FD}
+.cp-tagnow{font:700 11px var(--f-body);padding:2px 8px;border-radius:999px;background:rgba(74,222,128,.12);color:var(--brand)}
+.cp-lbl{display:block;font:600 12px var(--f-body);color:var(--dim);margin:0 0 6px}
+.cp-lbl i{font-style:normal;font-weight:500;opacity:.8}
+.cp-help{font-size:11.5px;color:var(--dim)}
+.cp-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.cp-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cp-go{border:0;border-radius:9px;padding:11px 18px;font:800 14px var(--f-body);background:var(--brand);color:var(--on-brand);cursor:pointer}
+.cp-go:disabled{opacity:.55;cursor:default}
+.cp-ghost{border:1px solid var(--border2);border-radius:9px;padding:10px 16px;font:700 13.5px var(--f-body);background:transparent;color:var(--text);cursor:pointer}
+.cp-err{font-size:12.5px;font-weight:600;color:#FCA5A5}
+.cp-tks{display:flex;gap:6px;flex-wrap:wrap}
+.cp-tk{display:inline-flex;align-items:center;gap:6px;font:700 12px var(--f-mono);padding:4px 8px;border-radius:7px;background:rgba(74,222,128,.10);color:var(--brand);border:1px solid rgba(74,222,128,.25)}
+.cp-tk button{border:0;background:transparent;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0}
+.cp-st{display:inline-flex;align-items:center;gap:6px;font:700 12px var(--f-body);padding:3px 10px;border-radius:999px;white-space:nowrap}
+.cp-st::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.cp-st.queued{color:#C7D0CC;background:rgba(199,208,204,.12)}
+.cp-st.writing{color:#93C5FD;background:rgba(96,165,250,.14)}
+.cp-st.review{color:#FCD34D;background:rgba(251,191,36,.14)}
+.cp-st.posted{color:#4ADE80;background:rgba(74,222,128,.12)}
+.cp-st.failed{color:#FCA5A5;background:rgba(248,113,113,.14)}
+.cp-where{font:700 12px var(--f-body);padding:3px 9px;border-radius:6px;border:1px solid var(--border2);white-space:nowrap}
+.cp-row-review td{background:rgba(251,191,36,.035)}
+.cp-note{font-size:11.5px;color:var(--dim);margin-top:4px}
+.cp-btn{border:0;border-radius:8px;padding:8px 13px;font:800 12.5px var(--f-body);background:var(--brand);color:var(--on-brand);cursor:pointer;white-space:nowrap}
+.cp-btn.alt{background:transparent;border:1px solid var(--border2);color:var(--text)}
+.cp-q{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+.cp-drawer{width:860px}
+.cp-dh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)}
+.cp-db{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.cp-input{border:1px dashed var(--border2);border-radius:10px;padding:12px 14px;background:var(--surface2);font-size:13px;white-space:pre-wrap;word-break:break-word;color:var(--text);max-height:240px;overflow:auto}
+.cp-frame{width:100%;height:70vh;border:1px solid var(--border);border-radius:12px;background:#F3EFE7}
+.cp-feed{border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--surface2)}
+.cp-feed h5{margin:0 0 8px;font-size:15px}
+.cp-feed p{margin:0 0 8px;font-style:italic;font-size:13.5px;line-height:1.55}
+.cp-feed ul{margin:0;padding-left:18px;font-size:13px;line-height:1.55}
 .pl-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .pl-tk{position:relative}
 .pl-cmd{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--dim2);cursor:text;transition:border-color .15s,background .15s}
@@ -924,6 +976,7 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
     <div class="nav-sec" data-sec="Grow">
     <button type="button" class="navlbl" data-sec="Grow" aria-expanded="false"><span class="sec-name">Grow</span><span class="sec-dot" aria-hidden="true"></span><svg class="sec-caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="nav" data-view="blogs"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h13a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z" stroke="currentColor" stroke-width="2"/><path d="M8 9h7M8 13h7M8 17h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Blogs</div>
+    <div class="nav" data-view="content"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 16l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Content pipeline<span class="badge" id="cpBadge" hidden>0</span></div>
     <div class="nav" data-view="mcpkeys"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 0-4 4h.5L9 13.5V16H6.5V18.5H4V22h5v-2.5l4.5-4.5H14a4 4 0 0 0 1-7.9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="16" cy="7" r="1.3" fill="currentColor"/></svg>MCP Keys</div>
     <div class="nav" data-view="feedback"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H9l-5 4V5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Feedback</div>
     <div class="nav" data-view="studio"><svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"/><circle cx="17.2" cy="6.8" r="1.3" fill="currentColor"/></svg>Social Studio<span class="badge-ig">IG</span></div>
@@ -1238,10 +1291,93 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
         </div>
       </section>
 
+      <section class="view" id="content">
+        <div class="cp-switch" role="group" aria-label="Content pipeline view">
+          <button type="button" id="cpTabSubmit" class="on" onclick="cpShow('submit')">Submit content</button>
+          <button type="button" id="cpTabStatus" onclick="cpShow('status')">Pipeline status <span class="cp-badge" id="cpReviewCount">0 to review</span></button>
+        </div>
+
+        <div id="cpSubmit" class="cp-grid">
+          <form class="card cp-form" onsubmit="cpSubmit(event)" novalidate>
+            <div class="card-h" style="margin-bottom:0"><h3>Add to the queue</h3><span class="sub">pick where it goes, paste what you found, submit · nothing here waits for the AI</span></div>
+            <fieldset style="border:0;margin:0;padding:0">
+              <legend class="cp-lbl" style="padding:0">Where should it post? <i>Pick one or more.</i></legend>
+              <div class="cp-dests">
+                <label class="cp-dest on" id="cpDestBlog"><input type="checkbox" id="cpBlogOn" checked onchange="cpDests()"><div><b>Blog</b><span>AI writes the article in the section's style. It waits for your review before it posts.</span></div></label>
+                <label class="cp-dest" id="cpDestPulse"><input type="checkbox" id="cpPulseOn" onchange="cpDests()"><div><b>Market Catalyst Pulse</b><span>Your header and body post right away. No AI step.</span></div></label>
+                <label class="cp-dest" id="cpDestFeed"><input type="checkbox" id="cpFeedOn" onchange="cpDests()"><div><b>Live Feed</b><span>Shows in News → Intraday commentary right away. No AI step.</span></div></label>
+              </div>
+            </fieldset>
+
+            <div class="cp-block" id="cpBlogBlock">
+              <h4>Blog <span class="cp-tagai">AI writes it · you review before it posts</span></h4>
+              <div><span class="cp-lbl">Section</span><div class="chips" id="cpSections"></div></div>
+              <div class="cp-two">
+                <div><label class="cp-lbl" for="cpBlogHeadline">Working headline <i>(optional; the AI writes the final one)</i></label><input id="cpBlogHeadline" class="inp" maxlength="200" placeholder="e.g. Lucid's robotaxi step vs. weak EV demand"></div>
+                <div><span class="cp-lbl">Tickers <i>(optional)</i></span><div data-cp-picker="blog" data-multi="1"></div></div>
+              </div>
+              <div><label class="cp-lbl" for="cpBlogNotes">Notes and source material for the AI</label><textarea id="cpBlogNotes" class="inp" rows="9" maxlength="20000" placeholder="Paste the facts, numbers and quotes you found. Bullets are fine."></textarea><div class="cp-help">The AI only uses what you give it. Include every number you want in the article.</div></div>
+              <div><label class="cp-lbl" for="cpBlogLinks">Source links <i>(optional, one per line)</i></label><textarea id="cpBlogLinks" class="inp" rows="2" placeholder="https://…"></textarea></div>
+            </div>
+
+            <div class="cp-block" id="cpPulseBlock" hidden>
+              <h4>Market Catalyst Pulse <span class="cp-tagnow">posts as entered, right away</span></h4>
+              <div><label class="cp-lbl" for="cpPulseHeader">Header</label><input id="cpPulseHeader" class="inp" maxlength="200" oninput="cpPulseCount()"></div>
+              <div><label class="cp-lbl" for="cpPulseBody">Body <i>(header + body up to 500 characters)</i></label><textarea id="cpPulseBody" class="inp" rows="3" maxlength="500" oninput="cpPulseCount()"></textarea><div class="cp-help"><span id="cpPulseCount">0</span> / 500</div></div>
+              <div><span class="cp-lbl">Ticker <i>(optional)</i></span><div data-cp-picker="pulse"></div></div>
+            </div>
+
+            <div class="cp-block" id="cpFeedBlock" hidden>
+              <h4>Live Feed <span class="cp-tagnow">posts as entered, right away</span></h4>
+              <div><label class="cp-lbl" for="cpFeedHeader">Header</label><input id="cpFeedHeader" class="inp" maxlength="200"></div>
+              <div><label class="cp-lbl" for="cpFeedBody">Body</label><textarea id="cpFeedBody" class="inp" rows="8" maxlength="4000"></textarea><div class="cp-help">Summary line first, then bullets starting with *, e.g. "* Robotaxi Progress: …".</div></div>
+              <div><span class="cp-lbl">Tickers <i>(optional)</i></span><div data-cp-picker="feed" data-multi="1"></div></div>
+            </div>
+
+            <div class="cp-actions">
+              <button type="submit" class="cp-go" id="cpGo">Add to the queue</button>
+              <button type="button" class="cp-ghost" onclick="cpClear()">Clear form</button>
+              <span class="cp-err" id="cpErr"></span>
+            </div>
+          </form>
+
+          <aside class="cp-side">
+            <div class="card">
+              <div class="card-h"><h3>AI writer, right now</h3></div>
+              <div id="cpAiState" class="cp-help"></div>
+              <div id="cpWriting" style="margin-top:10px"></div>
+              <div class="cp-lbl" style="margin-top:12px">Up next</div>
+              <ol class="cp-q" id="cpQueue"></ol>
+            </div>
+            <div class="card">
+              <div class="card-h"><h3>Submitted this session</h3></div>
+              <div id="cpMine" class="cp-help">Nothing yet. Items you add show up here and in Pipeline status.</div>
+            </div>
+          </aside>
+        </div>
+
+        <div id="cpStatus" hidden>
+          <div class="toolbar">
+            <div class="chips" id="cpFilters"></div>
+            <button class="btn" style="flex:none;margin-left:auto" onclick="cpLoad()">Refresh</button>
+          </div>
+          <div class="card" style="padding:0;overflow:auto">
+            <table style="min-width:860px"><thead><tr><th style="width:42%">Article</th><th>Where it posts</th><th>Status</th><th style="width:18%">Action</th></tr></thead><tbody id="cpBody"></tbody></table>
+          </div>
+        </div>
+      </section>
+
       <!-- SETTINGS -->
     </div>
   </main>
 </div>
+
+<!-- CONTENT PIPELINE PREVIEW -->
+<div class="scrim" id="cpScrim" onclick="cpClosePreview()"></div>
+<aside class="drawer cp-drawer" id="cpDrawer" aria-label="Preview">
+  <div class="cp-dh"><div id="cpDTitle" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div><button class="cp-ghost" onclick="cpClosePreview()" aria-label="Close preview">✕</button></div>
+  <div class="cp-db" id="cpDBody"></div>
+</aside>
 
 <!-- PUBLISH SETUP MODAL -->
 <div class="scrim" id="setScrim" onclick="closeSetup()"></div>
@@ -4066,7 +4202,7 @@ function initBlogs(){
 initBlogs();
 
 /* ---------- nav ---------- */
-const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',jobs:'Jobs <span>· scheduled work, and run it now</span>',apidocs:'API Docs <span>· which screen calls which API</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>',blogs:'Blogs <span>· publish articles to your site</span>',mcpkeys:'MCP Keys <span>· connect Claude to your blog</span>',feedback:'Feedback <span>· what users tell us in the app</span>'};
+const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',jobs:'Jobs <span>· scheduled work, and run it now</span>',apidocs:'API Docs <span>· which screen calls which API</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>',blogs:'Blogs <span>· publish articles to your site</span>',mcpkeys:'MCP Keys <span>· connect Claude to your blog</span>',feedback:'Feedback <span>· what users tell us in the app</span>',content:'Content pipeline <span>· Blog, Pulse and Live Feed</span>'};
 /* The Monitor tab lists the backend's API surface (GET /admin/api-health,
    staged in REAL.apiHealth) and health-checks the safely-probeable endpoints.
    The iframe has no Firebase token, so a live Re-check is delegated to the
@@ -5308,7 +5444,7 @@ window.addEventListener('message', function(e){
    console is a same-origin iframe, so it drives the PARENT's URL/history so each
    screen deep-links (/admin/users, /admin/subs, …). All parent access is wrapped
    in try/catch — standalone review of console.html has no parent. */
-const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','jobs','apidocs','studio','blogs','mcpkeys','feedback'];
+const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','jobs','apidocs','studio','blogs','content','mcpkeys','feedback'];
 
 function viewFromParentPath(){
   try{
@@ -5337,6 +5473,7 @@ function switchView(name, opts){
   if (name === 'apidocs') renderApiDocs();
   if (name === 'mcpkeys') renderMcpKeys();
   if (name === 'feedback') requestFeedback();
+  if (name === 'content') cpOpen();
   document.getElementById('pageTitle').innerHTML=TITLES[name]||name;
   document.querySelector('.main').scrollTo({top:0});
   // Reflect the active screen in the parent URL — but never when the switch was
@@ -5613,6 +5750,256 @@ window.addEventListener('message',function(e){
     if(d.action==='delete') toast('Post deleted');
   }
 });
+/* ── Content pipeline ─────────────────────────────────────────────────────────
+   Submit once to Blog / Market Catalyst Pulse / Live Feed, then track every item.
+   Pulse and Live Feed post at once; blog items are written by AI from the notes
+   and wait here for review (approve → published, send back → rewritten).
+   Every call is delegated to the parent (admin:content*), which calls the
+   AdminGuard'd /api/admin/content API. Ticker search reuses admin:pulseSearch. */
+const CP = { view:'submit', items:null, ai:true, model:'', loading:false, err:null, filter:'all', section:'News', mine:[], seq:0, pickers:{}, poll:null, preview:null };
+const CP_SECTIONS = ['Recap','News','Earnings','Educational'];
+const cpEl = id => document.getElementById(id);
+const cpAttr = s => String(s).replace(/[^A-Za-z0-9_-]/g,'');
+function cpPost(m){ parent.postMessage(m, location.origin); }
+
+function cpOpen(){
+  cpPaintSections();
+  if (!CP.items && !CP.loading) cpLoad();
+  clearInterval(CP.poll);
+  CP.poll = setInterval(function(){ if (document.querySelector('.view.on') && document.querySelector('.view.on').id === 'content') cpLoad(true); }, 15000);
+}
+function cpShow(v){
+  CP.view = v;
+  cpEl('cpTabSubmit').classList.toggle('on', v === 'submit');
+  cpEl('cpTabStatus').classList.toggle('on', v === 'status');
+  cpEl('cpSubmit').hidden = v !== 'submit';
+  cpEl('cpStatus').hidden = v !== 'status';
+  if (v === 'status') cpLoad();
+}
+function cpLoad(quiet){
+  if (!BLOG_BRIDGE){ CP.err = 'Works in the live console only.'; cpPaint(); return; }
+  if (!quiet){ CP.loading = true; cpPaint(); }
+  cpPost({ type:'admin:contentList' });
+}
+
+/* ── Submit form ── */
+function cpPaintSections(){
+  const box = cpEl('cpSections'); if (!box) return;
+  box.innerHTML = CP_SECTIONS.map(function(s){ return '<button type="button" class="chip'+(s===CP.section?' on':'')+'" aria-pressed="'+(s===CP.section)+'" onclick="cpPickSection(\''+s+'\')">'+s+'</button>'; }).join('');
+}
+function cpPickSection(s){ CP.section = s; cpPaintSections(); }
+function cpDests(){
+  [['Blog','cpBlogOn','cpBlogBlock'],['Pulse','cpPulseOn','cpPulseBlock'],['Feed','cpFeedOn','cpFeedBlock']].forEach(function(x){
+    const on = cpEl(x[1]).checked;
+    cpEl('cpDest'+x[0]).classList.toggle('on', on);
+    cpEl(x[2]).hidden = !on;
+  });
+  const n = ['cpBlogOn','cpPulseOn','cpFeedOn'].filter(function(id){ return cpEl(id).checked; }).length;
+  cpEl('cpGo').textContent = n > 1 ? 'Add '+n+' items to the queue' : 'Add to the queue';
+  cpEl('cpErr').textContent = '';
+}
+function cpPulseCount(){ cpEl('cpPulseCount').textContent = String(cpEl('cpPulseHeader').value.trim().length + 2 + cpEl('cpPulseBody').value.trim().length); }
+function cpClear(){
+  ['cpBlogHeadline','cpBlogNotes','cpBlogLinks','cpPulseHeader','cpPulseBody','cpFeedHeader','cpFeedBody'].forEach(function(id){ cpEl(id).value=''; });
+  Object.keys(CP.pickers).forEach(function(k){ CP.pickers[k].set([]); });
+  cpEl('cpErr').textContent = ''; cpPulseCount();
+}
+function cpSubmit(e){
+  e.preventDefault();
+  if (!BLOG_BRIDGE){ toast('Posting works in the live console only'); return; }
+  const body = {}, err = cpEl('cpErr');
+  const blog = cpEl('cpBlogOn').checked, pulse = cpEl('cpPulseOn').checked, feed = cpEl('cpFeedOn').checked;
+  if (!blog && !pulse && !feed){ err.textContent = 'Pick at least one place to post.'; return; }
+  if (blog){
+    const notes = cpEl('cpBlogNotes').value.trim();
+    if (!notes){ err.textContent = 'Add notes for the blog article.'; cpEl('cpBlogNotes').focus(); return; }
+    body.blog = { section:CP.section, headline:cpEl('cpBlogHeadline').value.trim(), tickers:CP.pickers.blog.get(), notes:notes, links:cpEl('cpBlogLinks').value.trim() };
+  }
+  if (pulse){
+    const h = cpEl('cpPulseHeader').value.trim(), b = cpEl('cpPulseBody').value.trim();
+    if (!h || !b){ err.textContent = 'Pulse needs a header and a body.'; return; }
+    if (h.length + 2 + b.length > 500){ err.textContent = 'Pulse header and body together are limited to 500 characters.'; return; }
+    body.pulse = { header:h, body:b, ticker:(CP.pickers.pulse.get()[0] || '') };
+  }
+  if (feed){
+    const h = cpEl('cpFeedHeader').value.trim(), b = cpEl('cpFeedBody').value.trim();
+    if (!h || !b){ err.textContent = 'Live Feed needs a header and a body.'; return; }
+    body.feed = { header:h, body:b, tickers:CP.pickers.feed.get() };
+  }
+  err.textContent = ''; cpEl('cpGo').disabled = true;
+  cpPost({ type:'admin:contentSubmit', body:body });
+}
+
+/* ── Ticker pickers (same search as Market Catalyst's box) ── */
+function cpPicker(host){
+  const key = host.dataset.cpPicker, multi = host.dataset.multi === '1';
+  host.classList.add('pl-tk');
+  host.innerHTML = '<div class="cp-tks" data-r="sel"></div>'
+    + '<div class="pl-cmd" data-r="cmd" style="margin-top:6px"><span class="pl-cmd-ic">⌕</span><input class="pl-cmd-input" data-r="inp" autocomplete="off" spellcheck="false" placeholder="Search tickers and stocks…"></div>'
+    + '<div class="pl-tklist" data-r="list" hidden></div>';
+  const q = r => host.querySelector('[data-r="'+r+'"]');
+  const P = { key:key, open:false, rows:[], seq:'', timer:null, picked:[] };
+  function paintSel(){
+    q('sel').innerHTML = P.picked.map(function(t){ return '<span class="cp-tk">$'+xesc(t)+'<button type="button" title="Remove" data-t="'+cpAttr(t)+'">×</button></span>'; }).join('');
+    q('sel').querySelectorAll('button').forEach(function(b){ b.onclick = function(){ P.picked = P.picked.filter(function(x){ return x !== b.dataset.t; }); paintSel(); }; });
+    q('cmd').hidden = !multi && P.picked.length > 0;
+  }
+  function add(t){
+    t = String(t||'').toUpperCase(); if (!t) return;
+    if (multi){ if (P.picked.indexOf(t) < 0 && P.picked.length < 10) P.picked.push(t); }
+    else P.picked = [t];
+    q('inp').value = ''; close(); paintSel();
+  }
+  function ask(){ CP.seq++; P.seq = 'cp-'+key+'-'+CP.seq; cpPost({ type:'admin:pulseSearch', q:q('inp').value, seq:P.seq }); }
+  function open(){ P.open = true; q('cmd').classList.add('on'); ask(); }
+  function close(){ P.open = false; q('cmd').classList.remove('on'); q('list').hidden = true; }
+  P.result = function(d){
+    if (d.seq !== P.seq || !P.open) return;
+    const rows = Array.isArray(d.results) ? d.results : []; P.rows = rows;
+    const box = q('list'); const term = (d.q||'').trim();
+    let h = rows.length ? '<div class="pl-tkhd">Tickers</div>' : '';
+    h += rows.map(function(m,i){ return '<div class="pl-pi" data-i="'+i+'"><div class="pl-pi-ic">'+xesc((m.sym||'?')[0])+'</div><div class="pl-pi-main"><div class="pl-pi-top"><span class="pl-pi-lbl">'+xesc(m.sym)+'</span></div><div class="pl-pi-sub">'+xesc(m.name||'Stock')+' · click to add</div></div></div>'; }).join('');
+    if (d.error) h = '<div class="pl-tknone">Search is unavailable right now ('+xesc(d.error)+')</div>';
+    else if (term && !rows.length) h += '<div class="pl-tknone">No results for “'+xesc(term)+'”</div>';
+    box.innerHTML = h; box.hidden = !h;
+    box.querySelectorAll('.pl-pi').forEach(function(el){
+      el.onmousedown = function(e){ e.preventDefault(); };
+      el.onclick = function(){ const m = P.rows[Number(el.dataset.i)]; if (m) add(m.sym); };
+    });
+  };
+  const inp = q('inp');
+  inp.addEventListener('focus', function(){ if (!P.open) open(); });
+  inp.addEventListener('input', function(){ if (!P.open){ open(); return; } clearTimeout(P.timer); P.timer = setTimeout(ask, 150); });
+  inp.addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){ inp.value=''; close(); inp.blur(); }
+    if (e.key === 'Enter'){ e.preventDefault(); const top = P.rows[0]; if (top) add(top.sym); else if (/^[A-Za-z][A-Za-z0-9.-]{0,9}$/.test(inp.value.trim())) add(inp.value.trim()); }
+  });
+  document.addEventListener('mousedown', function(e){ if (!host.contains(e.target)) close(); });
+  P.get = function(){ return P.picked.slice(); };
+  P.set = function(list){ P.picked = (list||[]).slice(); paintSel(); };
+  paintSel();
+  CP.pickers[key] = P;
+}
+document.querySelectorAll('[data-cp-picker]').forEach(cpPicker);
+cpPaintSections();
+
+/* ── Status table, side panel ── */
+const CP_FILTERS = [['all','All'],['review','Needs review'],['pulse','Pulse'],['feed','Live Feed']].concat(CP_SECTIONS.map(function(s){ return ['blog-'+s, 'Blog · '+s]; }));
+function cpMatch(it, f){
+  if (f === 'all') return true;
+  if (f === 'review') return it.status === 'review';
+  if (f === 'pulse' || f === 'feed') return it.kind === f;
+  return it.kind === 'blog' && 'blog-'+it.section === f;
+}
+const CP_LABEL = { queued:'Queued', writing:'Writing with AI', review:'Needs review', posted:'Posted', failed:'Failed' };
+function cpPaint(){
+  const items = CP.items || [];
+  const review = items.filter(function(i){ return i.status === 'review'; }).length;
+  cpEl('cpReviewCount').textContent = review + ' to review';
+  const badge = cpEl('cpBadge'); if (badge){ badge.textContent = String(review); badge.hidden = review === 0; }
+  cpEl('cpFilters').innerHTML = CP_FILTERS.map(function(f){ const n = items.filter(function(i){ return cpMatch(i, f[0]); }).length; return '<button class="chip'+(CP.filter===f[0]?' on':'')+'" onclick="cpFilter(\''+f[0]+'\')">'+xesc(f[1])+' <span style="opacity:.7">'+n+'</span></button>'; }).join('');
+  const body = cpEl('cpBody');
+  if (!CP.items){
+    body.innerHTML = '<tr><td colspan="4" style="color:var(--dim);padding:16px">'+xesc(CP.loading ? 'Loading…' : (CP.err || 'Nothing loaded yet.'))+'</td></tr>';
+  } else {
+    const rows = items.filter(function(i){ return cpMatch(i, CP.filter); });
+    body.innerHTML = rows.length ? rows.map(function(it){
+      let act = '';
+      if (it.status === 'review') act = '<button class="cp-btn" onclick="cpPreview(\''+cpAttr(it.id)+'\')">Preview &amp; post</button>';
+      else if (it.status === 'failed') act = '<button class="cp-btn alt" onclick="cpRetry(\''+cpAttr(it.id)+'\')">Retry</button> <button class="cp-btn alt" onclick="cpPreview(\''+cpAttr(it.id)+'\')">Details</button>';
+      else if (it.status === 'posted') act = '<button class="cp-btn alt" onclick="cpPreview(\''+cpAttr(it.id)+'\')">View</button>';
+      else if (it.status === 'queued' && !CP.ai) act = '<button class="cp-btn alt" onclick="cpRetry(\''+cpAttr(it.id)+'\')">Retry</button>';
+      else act = '<span class="cp-help">No action yet</span>';
+      return '<tr'+(it.status==='review'?' class="cp-row-review"':'')+'>'
+        + '<td><b>'+xesc(it.title || '(untitled)')+'</b><div class="cp-note">Submitted '+fmtWhen(it.createdAt)+(it.tickers && it.tickers.length ? ' · $'+it.tickers.map(xesc).join(' $') : '')+(it.kind==='blog'?' · AI-written':' · posted as entered')+'</div></td>'
+        + '<td><span class="cp-where">'+xesc(it.where)+'</span></td>'
+        + '<td><span class="cp-st '+cpAttr(it.status)+'">'+xesc(CP_LABEL[it.status] || it.status)+'</span><div class="cp-note">'+xesc(it.note || '')+(it.error ? ' · '+xesc(it.error) : '')+'</div></td>'
+        + '<td>'+act+'</td></tr>';
+    }).join('') : '<tr><td colspan="4" style="color:var(--dim);padding:16px">Nothing here right now.</td></tr>';
+  }
+  // Side panel
+  const ai = cpEl('cpAiState');
+  if (ai) ai.innerHTML = CP.items ? (CP.ai ? 'Writing with <b>'+xesc(CP.model)+'</b>. One article at a time, oldest first.' : '<span style="color:#FCD34D">AI key not set (ANTHROPIC_API_KEY).</span> Blog items wait in the queue; Pulse and Live Feed work now.') : '';
+  const writing = items.filter(function(i){ return i.status === 'writing'; });
+  cpEl('cpWriting').innerHTML = writing.map(function(w){ return '<div class="cp-block" style="padding:10px 12px"><span class="cp-st writing">Writing · '+xesc(w.where)+'</span><b style="font-size:13px">'+xesc(w.title)+'</b></div>'; }).join('');
+  const queued = items.filter(function(i){ return i.kind === 'blog' && i.status === 'queued'; }).slice().reverse();
+  cpEl('cpQueue').innerHTML = queued.length ? queued.map(function(q){ return '<li><b>'+xesc(q.title)+'</b> <span style="color:var(--dim)">· '+xesc(q.where)+'</span></li>'; }).join('') : '<li style="list-style:none;margin-left:-18px;color:var(--dim)">Nothing waiting.</li>';
+  const mine = CP.mine.map(function(id){ return items.find(function(i){ return i.id === id; }); }).filter(Boolean);
+  if (mine.length) cpEl('cpMine').innerHTML = mine.map(function(m){ return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px"><span style="font-size:12.5px;color:var(--text)">'+xesc(m.title)+' <span style="color:var(--dim)">· '+xesc(m.where)+'</span></span><span class="cp-st '+cpAttr(m.status)+'">'+xesc(CP_LABEL[m.status]||m.status)+'</span></div>'; }).join('');
+}
+function cpFilter(f){ CP.filter = f; cpPaint(); }
+function cpRetry(id){ cpPost({ type:'admin:contentRetry', id:id }); }
+
+/* ── Preview drawer ── */
+function cpPreview(id){ CP.preview = id; cpEl('cpDBody').innerHTML = '<div class="cp-help">Loading…</div>'; cpEl('cpDTitle').innerHTML = ''; cpEl('cpScrim').classList.add('on'); cpEl('cpDrawer').classList.add('on'); cpPost({ type:'admin:contentGet', id:id }); }
+function cpClosePreview(){ CP.preview = null; cpEl('cpScrim').classList.remove('on'); cpEl('cpDrawer').classList.remove('on'); }
+function cpPaintPreview(d){
+  const it = d.item, inp = d.input || {};
+  cpEl('cpDTitle').innerHTML = '<span class="cp-where">'+xesc(it.where)+'</span><span class="cp-st '+cpAttr(it.status)+'">'+xesc(CP_LABEL[it.status]||it.status)+'</span>';
+  let h = '';
+  if (it.kind === 'blog'){
+    h += '<div><div class="cp-lbl">What went into the queue</div><div class="cp-input">'+xesc(inp.notes || '')+'</div></div>';
+    if (d.reviewNote) h += '<div class="cp-help">Last review note: '+xesc(d.reviewNote)+'</div>';
+    if (d.previewHtml){
+      h += '<div><div class="cp-lbl">'+(it.status === 'review' ? 'AI-written article · as it will appear on the Blog' : 'As posted on the Blog')+(d.model ? ' · '+xesc(d.model) : '')+'</div><iframe class="cp-frame" sandbox="" title="Article preview" id="cpFrame"></iframe></div>';
+    } else if (it.error){ h += '<div class="cp-err">'+xesc(it.error)+'</div>'; }
+    if (it.status === 'review'){
+      h += '<div><label class="cp-lbl" for="cpReviewNote">Note to the writer (only if you send it back)</label><textarea id="cpReviewNote" class="inp" rows="3" maxlength="2000" placeholder="e.g. Lead with the Seaport target and shorten the robotaxi section"></textarea></div>'
+        + '<div class="cp-actions"><button class="cp-go" onclick="cpApprove(\''+cpAttr(it.id)+'\')">Approve &amp; post to Blog</button><button class="cp-ghost" onclick="cpSendBack(\''+cpAttr(it.id)+'\')">Send back for a rewrite</button></div>';
+    }
+  } else {
+    h += '<div><div class="cp-lbl">As it appears on '+(it.kind === 'pulse' ? 'Market Catalyst Pulse' : 'the Live Feed')+'</div><div class="cp-feed">'
+      + (it.tickers && it.tickers.length ? '<div class="cp-tks" style="margin-bottom:8px">'+it.tickers.map(function(t){ return '<span class="cp-tk">$'+xesc(t)+'</span>'; }).join('')+'</div>' : '')
+      + '<h5>'+xesc(inp.header || '')+'</h5>'
+      + (it.kind === 'feed' ? '<p>'+xesc(inp.summary || '')+'</p>'+(inp.bullets && inp.bullets.length ? '<ul>'+inp.bullets.map(function(b){ return '<li><b>'+xesc(b.label)+'</b> '+xesc(b.text)+'</li>'; }).join('')+'</ul>' : '') : '<p style="font-style:normal;white-space:pre-wrap">'+xesc(inp.body || '')+'</p>')
+      + '</div></div>';
+    if (it.error) h += '<div class="cp-err">'+xesc(it.error)+'</div>';
+  }
+  cpEl('cpDBody').innerHTML = h;
+  const f = cpEl('cpFrame'); if (f && d.previewHtml) f.srcdoc = d.previewHtml;
+}
+function cpApprove(id){ cpPost({ type:'admin:contentApprove', id:id }); }
+function cpSendBack(id){
+  const note = (cpEl('cpReviewNote') || {}).value || '';
+  if (!note.trim()){ toast('Say what to change in the note first'); cpEl('cpReviewNote').focus(); return; }
+  cpPost({ type:'admin:contentSendBack', id:id, note:note.trim() });
+}
+
+window.addEventListener('message', function(e){
+  if (e.origin !== location.origin) return;
+  const d = e.data || {};
+  if (d.type === 'admin:pulseSearchResult' && typeof d.seq === 'string' && d.seq.indexOf('cp-') === 0){
+    Object.keys(CP.pickers).forEach(function(k){ CP.pickers[k].result(d); });
+    return;
+  }
+  if (d.type !== 'admin:contentResult') return;
+  if (d.action === 'list'){
+    CP.loading = false;
+    if (d.ok){ CP.items = d.data.items || []; CP.ai = !!d.data.aiEnabled; CP.model = d.data.model || ''; CP.err = null; }
+    else CP.err = d.error || 'Could not load the pipeline.';
+    cpPaint();
+    return;
+  }
+  if (d.action === 'get'){
+    if (!d.ok){ cpEl('cpDBody').innerHTML = '<div class="cp-err">'+xesc(d.error || 'Could not load this item.')+'</div>'; return; }
+    if (CP.preview === d.data.item.id) cpPaintPreview(d.data);
+    return;
+  }
+  if (d.action === 'submit'){
+    cpEl('cpGo').disabled = false;
+    if (!d.ok){ cpEl('cpErr').textContent = d.error || 'Could not submit.'; return; }
+    const items = d.data.items || [];
+    items.forEach(function(i){ CP.mine.unshift(i.id); });
+    toast('Added '+items.length+(items.length === 1 ? ' item' : ' items')+'. Go ahead with the next one.');
+    cpClear(); cpLoad(true);
+    return;
+  }
+  // approve / send-back / retry
+  if (!d.ok){ toast(xesc(d.error || 'That did not work')); return; }
+  toast(d.action === 'approve' ? 'Approved and posted to the Blog' : d.action === 'sendBack' ? 'Sent back for a rewrite' : 'Back in the queue');
+  cpClosePreview(); cpLoad(true);
+});
+
 </script>
 </body>
 </html>
