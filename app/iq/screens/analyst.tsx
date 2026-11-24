@@ -1319,8 +1319,22 @@ export function AnalystScreen() {
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: TEXT_HI }}>
                             {fmtMoney(shownPrice(action.px))}
                           </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: action.dir >= 0 ? G : R, whiteSpace: "nowrap" }}>
-                            {action.dir >= 0 ? "▲" : "▼"} {action.upPct != null ? `${action.upPct >= 0 ? "+" : ""}${action.upPct.toFixed(1)}%` : action.move}
+                          {/* The arrow is the call (▲ bullish / ▼ bearish); the % is the room
+                              from today's price to that firm's target, coloured by its own sign.
+                              A bearish call can still have a target above the price (CRWD: ▼, +17.2%). */}
+                          <div
+                            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, whiteSpace: "nowrap" }}
+                            title={action.upPct != null ? `${action.dir >= 0 ? "Bullish" : "Bearish"} call (${action.act}); the firm's target is ${action.upPct >= 0 ? "above" : "below"} today's price` : undefined}
+                          >
+                            <span style={{ color: action.dir >= 0 ? G : R }}>{action.dir >= 0 ? "▲" : "▼"}</span>{" "}
+                            {action.upPct != null ? (
+                              <>
+                                <span style={{ color: action.upPct >= 0 ? G : R }}>{action.upPct >= 0 ? "+" : ""}{action.upPct.toFixed(1)}%</span>
+                                <span style={{ color: TEXT_MUTED }}> to target</span>
+                              </>
+                            ) : (
+                              <span style={{ color: action.dir >= 0 ? G : R }}>{action.move}</span>
+                            )}
                           </div>
                         </div>
 
