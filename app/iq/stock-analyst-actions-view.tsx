@@ -7,6 +7,7 @@ import { apiGet } from "./backend";
 import { useWatchlistsContext } from "./hooks/useWatchlists";
 import type { AnalystConsensusDoc, AnalystRatingChange, CompanyDoc } from "./types";
 import { buildAnalystActions, type FirmStat, type ProcessedAction } from "./analyst-actions-engine";
+import { trendLine, trendWindow } from "./analyst-trend";
 
 type SortKey = "date" | "firm" | "act" | "to" | "pt" | "up" | "score";
 const PAGE_SIZE = 20;
@@ -144,7 +145,62 @@ export function StockAnalystActionsView({
     </span>
   );
 
+  // Summary above the table: consensus, average target, and the last 30/90 days' direction.
+  const consensus = consensusDocs.find((c) => (c.ticker || "").trim().toUpperCase() === sym) ?? null;
+  const today = new Date().toISOString().slice(0, 10);
+  const w30 = trendWindow(rows, today, 30);
+  const w90 = trendWindow(rows, today, 90);
+  const line = trendLine(w30, w90);
+  const lineTone = line.startsWith("Leaning bullish") ? "var(--up)" : line.startsWith("Leaning bearish") ? "var(--down)" : "var(--text-hi)";
+  const buys = consensus ? consensus.strongBuy + consensus.buy : 0;
+  const sells = consensus ? consensus.sell + (consensus.strongSell ?? 0) : 0;
+  const holds = consensus ? consensus.hold : 0;
+  const rated = buys + holds + sells;
+  const target = consensus?.priceTargetConsensus ?? w90.avgTarget;
+  const upside = target != null && target > 0 && livePrice != null && livePrice > 0 ? ((target - livePrice) / livePrice) * 100 : null;
+
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
+    {(rows.length > 0 || rated > 0) && (
+      <div className="card" style={{ width: "100%" }}>
+        <div className="card-h"><h3>Analyst summary<span className="sd-unit">what the Street is recommending for {sym}</span></h3><VendorTag v="fmp" /></div>
+        <div className="card-b">
+          <div style={{ fontSize: ".95rem", fontWeight: 700, color: lineTone, marginBottom: 12 }}>{line}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>Consensus</div>
+              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>{rated > 0 ? consensus?.consensus : "—"}</div>
+              {rated > 0 && (
+                <>
+                  <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", margin: "6px 0 4px", background: "var(--surface-3)" }}>
+                    <div style={{ width: `${(buys / rated) * 100}%`, background: "var(--up)" }} />
+                    <div style={{ width: `${(holds / rated) * 100}%`, background: "var(--text-dim-solid)" }} />
+                    <div style={{ width: `${(sells / rated) * 100}%`, background: "var(--down)" }} />
+                  </div>
+                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{buys} buy · {holds} hold · {sells} sell</div>
+                </>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>Average target</div>
+              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>{target != null && target > 0 ? `$${target.toFixed(2)}` : "—"}</div>
+              {upside != null && (
+                <div style={{ fontSize: ".72rem", color: upside >= 0 ? "var(--up)" : "var(--down)" }}>{upside >= 0 ? "+" : ""}{upside.toFixed(1)}% from the current price</div>
+              )}
+            </div>
+            {[w30, w90].map((w) => (
+              <div key={w.days}>
+                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>Last {w.days} days</div>
+                <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>{w.calls} call{w.calls === 1 ? "" : "s"}</div>
+                <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                  <span className="up">▲ {w.upgrades + w.raises}</span> upgrades / raises · <span className="down">▼ {w.downgrades + w.cuts}</span> downgrades / cuts
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
     <div className="card" style={{ width: "100%" }}>
       <div className="card-h" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <h3>Analyst Actions<span className="sd-unit">{visible.length} {visible.length === 1 ? "call" : "calls"}{showOlder ? "" : ` · last ${RECENT_MONTHS} months`}</span></h3>
@@ -240,6 +296,7 @@ export function StockAnalystActionsView({
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }
