@@ -101,6 +101,11 @@ export interface CompanyDoc {
    *  so the reader can pick the base exactly 5 sessions before the live price's
    *  session. null/absent on docs written before the job published it. */
   week5Closes?: Week5Close[] | null;
+  /** The last 22 dated closes (oldest → newest), for the 1M frame the same way
+   *  `week5Closes` serves 1W: the base is [0] while the newest entry is the live
+   *  price's session and [1] once a later session is. null/absent until the
+   *  nightly technicals job has run with it. */
+  month21Closes?: Week5Close[] | null;
   stochK?: number | null;
   adx14?: number | null;
   /** Annualized 30-day realized volatility (%) — the Macro "30d Vol" column. */

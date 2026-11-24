@@ -54,19 +54,39 @@ export function heatGradient(colorBlind = false): string {
   return `linear-gradient(to right, ${stops.join(", ")})`;
 }
 
+/** The price a window ends at, and the ET date of the session it belongs to. */
+export interface FrameLive {
+  price: number | null;
+  dateIso: string | null;
+}
+
 /**
- * The change a tile shows for a time frame. 1D is the live day move passed in;
- * 1W is the 5-session change and 1M the 21-session change from the technicals
- * job. Null when the field is not synced for that stock (and always for YTD).
+ * The change a tile shows for a time frame. 1D is the live day move passed in.
+ * 1W is the 5-session change and 1M the 21-session change: from the technicals
+ * job's stored move, which ends at the LAST STORED BAR (a session behind from the
+ * open to the next night's run: on 24 Nov NVDA's 1W read +5.71% while the five
+ * sessions up to the live price were -1.33%). When `live` and the job's dated
+ * closes are there, the window is re-measured to the live price instead
+ * (windowPctToLive); otherwise the stored move stands. Null when neither exists
+ * (and always for YTD).
  */
 export function framePct(
   frame: HmFrame,
   day: number | null,
-  c: { week5ChangePct?: number | null; monthChangePct?: number | null } | null | undefined,
+  c:
+    | {
+        week5ChangePct?: number | null;
+        monthChangePct?: number | null;
+        week5Closes?: DatedClose[] | null;
+        month21Closes?: DatedClose[] | null;
+      }
+    | null
+    | undefined,
+  live?: FrameLive | null,
 ): number | null {
   if (frame === "1D") return day;
-  if (frame === "1W") return c?.week5ChangePct ?? null;
-  if (frame === "1M") return c?.monthChangePct ?? null;
+  if (frame === "1W") return (live ? windowPctToLive(c?.week5Closes, live.price, live.dateIso) : null) ?? c?.week5ChangePct ?? null;
+  if (frame === "1M") return (live ? windowPctToLive(c?.month21Closes, live.price, live.dateIso) : null) ?? c?.monthChangePct ?? null;
   return null;
 }
 
@@ -172,6 +192,27 @@ export function lastSessionPct(closes: DatedClose[] | null | undefined, sessionI
   const prev = closes[closes.length - 2];
   if (last.date !== sessionIso || !(last.close > 0) || !(prev.close > 0)) return null;
   return ((last.close - prev.close) / prev.close) * 100;
+}
+
+/**
+ * An N-session move measured to the live price. `closes` are the job's N+1 dated
+ * closes (oldest first: 6 for 1W, 22 for 1M). While the newest stored close IS
+ * the live price's session the window's base is the first close; once the live
+ * price is from a LATER session, that session counts as one of the N and the
+ * base moves forward to the second close. Null when the live price is older than
+ * the newest stored close, or anything is missing — the caller then keeps the
+ * stored move rather than guessing.
+ */
+export function windowPctToLive(
+  closes: DatedClose[] | null | undefined,
+  livePrice: number | null | undefined,
+  liveDateIso: string | null | undefined,
+): number | null {
+  if (!closes || closes.length < 3 || !(livePrice != null && livePrice > 0) || !liveDateIso) return null;
+  const newest = closes[closes.length - 1];
+  const base = liveDateIso > newest.date ? closes[1] : liveDateIso === newest.date ? closes[0] : null;
+  if (!base || !(base.close > 0)) return null;
+  return ((livePrice - base.close) / base.close) * 100;
 }
 
 /** The slice of a live quote `dayMovePct` reads (a subset of LiveQuote). */
@@ -370,4 +411,17 @@ export function tileFontRem(w: number, h: number): number {
   const s = Math.sqrt(Math.max(0, w) * Math.max(0, h));
   const rem = 0.55 + 0.95 * (1 - Math.exp(-(s - 50) / 110));
   return Math.max(0.45, Math.min(1.5, rem));
+}
+
+/**
+ * A stock's market cap in $B for sizing and weighting. The stored cap is only as
+ * fresh as its job (AMD's read $744B while the live quote said $680B after a -9%
+ * day), so the live quote's own cap wins when it is there and plausible: within
+ * half to double of the stored one, which keeps a class-only or otherwise odd
+ * vendor figure from rescaling a tile.
+ */
+export function liveCapBillions(liveCap: number | null | undefined, storedBillions: number): number {
+  if (liveCap == null || !(liveCap > 0)) return storedBillions;
+  const live = liveCap / 1e9;
+  return live >= storedBillions * 0.5 && live <= storedBillions * 2 ? live : storedBillions;
 }

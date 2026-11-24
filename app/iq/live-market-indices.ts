@@ -2,6 +2,7 @@ import type { PulseItem, SectorRow } from "./data";
 import type { TapeItem, TapeSource } from "./types/tape";
 import type { CompanyDoc } from "./types/companies";
 import type { SectorApiDoc } from "./types/sectors";
+import { dedupeIssuers } from "./issuer-dedupe";
 
 /**
  * Builds the sector treemap PURELY from live data — no static seed. Sector
@@ -28,20 +29,12 @@ export function buildSectorList(
   const validSet = new Set(liveNames);
   const hasValidSet = validSet.size > 0;
 
-  const bySector = new Map<string, Map<string, [string, number, number]>>();
+  const bySector = new Map<string, CompanyDoc[]>();
   for (const c of companies) {
     const sec = c.sector;
     if (!sec || (hasValidSet && !validSet.has(sec)) || c.marketCap == null || c.pctChange == null) continue;
-    let secMap = bySector.get(sec);
-    if (!secMap) { secMap = new Map(); bySector.set(sec, secMap); }
-    // Group share classes by SEC CIK: when multiple tickers share a CIK (e.g. GOOG and GOOGL),
-    // retain the primary one with the largest market cap.
-    const groupKey = (c as any).cik ? `CIK_${String((c as any).cik).replace(/^0+/, "")}` : c.ticker;
-    const existing = secMap.get(groupKey);
-    const mcapBillions = c.marketCap / 1e9;
-    if (!existing || mcapBillions > existing[1]) {
-      secMap.set(groupKey, [c.ticker, mcapBillions, c.pctChange]);
-    }
+    const list = bySector.get(sec);
+    if (list) list.push(c); else bySector.set(sec, [c]);
   }
 
   // Every sector the aggregate produced, in its live order. Falls back to
@@ -49,9 +42,14 @@ export function buildSectorList(
   const orderedNames = liveNames.length > 0 ? liveNames : Array.from(bySector.keys()).sort();
   const rows: SectorRow[] = [];
   orderedNames.forEach((name, i) => {
-    const secMap = bySector.get(name);
-    if (!secMap || secMap.size === 0) return;
-    const items = [...secMap.values()].sort((a, b) => b[1] - a[1]);
+    const docs = bySector.get(name);
+    if (!docs || docs.length === 0) return;
+    // Stocks only, each company once (see issuer-dedupe.ts): ETFs and duplicate
+    // share classes (GOOG/GOOGL/GOOGM, BRK.A/BRK.B) used to inflate the map.
+    const items: [string, number, number][] = dedupeIssuers(
+      docs.map((c) => ({ ticker: c.ticker, name: c.name, cik: (c as { cik?: string | null }).cik ?? null, type: c.type ?? null, marketCap: c.marketCap, pctChange: c.pctChange })),
+    ).map((c) => [c.ticker, (c.marketCap as number) / 1e9, c.pctChange as number]);
+    if (items.length === 0) return;
     const pctChange =
       livePctByName.get(name) ??
       items.reduce((s, [, , p]) => s + p, 0) / items.length;

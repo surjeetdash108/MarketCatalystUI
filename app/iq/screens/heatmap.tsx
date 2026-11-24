@@ -5,13 +5,14 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { sign, fmt, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
 import { tilePctLabel } from "../heatmap-label";
-import { heatTile, heatGradient, framePct, dayMovePct, asOfLabel, floorWeights, sectorHeaderPlan, squarify, packStocks, tileFontRem, MORE_KEY, type HeaderPlan, type HmFrame, type LRect } from "../heatmap-design";
+import { heatTile, heatGradient, framePct, dayMovePct, liveCapBillions, asOfLabel, floorWeights, sectorHeaderPlan, squarify, packStocks, tileFontRem, MORE_KEY, type HeaderPlan, type HmFrame, type LRect } from "../heatmap-design";
 import { useApiList } from "../hooks/useApiList";
+import { useApiResource } from "../hooks/useApiResource";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useLiveQuotes, QUOTE_DELAY_LABEL } from "../live-quotes-context";
 import { latestSessionDate } from "../market-status";
 import { buildSectorList } from "../live-market-indices";
-import { INDEX_MEMBERS, HEATMAP_TAB_KEYS } from "../index-constituents";
+import { indexMemberSet, HEATMAP_TAB_KEYS, type LiveIndexMembers } from "../index-constituents";
 import type { CompanyDoc, SectorApiDoc } from "../types";
 
 const StockScreenEmbed = dynamic<{ initialSym?: string }>(
@@ -21,8 +22,13 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 
 /** Index names as other screens link to them (`?index=Nasdaq`), so keep these keys. */
 const TABS = ["Stocks", "S&P 500", "Nasdaq", "Dow", "Russell 2000"];
-/** What the buttons say. */
-const TAB_LABELS = ["All stocks", "S&P 500", "Nasdaq 100", "Dow 30", "Russell 2000"];
+/**
+ * What the buttons say. The last tab keeps its `?index=Russell 2000` URL key above,
+ * but it is not the Russell 2000 (no feed supplies that index): it is every stock
+ * under $40B in our data, and is labelled as exactly that.
+ */
+const TAB_LABELS = ["All stocks", "S&P 500", "Nasdaq 100", "Dow 30", "Small & mid caps"];
+const SMALL_MID_TAB = 4;
 const FRAMES: HmFrame[] = ["1D", "1W", "1M", "YTD"];
 const FRAME_TITLES: Record<HmFrame, string> = {
   "1D": "Change today",
@@ -189,9 +195,15 @@ function HeatmapInner() {
   };
 
   // Tab 0 = all synced stocks; 1-3 filter to the S&P 500 / Nasdaq-100 / Dow-30.
-  // 4 (Russell 2000) filters to small/mid caps (<$40B) or falls back to full list so all tabs have data.
+  // 4 (small & mid caps) filters to stocks under $40B, falling back to the full list so every tab has data.
+  // Membership is the live constituent list (index-members job); the static
+  // 2024 lists only until it answers or if it is thin (see indexMemberSet).
+  const { data: liveMembers } = useApiResource<LiveIndexMembers>("/market-data/index-members");
   const tabKey    = HEATMAP_TAB_KEYS[tab];
-  const memberSet = tabKey && tabKey !== "RUT" ? INDEX_MEMBERS[tabKey] : null;
+  const memberSet = useMemo(
+    () => (tabKey && tabKey !== "RUT" ? indexMemberSet(tabKey, liveMembers) : null),
+    [tabKey, liveMembers],
+  );
 
   const baseSectorList = useMemo(() => {
     if (memberSet) {
@@ -229,16 +241,22 @@ function HeatmapInner() {
     const lookup = new Map<string, { stock: HmStock; sector: string }>();
     for (const g of baseSectorList) {
       const stocks: HmStock[] = [];
-      for (const [sym, mcap, storedPct] of g.items) {
+      for (const [sym, storedCap, storedPct] of g.items) {
         const lq = liveQuotes.get(sym);
         const c = companyBySym.get(sym);
         const day = dayMovePct(lq, storedPct, c?.week5Closes, sessionIso, mkt.phase);
+        // The stored cap lags its job (AMD $744B beside a live $680B after a -9% day).
+        const mcap = liveCapBillions(lq?.marketCap, storedCap);
         const price = lq?.price ?? c?.price ?? null;
         const shares = lq?.dayVolume ?? c?.dayVolume ?? null;
         const vol = shares != null && shares > 0 && price != null && price > 0 ? (shares * price) / 1e9 : null;
         const weight = sizeBy === "cap" ? mcap : (vol ?? 0);
         if (!(weight > 0)) continue;
-        const stock: HmStock = { sym, mcap, chg: framePct(frame, day, c), vol, weight };
+        // 1W / 1M are measured to the live price (the regular close outside the session),
+        // not read from the technicals job's move, which ends at the last stored bar.
+        const sessionOpen = lq?.marketStatus === "open" || (lq?.marketStatus == null && mkt.phase === "open");
+        const frameLive = frame === "1D" || !lq ? null : { price: sessionOpen ? lq.price : (lq.regularClose ?? null), dateIso: sessionIso };
+        const stock: HmStock = { sym, mcap, chg: framePct(frame, day, c, frameLive), vol, weight };
         stocks.push(stock);
         lookup.set(sym, { stock, sector: g.name });
       }
@@ -381,7 +399,7 @@ function HeatmapInner() {
 
   const subtitle = [
     asOfLabel(mkt.phase, latestSessionDate(), QUOTE_DELAY_LABEL),
-    `${membersShown.toLocaleString("en-US")} ${isOverall ? (tab === 0 ? "stocks" : `${TAB_LABELS[tab]} members`) : `${activeSector!.name} stocks`}`,
+    `${membersShown.toLocaleString("en-US")} ${isOverall ? (tab === 0 ? "stocks" : tab === SMALL_MID_TAB ? "stocks under $40B" : `${TAB_LABELS[tab]} members`) : `${activeSector!.name} stocks`}`,
     `sized by ${sizeBy === "cap" ? "market cap" : "dollar volume"}`,
   ].join(" · ");
 
@@ -469,7 +487,7 @@ function HeatmapInner() {
         )}
         {groups.length === 0 && !isLoading && (
           <div className="hm2-empty">
-            <div className="t">{sizeBy === "volume" ? "No volume synced yet" : `No ${TABS[tab]} stocks to show yet`}</div>
+            <div className="t">{sizeBy === "volume" ? "No volume synced yet" : `No ${tab === SMALL_MID_TAB ? "small & mid cap" : TABS[tab]} stocks to show yet`}</div>
             <div className="d">
               {sizeBy === "volume"
                 ? "Today's traded volume hasn't loaded for these stocks. Switch back to Market cap, or check back shortly."
