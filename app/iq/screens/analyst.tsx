@@ -437,6 +437,12 @@ export function AnalystScreen() {
     return d.toISOString().slice(0, 10);
   }, [allActions]); // eslint-disable-line react-hooks/exhaustive-deps
   const recentActions = useMemo(() => allActions.filter((a) => a.date >= recentCutoff), [allActions, recentCutoff]);
+  // Newest call on any watched stock, for the Watchlist card when the last
+  // RECENT_DAYS have none (so "0 Calls" reads as quiet, not broken).
+  const lastWatchedCall = useMemo(
+    () => allActions.filter((a) => a.watched).reduce<ProcessedAction | null>((best, a) => (!best || a.date > best.date ? a : best), null),
+    [allActions],
+  );
   const todayCount = useMemo(() => {
     const today = etTodayIso();
     return allActions.filter((a) => a.date === today).length;
@@ -1168,7 +1174,13 @@ export function AnalystScreen() {
                   WATCHLIST
                 </span>
               </div>
-              {summaryMetrics.watchCalls.length === 0 && <div style={{ fontSize: 12, color: TEXT_MUTED }}>No actions on watched stocks</div>}
+              {summaryMetrics.watchCalls.length === 0 && (
+                <div style={{ fontSize: 12, color: TEXT_MUTED }}>
+                  {watchedTickers.size === 0
+                    ? "Your watchlists are empty. Add stocks to see analyst calls on them here."
+                    : `No calls on your ${watchedTickers.size} watched stock${watchedTickers.size === 1 ? "" : "s"} in the last ${RECENT_DAYS} days.${lastWatchedCall ? ` Latest: ${lastWatchedCall.t} (${lastWatchedCall.firm}) on ${lastWatchedCall.date}.` : ""}`}
+                </div>
+              )}
 
               {/* Tooltip Popup */}
               {activeTip === "watch" && summaryMetrics.watchCalls.length > 0 && (
