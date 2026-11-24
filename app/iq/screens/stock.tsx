@@ -1996,9 +1996,6 @@ export function StockScreen({
                   <span className="v">{l[1]}</span>
                 </div>
               ))}
-              <div style={{ marginTop: 10, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                Source: rs-rating.job, technical-indicators.job, a year of daily bars · informational purposes only, not investment advice.
-              </div>
 
               {/* ── AI read — technicals + news synthesised by OpenRouter,
                   appended below the deterministic rows. The raw headline list
@@ -2832,9 +2829,6 @@ export function StockScreen({
                     <span className="v">{l[1]}</span>
                   </div>
                 ))}
-              </div>
-              <div className="sd-foot">
-                Source: rs-rating.job, technical-indicators.job, a year of daily bars · informational only, not investment advice.
               </div>
             </div>
 
