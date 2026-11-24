@@ -12,7 +12,7 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 );
 import { useApiList } from "../hooks/useApiList";
 import { useLiveQuotes } from "../live-quotes-context";
-import { hasListed, isNonCommonListing } from "../ipo-rows";
+import { displayStatus, hasListed, isNonCommonListing, listingKind } from "../ipo-rows";
 import type { IpoEventDoc, IpoPipelineDoc, CompanyDoc } from "../types";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { etTodayIso, fmtMonthDay } from "../calendar-range";
@@ -513,6 +513,13 @@ export function IPOsScreen() {
       )}
 
       {/* ── Live IPO calendar (Polygon) ── */}
+      {tab === "calendar" && filteredCalendar.length === 0 && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="card-b" style={{ padding: 28, textAlign: "center", color: "var(--text-dim-solid)", fontSize: ".84rem" }}>
+            {q || sector !== "All" ? "No IPOs match this search or sector." : "No IPOs in the calendar window right now."}
+          </div>
+        </div>
+      )}
       {tab === "calendar" && filteredCalendar.length > 0 && (
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
@@ -532,7 +539,10 @@ export function IPOsScreen() {
                 </tr>
               </thead>
               <tbody>
-                {pageSlice(filteredCalendar).map(e => (
+                {pageSlice(filteredCalendar).map(e => {
+                  const livePx = livePxOf(e.symbol);
+                  const status = displayStatus(e, livePx, todayIso);
+                  return (
                   <tr key={e.id} onClick={() => setSelectedSym(e.symbol || "")} style={{ cursor: "pointer" }}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -542,17 +552,38 @@ export function IPOsScreen() {
                     </td>
                     <td style={{ fontFamily: "var(--f-mono)", fontWeight: 700, color: "var(--text-hi)" }}>
                       {e.symbol || "—"}
+                      {listingKind(e) && (
+                        <span className="pill" style={{ marginLeft: 6, fontSize: ".6rem", fontFamily: "var(--f-body, inherit)", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                          {listingKind(e)}
+                        </span>
+                      )}
                     </td>
                     <td>{e.date}</td>
                     <td>{e.exchange || "—"}</td>
-                    <td className="num"><IpoPriceCell low={e.priceLow} high={e.priceHigh} offer={e.offerPrice} /></td>
+                    <td className="num">
+                      {/* A listed name shows where it trades now (the live quote the stock
+                          drawer uses), with the offer range under it when there was one. */}
+                      {status === "history" && (livePx ?? e.currentPrice) != null ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                          <span style={{ fontFamily: "var(--f-mono)", fontWeight: 700, color: "var(--text-hi)" }}>${(livePx ?? e.currentPrice as number).toFixed(2)}</span>
+                          {(e.offerPrice != null || e.priceLow != null) && (
+                            <span style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
+                              offer {e.offerPrice != null ? `$${e.offerPrice.toFixed(2)}` : formatIpoPrice(e.priceLow, e.priceHigh)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <IpoPriceCell low={e.priceLow} high={e.priceHigh} offer={e.offerPrice} />
+                      )}
+                    </td>
                     <td>
-                      <span className={`pill ${e.status === "priced" || e.status === "history" ? "up" : e.status === "withdrawn" ? "down" : "amc"}`}>
-                        {ipoStatusLabel(e.status)}
+                      <span className={`pill ${status === "priced" || status === "history" ? "up" : status === "withdrawn" ? "down" : "amc"}`}>
+                        {ipoStatusLabel(status)}
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
