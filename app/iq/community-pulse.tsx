@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useIQActions } from "./shell";
 import { useApiResource } from "./hooks/useApiResource";
 import { StockLogo } from "./utils";
@@ -133,17 +133,18 @@ function PulseRich({ text, terms }: { text: string; terms: string[] }) {
 }
 
 /**
- * One post's text, held to a few lines with a Show more / Show less toggle.
- * The toggle only appears when the text really overflows the collapsed height
- * (ResizeObserver also reports once on observe, so it is measured on mount and
- * again when the card is resized).
+ * One post's text, collapsed to three lines with the Live Feed's expand control:
+ * a chevron beside the text (rotates when open), the text itself also toggles,
+ * and one post is open at a time (the parent owns `open`). The chevron only
+ * appears when the text really overflows the collapsed height (ResizeObserver
+ * also reports once on observe, so it is measured on mount and on resize).
  */
-function PulseText({ text, terms }: { text: string; terms: string[] }) {
-  const [open, setOpen] = useState(false);
+function PulseText({ text, terms, open, onToggle }: { text: string; terms: string[]; open: boolean; onToggle: () => void }) {
   const [overflows, setOverflows] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  // While searching the whole post shows: a match past the fourth line would
-  // otherwise be in the results but hidden behind "Show more".
+  const panelId = useId();
+  // While searching the whole post shows: a match past the third line would
+  // otherwise be in the results but hidden behind the collapsed preview.
   const searching = terms.length > 0;
   const clamped = !open && !searching;
   useEffect(() => {
@@ -153,15 +154,35 @@ function PulseText({ text, terms }: { text: string; terms: string[] }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [text, clamped]);
+  const canToggle = !searching && (overflows || open);
   return (
-    <>
-      <div ref={ref} className={`cpulse-tw-text${clamped ? " clamp" : ""}`}><PulseRich text={text} terms={terms} /></div>
-      {!searching && (overflows || open) && (
-        <button type="button" className="cpulse-more" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-          {open ? "Show less" : "Show more"}
+    <div className="cpulse-tw-row">
+      <div
+        ref={ref}
+        id={panelId}
+        className={`cpulse-tw-text${clamped ? " clamp" : ""}${canToggle ? " toggles" : ""}`}
+        // Clicking the text expands/collapses it too, except on a link inside it.
+        onClick={canToggle ? (e => { if (!(e.target as HTMLElement).closest("a")) onToggle(); }) : undefined}
+      >
+        <PulseRich text={text} terms={terms} />
+      </div>
+      {canToggle && (
+        <button
+          type="button"
+          className="cpulse-chev"
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={open ? "Collapse post" : "Expand post"}
+          title={open ? "Collapse" : "Expand"}
+          onClick={onToggle}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }}>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
         </button>
       )}
-    </>
+    </div>
   );
 }
 
@@ -176,6 +197,8 @@ export function CommunityPulse() {
   }, [q]);
   const { data, loading } = useApiResource<{ posts: PulsePost[] }>(pulseQueryPath(sentQ), POLL_MS);
   const posts = data?.posts ?? [];
+  // Which post is expanded: one at a time, like the Live Feed's news rows.
+  const [openId, setOpenId] = useState<string | null>(null);
   // Live Feed look: a post that arrives while the card is open flashes green
   // with a NEW chip and drops in (useFreshStories + useArrivalMotion). Searching
   // shows a different list, so nothing is "new" there.
@@ -257,7 +280,7 @@ export function CommunityPulse() {
               <div className="cpulse-av" style={{ background: AVATARS[i % AVATARS.length] }}>{pulseLetter(p.text)}</div>
             )}
             <div className="cpulse-tw-main">
-              <PulseText text={p.text} terms={terms} />
+              <PulseText text={p.text} terms={terms} open={openId === p.id} onToggle={() => setOpenId(o => (o === p.id ? null : p.id))} />
               <div className="cpulse-tw-foot">
                 {p.ticker && (
                   <button type="button" className="tk-link" title={`Open ${p.ticker}`} onClick={() => openStock(p.ticker as string)}>$<Hl text={p.ticker} terms={terms} /></button>

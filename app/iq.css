@@ -13762,7 +13762,15 @@ h6.sd-sec {
 .iq-root .cpulse-tw-text { font-size: .8rem; line-height: 1.45; color: var(--text-hi); text-wrap: pretty; }
 /* Four lines collapsed. A height cap rather than line-clamp: the text is now
    paragraphs and lists, and line-clamp only counts one block's lines. */
-.iq-root .cpulse-tw-text.clamp { max-height: calc(4 * 1.45em); overflow: hidden; }
+.iq-root .cpulse-tw-text.clamp { max-height: calc(3 * 1.45em); overflow: hidden; }
+/* Live Feed-style expand: the chevron sits beside the first line; the text toggles too. */
+.iq-root .cpulse-tw-row { display: flex; align-items: flex-start; gap: 8px; }
+.iq-root .cpulse-tw-row .cpulse-tw-text { flex: 1; min-width: 0; }
+.iq-root .cpulse-tw-text.toggles { cursor: pointer; }
+.iq-root .cpulse-chev { flex: none; display: inline-flex; align-items: center; justify-content: center; height: 1.45em; padding: 0 2px; margin: 0; background: none; border: 0; color: var(--text-dim-solid); cursor: pointer; font-size: .8rem; }
+.iq-root .cpulse-chev:hover { color: var(--text-hi); }
+/* Room for the NEW chip (top right) while a post is fresh, so it never covers the chevron. */
+.iq-root .cpulse-tw.lfb-fresh .cpulse-tw-row { padding-right: 38px; }
 /* Rich text (pulse-rich.ts): paragraphs, line breaks, lists, bold, italic, links. */
 .iq-root .cpulse-tw-text p { margin: 0; }
 .iq-root .cpulse-tw-text p + p,
