@@ -1895,6 +1895,11 @@ function CandleChartInner({
   const di = hoverIdx ?? n - 1;
   const bar = data[di], prev = data[Math.max(0, di - 1)];
   const chg = bar.c - prev.c, chgPct = prev.c ? (chg / prev.c) * 100 : 0;
+  // Change across the candles on screen (first visible open to last visible
+  // close), the way Google Finance shows the move over the selected range.
+  const visFirst = data[Math.min(n - 1, Math.max(0, Math.floor(view.from)))];
+  const visLast = data[Math.max(0, Math.min(n - 1, Math.ceil(view.to) - 1))];
+  const rangeChgPct = visFirst && visLast && visFirst.o > 0 ? ((visLast.c - visFirst.o) / visFirst.o) * 100 : null;
   const studyVal = (s: Study): string | null => {
     const d = computed.get(s.id), i = di + series.seed;
     if (s.k === "vol") return bigVol(bar.v);
@@ -2055,6 +2060,9 @@ function CandleChartInner({
             <span className="cc-lg-id" />
             {!hideHudOhlc && (
               <span className="cc-lg-q">
+                {/* Says these are the candle's figures, not the day's: a 1-minute
+                    candle's high/low differs from the Day's range above. */}
+                {interval && <span title="Open, high, low and close of the candle under the cursor (or the latest one)"><s>{intervalLabel(interval)} candle</s></span>}
                 <span><s>O</s><b>{bar.o.toFixed(2)}</b></span>
                 <span><s>H</s><b>{bar.h.toFixed(2)}</b></span>
                 <span><s>L</s><b>{bar.l.toFixed(2)}</b></span>
@@ -2062,6 +2070,11 @@ function CandleChartInner({
                 <span className={chg >= 0 ? "up" : "down"}>
                   {chg >= 0 ? "+" : ""}{chg.toFixed(2)} ({chg >= 0 ? "+" : ""}{chgPct.toFixed(2)}%)
                 </span>
+                {rangeChgPct != null && (
+                  <span title="Change from the first candle on screen to the last one; follows zoom and scroll">
+                    <s>Range</s><b className={rangeChgPct >= 0 ? "up" : "down"}>{rangeChgPct >= 0 ? "+" : ""}{rangeChgPct.toFixed(2)}%</b>
+                  </span>
+                )}
               </span>
             )}
           </div>
