@@ -88,6 +88,45 @@ describe("foldLiveOntoBars: during the session the live tick still folds", () =>
     assert.equal(out[1].h, 350.6);
   });
 
+  it("1D: stored bars end on the previous session, so today's candle is started from the tick (NVDA 81.32 vs 87.21)", () => {
+    const tick = { price: 87.21, high: 88.1, low: 82.4, open: 82.9, at: at("2026-11-24T10:41:00-05:00") };
+    const out = foldLiveOntoBars([fri, monPartial], tick, "1D", null);
+    assert.equal(out.length, 3);
+    assert.deepEqual(out[2], { t: at("2026-11-24T00:00:00-05:00"), o: 82.9, h: 88.1, l: 82.4, c: 87.21, v: 0 });
+  });
+
+  it("1m: a tick past the last stored minute starts its own minute candle", () => {
+    const m1 = { t: at("2026-11-24T10:30:00-05:00"), o: 86, h: 86.2, l: 85.9, c: 86.1, v: 10 };
+    const m2 = { t: at("2026-11-24T10:31:00-05:00"), o: 86.1, h: 86.3, l: 86, c: 86.2, v: 10 };
+    const tick = { price: 87.21, high: 88.1, low: 82.4, at: at("2026-11-24T10:44:27-05:00") };
+    const out = foldLiveOntoBars([m1, m2], tick, "1m", null);
+    assert.equal(out.length, 3);
+    assert.deepEqual(out[2], { t: at("2026-11-24T10:44:00-05:00"), o: 87.21, h: 87.21, l: 87.21, c: 87.21, v: 0 }, "the day's range is not put on a 1-minute candle");
+  });
+
+  it("1H: the new candle is aligned to the 09:30 open", () => {
+    const h1 = { t: at("2026-11-24T09:30:00-05:00"), o: 86, h: 86.2, l: 85.9, c: 86.1, v: 10 };
+    const h0 = { t: at("2026-11-23T15:30:00-05:00"), o: 86, h: 86.2, l: 85.9, c: 86.1, v: 10 };
+    const out = foldLiveOntoBars([h0, h1], { price: 87, high: null, low: null, at: at("2026-11-24T11:05:00-05:00") }, "1H", null);
+    assert.equal(out[2].t, at("2026-11-24T10:30:00-05:00"));
+  });
+
+  it("1W: the first session of a new week starts this week's candle", () => {
+    const w1 = bar("2026-11-16", 300, 310, 295, 305);
+    const w2 = bar("2026-11-23", 305, 351, 300, 349.08);
+    const tick = { price: 352, high: 353, low: 348, open: 349.5, at: at("2026-11-30T10:00:00-05:00") };
+    const out = foldLiveOntoBars([w1, w2], tick, "1W", null);
+    assert.equal(out.length, 3);
+    assert.equal(out[2].t, at("2026-11-30T00:00:00-05:00"));
+    assert.equal(out[2].o, 349.5);
+  });
+
+  it("an after-hours or pre-market tick never starts a candle", () => {
+    const base = [fri, monPartial];
+    assert.equal(foldLiveOntoBars(base, { price: 351, high: null, low: null, at: at("2026-11-24T08:00:00-05:00") }, "1D", null), base);
+    assert.equal(foldLiveOntoBars(base, { price: 351, high: null, low: null, at: at("2026-11-23T17:00:00-05:00") }, "1D", null).length, 2);
+  });
+
   it("a REST-poll tick without a time folds nothing", () => {
     const base = [fri, monPartial];
     assert.equal(foldLiveOntoBars(base, { price: 350, high: null, low: null, at: null }, "1D", null), base);

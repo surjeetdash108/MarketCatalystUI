@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { trendLine, trendWindow } from "./analyst-trend";
+import { latestFirmTargets, trendLine, trendWindow } from "./analyst-trend";
 
 const today = "2026-11-24";
 const calls = [
@@ -29,5 +29,24 @@ describe("analyst trend", () => {
     const line = trendLine(trendWindow(calls, today, 30), trendWindow(calls, today, 90));
     assert.equal(line, "Leaning bullish over the last 30 days: 1 upgrade, 1 target raise, 1 target cut.");
     assert.equal(trendLine(trendWindow([], today, 30), trendWindow([], today, 90)), "No analyst calls in the last 90 days.");
+  });
+});
+
+describe("latestFirmTargets", () => {
+  it("keeps each firm's newest own target in the window, highest first", () => {
+    const c = (firm: string, pt1: number, date: string, to = "Buy", ptSource: "firm" | "consensus" = "firm") =>
+      ({ firm, pt1, date, to, ptSource, act: "Maintain", dir: 0 });
+    const out = latestFirmTargets([
+      c("Citi", 200, "2026-10-01"),
+      c("Citi", 220, "2026-11-10", "Buy"),
+      c("Mizuho", 180, "2026-11-01", "Neutral"),
+      c("Old Firm", 300, "2024-01-01"),
+      c("No Target", 0, "2026-11-12"),
+      c("Fallback", 250, "2026-11-12", "Buy", "consensus"),
+    ], "2025-11-24");
+    assert.deepEqual(out, [
+      { firm: "Citi", pt: 220, rating: "Buy", date: "2026-11-10" },
+      { firm: "Mizuho", pt: 180, rating: "Neutral", date: "2026-11-01" },
+    ]);
   });
 });

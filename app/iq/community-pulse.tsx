@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useIQActions } from "./shell";
 import { useApiResource } from "./hooks/useApiResource";
 import { StockLogo } from "./utils";
+import { parsePulse, pulsePlainText, type PulseInline } from "./pulse-rich";
 
 /*
  * Market Catalyst Pulse — short posts the MarketCatalyst desk writes from the
@@ -48,7 +49,7 @@ export function pulseTime(iso: string, now: number): string {
   return `${new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: tz })} · ${time}`;
 }
 
-/** The read for the card: the newest posts, or the search for `q` (ticker, words, name or handle). */
+/** The read for the card: the newest posts, or the search for `q` (ticker or words). */
 export const pulseQueryPath = (q: string) => {
   const t = q.trim().slice(0, 100);
   return t ? `/api/pulse?q=${encodeURIComponent(t)}` : "/api/pulse";
@@ -94,6 +95,41 @@ function Hl({ text, terms }: { text: string; terms: string[] }) {
   );
 }
 
+/** Inline runs (bold, italic, links) with search matches marked inside them. */
+function RichInline({ c, terms }: { c: PulseInline[]; terms: string[] }) {
+  return (
+    <>
+      {c.map((x, i) =>
+        x.k === "text" ? <Hl key={i} text={x.t} terms={terms} />
+          : x.k === "b" ? <strong key={i}><RichInline c={x.c} terms={terms} /></strong>
+          : x.k === "i" ? <em key={i}><RichInline c={x.c} terms={terms} /></em>
+          : <a key={i} href={x.href} target="_blank" rel="noopener noreferrer nofollow"><RichInline c={x.c} terms={terms} /></a>,
+      )}
+    </>
+  );
+}
+
+/** A post's formatted text: paragraphs with line breaks, bullet and numbered lists. */
+function PulseRich({ text, terms }: { text: string; terms: string[] }) {
+  return (
+    <>
+      {parsePulse(text).map((b, i) =>
+        b.k === "p" ? (
+          <p key={i}>
+            {b.lines.map((l, j) => (
+              <span key={j}>{j > 0 && <br />}<RichInline c={l} terms={terms} /></span>
+            ))}
+          </p>
+        ) : b.k === "ul" ? (
+          <ul key={i}>{b.items.map((it, j) => <li key={j}><RichInline c={it} terms={terms} /></li>)}</ul>
+        ) : (
+          <ol key={i}>{b.items.map((it, j) => <li key={j}><RichInline c={it} terms={terms} /></li>)}</ol>
+        ),
+      )}
+    </>
+  );
+}
+
 /**
  * One post's text, held to a few lines with a Show more / Show less toggle.
  * The toggle only appears when the text really overflows the collapsed height
@@ -117,7 +153,7 @@ function PulseText({ text, terms }: { text: string; terms: string[] }) {
   }, [text, clamped]);
   return (
     <>
-      <div ref={ref} className={`cpulse-tw-text${clamped ? " clamp" : ""}`}><Hl text={text} terms={terms} /></div>
+      <div ref={ref} className={`cpulse-tw-text${clamped ? " clamp" : ""}`}><PulseRich text={text} terms={terms} /></div>
       {!searching && (overflows || open) && (
         <button type="button" className="cpulse-more" aria-expanded={open} onClick={() => setOpen(o => !o)}>
           {open ? "Show less" : "Show more"}
@@ -141,9 +177,9 @@ export function CommunityPulse() {
   // Highlights follow the box as it is typed; the posts below catch up after the pause.
   const terms = pulseTerms(q);
   const searching = sentQ.trim().length > 0;
-  // Everything marked below: post text, name, handle and ticker.
+  // Everything marked below: the post's visible text and its ticker.
   const matches = terms.length === 0 ? 0 : posts.reduce(
-    (n, p) => n + [p.text, p.name, p.handle, p.ticker ?? ""].reduce((m, f) => m + pulseMatchCount(f, terms), 0),
+    (n, p) => n + [pulsePlainText(p.text), p.ticker ?? ""].reduce((m, f) => m + pulseMatchCount(f, terms), 0),
     0,
   );
   // Keeps "5m" / "1h" current between polls.
@@ -169,7 +205,7 @@ export function CommunityPulse() {
           value={q}
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => { if (e.key === "Escape") setQ(""); }}
-          placeholder="Search posts — ticker, keyword or @handle"
+          placeholder="Search posts — ticker or keyword"
           aria-label="Search Market Catalyst Pulse"
           maxLength={100}
           data-testid="pulse-search"
@@ -198,17 +234,12 @@ export function CommunityPulse() {
               <div className="cpulse-av" style={{ background: AVATARS[i % AVATARS.length] }}>{pulseLetter(p.text)}</div>
             )}
             <div className="cpulse-tw-main">
-              <div className="cpulse-tw-top">
-                <span className="nm"><Hl text={p.name} terms={terms} /></span>
-                <span className="hd">@<Hl text={p.handle} terms={terms} /></span>
-                <span className="ago">{pulseAgo(p.createdAt, now)}</span>
-              </div>
               <PulseText text={p.text} terms={terms} />
               <div className="cpulse-tw-foot">
                 {p.ticker && (
                   <button type="button" className="tk-link" title={`Open ${p.ticker}`} onClick={() => openStock(p.ticker as string)}>$<Hl text={p.ticker} terms={terms} /></button>
                 )}
-                <span className="tm">{pulseTime(p.createdAt, now)}</span>
+                <span className="tm">{pulseTime(p.createdAt, now)} · {pulseAgo(p.createdAt, now)}</span>
               </div>
             </div>
           </div>

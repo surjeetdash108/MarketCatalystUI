@@ -12,7 +12,7 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 );
 import { useApiList } from "../hooks/useApiList";
 import { useLiveQuotes } from "../live-quotes-context";
-import { displayStatus, hasListed, isNonCommonListing, listingKind } from "../ipo-rows";
+import { displayStatus, hasListed, hasOfferPrice, isNonCommonListing, listingKind } from "../ipo-rows";
 import type { IpoEventDoc, IpoPipelineDoc, CompanyDoc } from "../types";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { etTodayIso, fmtMonthDay } from "../calendar-range";
@@ -177,7 +177,7 @@ export function IPOsScreen() {
   // units or rights, and not deals still waiting to list (they had no price, so
   // the newest rows read as blanks).
   const liveRows: IpoRow[] = liveIposSorted
-    .filter(e => !isNonCommonListing(e) && hasListed(e, livePxOf(e.symbol), todayIso))
+    .filter(e => !isNonCommonListing(e) && hasOfferPrice(e) && hasListed(e, livePxOf(e.symbol), todayIso))
     .map(e => {
     const offer = offerOf(e);
     const livePx = livePxOf(e.symbol);

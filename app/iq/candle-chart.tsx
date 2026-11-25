@@ -137,7 +137,24 @@ function sameCalendarCandle(lastT: number, iv: BarInterval, at: number): boolean
  */
 export type OfficialClose = { close: number; high: number | null; low: number | null; sessionIso: string };
 
-type LiveInput = { price: number; high: number | null; low: number | null; at?: number | null };
+type LiveInput = { price: number; high: number | null; low: number | null; open?: number | null; at?: number | null };
+
+/**
+ * Start time of the candle a regular-session tick at `at` belongs to, stamped
+ * the way the stored bars are: intraday candles count from the 09:30 ET open;
+ * 1D/1W/1M candles are stamped at ET midnight of their first session (for a
+ * new week or month, that is today, since no candle exists for it yet).
+ */
+function candleStartFor(at: number, iv: BarInterval): number {
+  const intoMinute = ((at % 60_000) + 60_000) % 60_000;
+  const minuteStart = at - intoMinute;
+  const len = INTRADAY_INTERVAL_MS[iv];
+  if (len != null) {
+    const sinceOpen = (etMinuteOfDay(at) - (9 * 60 + 30)) * 60_000;
+    return minuteStart - (sinceOpen % len);
+  }
+  return minuteStart - etMinuteOfDay(at) * 60_000;
+}
 
 /**
  * The bars to draw: the stored ones with the live quote folded onto the newest.
@@ -152,8 +169,9 @@ type LiveInput = { price: number; high: number | null; low: number | null; at?: 
  *    ET against the official 349.08), so without this the candle only matches the
  *    header if the bars happened to be re-fetched after the close.
  *
- * No synthetic bar is ever added: if the stored bars have no candle for the
- * session (NVDA's ended on Friday), nothing is folded onto an earlier candle.
+ * A regular-session tick newer than the last candle starts a new candle (see
+ * candleStartFor); an official close is never painted onto an earlier candle
+ * (NVDA's stored bars ended on Friday).
  */
 export function foldLiveOntoBars(
   base: OHLCBar[],
@@ -177,6 +195,21 @@ export function foldLiveOntoBars(
         const h = Math.max(last.h, c, dayRange ? (live.high ?? c) : c);
         const l = Math.min(last.l, c, dayRange ? (live.low ?? c) : c);
         return [...base.slice(0, -1), { ...last, c, h, l }];
+      }
+      // The tick is newer than the last stored candle: start the candle it
+      // belongs to, so the chart's last price is the header's. Before, nothing
+      // was drawn until the next bars refetch: the 1D chart ended on the
+      // previous session (NVDA, 25 Nov 2026: 81.32 on the chart, 87.21 above
+      // it) and 1-minute charts stood still for up to 15 minutes.
+      if (live.at != null && inRegularHours(live.at) && live.at > last.t) {
+        const t = candleStartFor(live.at, interval);
+        if (t > last.t) {
+          const dayRange = !isIntradayInterval(interval);
+          const o = dayRange && live.open != null && live.open > 0 ? live.open : c;
+          const h = Math.max(o, c, dayRange ? (live.high ?? c) : c);
+          const l = Math.min(o, c, dayRange ? (live.low ?? c) : c);
+          return [...base, { t, o, h, l, c, v: 0 }];
+        }
       }
     } else if (live.at != null && inRegularHours(live.at) && etSessionDate(last.t) === etSessionDate(live.at)) {
       const h = Math.max(last.h, live.high ?? c, c);
@@ -1364,7 +1397,7 @@ type CandleChartProps = {
   /** Bars are being fetched — shows a loading state instead of "not enough history". */
   loading?: boolean;
   /** Latest live (delayed) quote, folded onto the newest bar while that bar is still forming. */
-  live?: { price: number; high: number | null; low: number | null; at?: number | null } | null;
+  live?: { price: number; high: number | null; low: number | null; open?: number | null; at?: number | null } | null;
   /** The last completed session's official close/high/low, set while the market is not in its regular session; see foldLiveOntoBars. */
   official?: OfficialClose | null;
   /** Reported quarters to mark on the chart. Omit (or pass []) to hide them. */
@@ -1862,6 +1895,11 @@ function CandleChartInner({
   const di = hoverIdx ?? n - 1;
   const bar = data[di], prev = data[Math.max(0, di - 1)];
   const chg = bar.c - prev.c, chgPct = prev.c ? (chg / prev.c) * 100 : 0;
+  // Change across the candles on screen (first visible open to last visible
+  // close), the way Google Finance shows the move over the selected range.
+  const visFirst = data[Math.min(n - 1, Math.max(0, Math.floor(view.from)))];
+  const visLast = data[Math.max(0, Math.min(n - 1, Math.ceil(view.to) - 1))];
+  const rangeChgPct = visFirst && visLast && visFirst.o > 0 ? ((visLast.c - visFirst.o) / visFirst.o) * 100 : null;
   const studyVal = (s: Study): string | null => {
     const d = computed.get(s.id), i = di + series.seed;
     if (s.k === "vol") return bigVol(bar.v);
@@ -2022,6 +2060,9 @@ function CandleChartInner({
             <span className="cc-lg-id" />
             {!hideHudOhlc && (
               <span className="cc-lg-q">
+                {/* Says these are the candle's figures, not the day's: a 1-minute
+                    candle's high/low differs from the Day's range above. */}
+                {interval && <span title="Open, high, low and close of the candle under the cursor (or the latest one)"><s>{intervalLabel(interval)} candle</s></span>}
                 <span><s>O</s><b>{bar.o.toFixed(2)}</b></span>
                 <span><s>H</s><b>{bar.h.toFixed(2)}</b></span>
                 <span><s>L</s><b>{bar.l.toFixed(2)}</b></span>
@@ -2029,6 +2070,11 @@ function CandleChartInner({
                 <span className={chg >= 0 ? "up" : "down"}>
                   {chg >= 0 ? "+" : ""}{chg.toFixed(2)} ({chg >= 0 ? "+" : ""}{chgPct.toFixed(2)}%)
                 </span>
+                {rangeChgPct != null && (
+                  <span title="Change from the first candle on screen to the last one; follows zoom and scroll">
+                    <s>Range</s><b className={rangeChgPct >= 0 ? "up" : "down"}>{rangeChgPct >= 0 ? "+" : ""}{rangeChgPct.toFixed(2)}%</b>
+                  </span>
+                )}
               </span>
             )}
           </div>

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { displayStatus, hasListed, isNonCommonListing, listingKind } from "./ipo-rows";
+import { displayStatus, hasListed, hasOfferPrice, isNonCommonListing, listingKind } from "./ipo-rows";
 
 const today = "2026-11-24";
 
@@ -17,6 +17,20 @@ describe("IPO rows", () => {
     // Date passed, never traded (postponed): not "Pending".
     assert.equal(displayStatus({ symbol: "SEAM", date: "2026-11-10", status: "pending" }, null, today), "not_listed");
     assert.equal(hasListed({ symbol: "ABC", date: "2026-11-30", status: "pending" }, 10, today), false);
+  });
+
+  it("a feed 'history' status with no trade anywhere is not listed", () => {
+    // OPAY: Polygon says history, but there are no bars and no quote.
+    const opay = { symbol: "OPAY", date: "2026-10-30", status: "history", currentPrice: null };
+    assert.equal(hasListed(opay, null, today), false);
+    assert.equal(displayStatus(opay, null, today), "not_listed");
+    assert.equal(hasListed({ ...opay, currentPrice: 19.5 }, null, today), true);
+  });
+
+  it("only rows with an offer price are IPOs (not transfers or direct listings)", () => {
+    assert.equal(hasOfferPrice({ offerPrice: null, priceLow: null, priceHigh: null }), false); // GM
+    assert.equal(hasOfferPrice({ offerPrice: 17 }), true);
+    assert.equal(hasOfferPrice({ offerPrice: null, priceLow: 18, priceHigh: 22 }), true);
   });
 
   it("withdrawn stays withdrawn", () => {

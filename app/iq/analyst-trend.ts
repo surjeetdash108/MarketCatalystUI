@@ -67,3 +67,29 @@ export function trendLine(w30: TrendWindow, w90: TrendWindow): string {
   const detail = parts.length ? parts.join(", ") : `${w.calls} reiteration${w.calls === 1 ? "" : "s"}`;
   return `${tone} over the last ${w.days} days: ${detail}.`;
 }
+
+export interface FirmTarget {
+  firm: string;
+  pt: number;
+  rating: string;
+  date: string;
+}
+
+/**
+ * Each firm's most recent own price target on or after `fromIso`, highest
+ * first: the "where targets sit" ticks and the per-firm bars. Calls without a
+ * firm target (consensus fallback) are skipped.
+ */
+export function latestFirmTargets(
+  calls: ReadonlyArray<TrendCall & { firm: string; to: string }>,
+  fromIso: string,
+): FirmTarget[] {
+  const byFirm = new Map<string, FirmTarget>();
+  for (const c of calls) {
+    if (c.date < fromIso || !(c.pt1 > 0) || c.ptSource === "consensus" || !c.firm) continue;
+    const key = c.firm.trim().toLowerCase();
+    const prev = byFirm.get(key);
+    if (!prev || c.date > prev.date) byFirm.set(key, { firm: c.firm, pt: c.pt1, rating: c.to, date: c.date });
+  }
+  return [...byFirm.values()].sort((a, b) => b.pt - a.pt);
+}

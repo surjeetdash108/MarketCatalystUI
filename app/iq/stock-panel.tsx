@@ -262,7 +262,15 @@ export function StockChart({
     <CandleChart
       sym={sym} tf={interval} interval={interval} chartType={chartType.toLowerCase()}
       realBars={realBars} loading={loading} px={px} height={height}
-      live={tick ? { price: tick.price, high: tick.high, low: tick.low, at: tick.at } : null}
+      // The session's open/high/low come from the same quote the header shows,
+      // so a forming 1D/1W candle's range matches the header's day range.
+      live={tick ? {
+        price: tick.price,
+        high: quote?.dayHigh ?? tick.high,
+        low: quote?.dayLow ?? tick.low,
+        open: quote?.open ?? tick.open,
+        at: tick.at,
+      } : null}
       official={official}
       earnings={showEarnings ? chartEarnings : []}
       moments={keyMoments}
