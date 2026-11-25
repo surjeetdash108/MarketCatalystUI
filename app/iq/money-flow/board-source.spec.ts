@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import {
   SNAPSHOT_MAX_AGE_MS,
@@ -28,11 +28,10 @@ describe("Money Flow saved board: freshness (same rule as the backend)", () => {
     assert.equal(snapshotUsable(Date.parse("2026-11-20T21:20:00Z"), SAT_10_ET), true);
     assert.equal(snapshotUsable(SAT_10_ET - 5 * 24 * 60 * MIN, SAT_10_ET), false);
   });
-  it("matches the backend's limits", () => {
-    const be = readFileSync(
-      new URL("../../../../MarketCatalystBackEnd/src/live/money-flow/money-flow-snapshot.ts", import.meta.url),
-      "utf8",
-    );
+  // The backend repo sits beside this one locally; CI checks out this repo alone.
+  const BE = new URL("../../../../MarketCatalystBackEnd/src/live/money-flow/money-flow-snapshot.ts", import.meta.url);
+  it("matches the backend's limits", { skip: !existsSync(BE) && "backend repo not checked out (CI)" }, () => {
+    const be = readFileSync(BE, "utf8");
     assert.match(be, /SNAPSHOT_MAX_AGE_MS = 10 \* 60_000/);
     assert.match(be, /SNAPSHOT_OFFHOURS_MAX_AGE_MS = 4 \* 24 \* 60 \* 60_000/);
   });
