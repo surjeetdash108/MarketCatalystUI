@@ -1835,7 +1835,7 @@ export function StockIntelligenceScreen() {
           <div
             style={{
               fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: 48,
+              fontSize: 57.6, // 48 × 1.2
               fontWeight: 700,
               letterSpacing: "0.16em",
               color: "var(--si-text-hi, #e8eef4)",
@@ -1848,7 +1848,7 @@ export function StockIntelligenceScreen() {
           <div
             style={{
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 12,
+              fontSize: 14.4, // 12 × 1.2
               fontWeight: 500,
               letterSpacing: "0.22em",
               color: "var(--si-accent, #5980a6)",
@@ -1861,7 +1861,7 @@ export function StockIntelligenceScreen() {
           <p
             style={{
               fontFamily: "'Manrope', sans-serif",
-              fontSize: 15,
+              fontSize: 18, // 15 × 1.2
               color: "var(--si-text-mid, #93a1af)",
               lineHeight: 1.6,
               marginBottom: 36,
