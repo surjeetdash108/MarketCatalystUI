@@ -25,10 +25,15 @@ const TABS = ["Stocks", "S&P 500", "Nasdaq", "Dow", "Russell 2000"];
 /**
  * What the buttons say. The last tab keeps its `?index=Russell 2000` URL key above,
  * but it is not the Russell 2000 (no feed supplies that index): it is every stock
- * under $40B in our data, and is labelled as exactly that.
+ * under SMALL_MID_MAX_B in our data, and is labelled as exactly that.
  */
 const TAB_LABELS = ["All stocks", "S&P 500", "Nasdaq 100", "Dow 30", "Small & mid caps"];
 const SMALL_MID_TAB = 4;
+/**
+ * Small & mid caps: under $10B, the usual mid-cap ceiling. It was $40B, which
+ * put large caps ($10B-$40B) under a "Small & mid caps" label.
+ */
+const SMALL_MID_MAX_B = 10;
 const FRAMES: HmFrame[] = ["1D", "1W", "1M", "YTD"];
 const FRAME_TITLES: Record<HmFrame, string> = {
   "1D": "Change today",
@@ -188,7 +193,7 @@ function HeatmapInner() {
   };
 
   // Tab 0 = all synced stocks; 1-3 filter to the S&P 500 / Nasdaq-100 / Dow-30.
-  // 4 (small & mid caps) filters to stocks under $40B, falling back to the full list so every tab has data.
+  // 4 (small & mid caps) filters to stocks under SMALL_MID_MAX_B ($10B), falling back to the full list so every tab has data.
   // Membership is the live constituent list (index-members job); the static
   // 2024 lists only until it answers or if it is thin (see indexMemberSet).
   const { data: liveMembers } = useApiResource<LiveIndexMembers>("/market-data/index-members");
@@ -206,7 +211,7 @@ function HeatmapInner() {
     }
     if (tabKey === "RUT") {
       const smallCaps = fullSectorList
-        .map(g => ({ ...g, items: g.items.filter(([, mcap]) => mcap < 40) }))
+        .map(g => ({ ...g, items: g.items.filter(([, mcap]) => mcap < SMALL_MID_MAX_B) }))
         .filter(g => g.items.length > 0);
       return smallCaps.length > 0 ? smallCaps : fullSectorList;
     }
@@ -392,7 +397,7 @@ function HeatmapInner() {
 
   const subtitle = [
     asOfLabel(mkt.phase, latestSessionDate(), QUOTE_DELAY_LABEL),
-    `${membersShown.toLocaleString("en-US")} ${isOverall ? (tab === 0 ? "stocks" : tab === SMALL_MID_TAB ? "stocks under $40B" : `${TAB_LABELS[tab]} members`) : `${activeSector!.name} stocks`}`,
+    `${membersShown.toLocaleString("en-US")} ${isOverall ? (tab === 0 ? "stocks" : tab === SMALL_MID_TAB ? `stocks under $${SMALL_MID_MAX_B}B` : `${TAB_LABELS[tab]} members`) : `${activeSector!.name} stocks`}`,
     `sized by ${sizeBy === "cap" ? "market cap" : "dollar volume"}`,
   ].join(" · ");
 
