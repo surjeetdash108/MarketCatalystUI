@@ -86,6 +86,7 @@ import type { Stock13FResponse } from "../stock-13f-view";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { LockedFeature } from "../entitlement-gate";
 import { ProfileMenu } from "../profile-menu";
+import { MarketClockBadge } from "../market-clock-badge";
 
 const toneColor = (tone?: "up" | "dn") =>
   tone === "up" ? "var(--up, #16a34a)" : tone === "dn" ? "var(--down, #dc2626)" : "var(--si-text-hi, #e8eef4)";
@@ -2421,15 +2422,24 @@ export function StockIntelligenceScreen() {
             flexWrap: "wrap",
           }}
         >
-          {/* Logo & Subtitle: unclickable brand text */}
-          <div
+          {/* Logo & Subtitle: click to go back to the Stock Intelligence home (search page) */}
+          <button
+            type="button"
+            onClick={goToSearch}
+            title="Stock Intelligence home"
+            aria-label="Stock Intelligence home"
             style={{
               display: "flex",
               flexDirection: "column",
+              alignItems: "flex-start",
               flex: "none",
+              border: "none",
               borderRight: "1px solid var(--si-border, #1c2733)",
-              paddingRight: 16,
+              background: "transparent",
+              padding: "0 16px 0 0",
+              cursor: "pointer",
               userSelect: "none",
+              textAlign: "left",
             }}
           >
             <span
@@ -2456,46 +2466,6 @@ export function StockIntelligenceScreen() {
             >
               BY MARKETCATALYST
             </span>
-          </div>
-
-          {/* Home Button -> returns to search bar page (/si) */}
-          <button
-            type="button"
-            onClick={goToSearch}
-            title="Return to Stock Intelligence Search (/si)"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              height: 32,
-              padding: "0 11px",
-              border: "1px solid var(--si-border-sec, #2a3a4a)",
-              borderRadius: 6,
-              background: "var(--si-card-tint, rgba(12, 17, 24, 0.8))",
-              color: "var(--si-accent-light, #a9c6e3)",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              cursor: "pointer",
-              transition: "all 150ms ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(89, 128, 166, 0.22)";
-              e.currentTarget.style.borderColor = "#7fa8d0";
-              e.currentTarget.style.color = "#ffffff";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(12, 17, 24, 0.8)";
-              e.currentTarget.style.borderColor = "#2a3a4a";
-              e.currentTarget.style.color = "#a9c6e3";
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-            HOME
           </button>
 
           {/* Search Bar */}
@@ -2594,28 +2564,9 @@ export function StockIntelligenceScreen() {
 
           {/* Action Buttons */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
-            <button
-              onClick={() => setActiveTab("ai")}
-              style={{
-                height: 34,
-                padding: "0 12px",
-                border: "none",
-                background: "var(--si-accent-btn, #5980a6)",
-                color: "#ffffff",
-                fontFamily: "'Manrope', sans-serif",
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                borderRadius: 4,
-              }}
-            >
-              ✦ AI Research
-            </button>
-            {/* Theme Toggle Button right beside AI Research */}
+            {/* ET clock + market session, as in Market Catalyst, Money Flow and Alpha Signals */}
+            <MarketClockBadge />
+            {/* Theme toggle */}
             <button
               type="button"
               onClick={toggleTheme}
@@ -2647,43 +2598,6 @@ export function StockIntelligenceScreen() {
                   <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
                 </svg>
               )}
-            </button>
-            <button
-              onClick={toggleWatch}
-              disabled={watchBusy}
-              title={watchMsg ?? (isWatched ? "In your Market Catalyst watchlist — click to remove" : "Add to your Market Catalyst watchlist")}
-              style={{
-                height: 34,
-                padding: "0 12px",
-                border: isWatched ? "1px solid #5980a6" : "1px solid #2a3a4a",
-                background: isWatched ? "rgba(89,128,166,0.18)" : "transparent",
-                color: "var(--si-text-hi, #e8eef4)",
-                fontFamily: "'Manrope', sans-serif",
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {isWatched ? "✓ Watching" : "+ Watch"}
-            </button>
-            {watchMsg && (
-              <span role="status" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--down, #dc2626)", maxWidth: 320 }}>{watchMsg}</span>
-            )}
-            <button
-              onClick={() => setActiveTab("mon")}
-              style={{
-                height: 34,
-                padding: "0 12px",
-                border: "1px solid var(--si-border, #1c2733)",
-                background: "transparent",
-                color: "var(--si-text-hi, #e8eef4)",
-                fontFamily: "'Manrope', sans-serif",
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Track Trade
             </button>
             <ProfileMenu />
           </div>
@@ -2751,9 +2665,35 @@ export function StockIntelligenceScreen() {
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                     <StockLogo sym={stock.t} size={52} />
                     <div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                        {stock.t}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
+                          {stock.t}
+                        </div>
+                        {/* Watchlist star, as on the Market Catalyst stock page: filled when the
+                            ticker is in a Market Catalyst watchlist. */}
+                        <button
+                          type="button"
+                          onClick={toggleWatch}
+                          disabled={watchBusy}
+                          aria-pressed={isWatched}
+                          aria-label={isWatched ? `Remove ${stock.t} from your watchlist` : `Add ${stock.t} to your watchlist`}
+                          title={watchMsg ?? (isWatched ? "In your Market Catalyst watchlist — click to remove" : "Add to your Market Catalyst watchlist")}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            padding: "0 2px",
+                            fontSize: 22,
+                            lineHeight: 1,
+                            cursor: watchBusy ? "default" : "pointer",
+                            color: isWatched ? "var(--warn, #f5b544)" : "var(--si-text-mid, #93a1af)",
+                          }}
+                        >
+                          {isWatched ? "★" : "☆"}
+                        </button>
                       </div>
+                      {watchMsg && (
+                        <div role="status" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--down, #dc2626)", marginTop: 4, maxWidth: 260 }}>{watchMsg}</div>
+                      )}
                       <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4, whiteSpace: "nowrap" }}>
                         {stock.name}
                       </div>

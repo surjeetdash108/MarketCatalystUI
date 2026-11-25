@@ -13,8 +13,22 @@
 /** Instrument types that are funds, not companies. */
 const FUND_TYPES = new Set(["ETF", "ETN", "ETV", "FUND"]);
 
+/**
+ * Instruments that ride on a company's shares but aren't them: warrants, rights,
+ * units (SPAC "SP" units too). ENVXW, an Enovix warrant, sat on the map at
+ * +109% on 25 Nov 2026 under the name "Enovix Corporation".
+ */
+const DERIVATIVE_TYPES = new Set(["WARRANT", "RIGHT", "UNIT", "SP"]);
+
 export function isFundType(type: string | null | undefined): boolean {
   return type != null && FUND_TYPES.has(String(type).toUpperCase());
+}
+
+/** Not a company's own shares: a fund, or a warrant / right / unit. */
+export function isNonStockType(type: string | null | undefined): boolean {
+  if (type == null) return false;
+  const t = String(type).toUpperCase();
+  return FUND_TYPES.has(t) || DERIVATIVE_TYPES.has(t);
 }
 
 /**
@@ -49,7 +63,7 @@ export function dedupeIssuers<
 >(items: T[]): T[] {
   const best = new Map<string, T>();
   for (const item of items) {
-    if (!item.ticker || isFundType(item.type)) continue;
+    if (!item.ticker || isNonStockType(item.type)) continue;
     const key = issuerKey(item);
     const cur = best.get(key);
     if (!cur) {

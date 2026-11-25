@@ -44,6 +44,7 @@ import type {
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, gaapQuarterEps, quarterLabel, ADJUSTED_SURPRISE_LABEL } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, salesDisplay, type EpsSalesPt } from "../eps-sales-data";
+import { forwardPe, pegRatio } from "../forward-valuation";
 import { hasPublicEarningsReport, salesChangeNote, salesSurpriseNote, type SalesCellNote } from "../sales-table-notes";
 import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
@@ -2020,7 +2021,7 @@ export function StockScreen({
                   since it's model-generated / untrusted. ── */}
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
                 <div style={{ fontSize: ".66rem", fontWeight: 700, color: "var(--ai)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span>AI Read</span>
+                  <span>AI summary</span>
                   {aiAnalysis?.ok && (
                     <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", color: "var(--text-dim-solid)", textTransform: "none", letterSpacing: 0 }}>
                       {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}
@@ -2732,9 +2733,16 @@ export function StockScreen({
             const target = consensusDoc?.priceTargetConsensus ?? null;
             const targetUp = target != null && dispPrice != null && dispPrice > 0 ? (target - dispPrice) / dispPrice * 100 : null;
             type Row = { k: string; v: ReactNode | null; delta?: { txt: string; up: boolean } | null };
+            // Next fiscal year's consensus EPS (the first starred year in Financials).
+            const nextFyEps = forwardAnnualEstimates(financialsDoc)[0]?.epsEstimate ?? null;
+            const trailingPe = eps != null && eps > 0 ? data.peRatio : null;
+            const fwdPe = forwardPe(dispPrice, nextFyEps, trailingPe);
+            const peg = pegRatio(trailingPe, eps, nextFyEps);
             const fundamentalRows: Row[] = [
               { k: "Market cap",    v: mc != null ? cap(mc) : null },
               { k: "P/E ratio",     v: eps != null && eps <= 0 ? "n/a" : (data.peRatio != null ? data.peRatio.toFixed(2) : null) },
+              { k: "Forward P/E",   v: fwdPe != null ? fwdPe.toFixed(2) : (nextFyEps != null && nextFyEps <= 0 ? "n/a" : null) },
+              { k: "PEG ratio",     v: peg != null ? peg.toFixed(2) : (trailingPe != null && nextFyEps != null ? "n/a" : null) },
               { k: "EPS (TTM)",     v: eps != null ? "$" + eps.toFixed(2) : null },
               // Forward-annualized (latest declared rate × frequency ÷ price).
               { k: "Dividend (fwd)", v: divMetrics.isPayer
@@ -2772,13 +2780,13 @@ export function StockScreen({
                 delta: targetUp != null ? { txt: pct(targetUp), up: targetUp >= 0 } : null },
               { k: "Next earnings date", v: erDate !== "—" ? <>{fmtDate(erDate)}{!isErConfirmed && <span className="pill" style={{ marginLeft: 6, fontSize: ".65rem", padding: "1px 5px", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Estimated</span>}</> : null },
             ];
-            // Three parts of seven rows, side by side: valuation and payout,
+            // Three parts side by side (8 / 7 / 8 rows): valuation and payout,
             // trading, then the company and what analysts think of it.
             const byKey = new Map([...fundamentalRows, ...tradingRows].map(r => [r.k, r] as const));
             const part = (...keys: string[]) => keys.map(k => byKey.get(k)).filter((r): r is Row => r != null);
-            const valuationPart = part("Market cap", "P/E ratio", "EPS (TTM)", "Dividend (fwd)", "Ex-dividend date", "Beta", "Next earnings date");
+            const valuationPart = part("Market cap", "P/E ratio", "Forward P/E", "PEG ratio", "EPS (TTM)", "Dividend (fwd)", "Ex-dividend date", "Beta");
             const tradingPart = part("Today's volume", "Avg volume (20D)", "Open", "Previous close", "Day's range", "52-week range", "Off 52W high / low");
-            const companyPart = part("Sector", "Industry", "CEO", "Employees", "Listing date", "Analysts consensus", "Price target");
+            const companyPart = part("Sector", "Industry", "CEO", "Employees", "Listing date", "Next earnings date", "Analysts consensus", "Price target");
             const col = (rows: Row[]) => (
               <dl className="sd-kv">
                 {rows.map(r => (
@@ -2984,7 +2992,7 @@ export function StockScreen({
 
             <div className="ai-block sd-ai">
               <div className="card-h">
-                <h3 className="ai-c">AI Read</h3>
+                <h3 className="ai-c">AI summary</h3>
                 {aiAnalysis?.ok && (
                   <span className="pill" style={{ fontSize: ".58rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
                     {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}

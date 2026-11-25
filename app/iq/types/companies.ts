@@ -44,6 +44,9 @@ export interface CompanyDoc {
   dayVolume?: number | null;
   peRatio: number | null;
   forwardPe?: number | null;
+  /** Next fiscal year's consensus EPS and that year's end date (forward-estimates.job; S&P 500 / NDX members). */
+  nextFyEps?: number | null;
+  nextFyEnd?: string | null;
   // Latest reported EPS (eps) and trailing-twelve-month EPS (epsTtm), written
   // by /live/company (ondemand.service). Absent on bulk-synced docs.
   eps?: number | null;
