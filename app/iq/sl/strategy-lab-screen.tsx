@@ -5,6 +5,7 @@ import { ModuleSwitcher } from "../module-switcher";
 import { ProfileMenu } from "../profile-menu";
 import { useSI } from "../si/si-context";
 import { ModuleThemeToggle } from "../theme/theme-toggle";
+import { MarketClockBadge } from "../market-clock-badge";
 
 /**
  * Strategy Lab module (/sl): the prototype's module chrome — title + HOME —
@@ -42,8 +43,9 @@ export function StrategyLabScreen() {
           <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290 }}>
             <ModuleSwitcher />
           </div>
-          {/* Right: theme switch + profile menu (204px balances the title block so the toggle stays centred; top-right on a phone). */}
-          <div className="sl-hdr-right" style={{ flex: "none", width: 204, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+          {/* Right: ET clock + market session (as in Market Catalyst, Money Flow and Alpha Signals), theme switch, profile menu. */}
+          <div className="sl-hdr-right" style={{ flex: "none", minWidth: 204, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+            <MarketClockBadge />
             <ModuleThemeToggle />
             <ProfileMenu />
           </div>

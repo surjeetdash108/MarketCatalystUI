@@ -86,6 +86,7 @@ import type { Stock13FResponse } from "../stock-13f-view";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { LockedFeature } from "../entitlement-gate";
 import { ProfileMenu } from "../profile-menu";
+import { MarketClockBadge } from "../market-clock-badge";
 
 const toneColor = (tone?: "up" | "dn") =>
   tone === "up" ? "var(--up, #16a34a)" : tone === "dn" ? "var(--down, #dc2626)" : "var(--si-text-hi, #e8eef4)";
@@ -2563,6 +2564,8 @@ export function StockIntelligenceScreen() {
 
           {/* Action Buttons */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
+            {/* ET clock + market session, as in Market Catalyst, Money Flow and Alpha Signals */}
+            <MarketClockBadge />
             {/* Theme toggle */}
             <button
               type="button"
