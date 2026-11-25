@@ -1491,6 +1491,23 @@ export function InsiderScreen() {
                   {deepDive.chg}
                 </span>
               </div>
+              {/* Insiders vs funds, in words: between the quote and the stock-page button. */}
+              {deepDive.hasAlign && (
+                <span
+                  style={{
+                    display: "inline-block",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    border: `1px dashed ${deepDive.alignColor}`,
+                    color: deepDive.alignColor,
+                    marginLeft: 8,
+                  }}
+                >
+                  ◆ {deepDive.alignText}
+                </span>
+              )}
               <button
                 onClick={() => openStockFull(deepDive.t)}
                 style={{
@@ -1514,25 +1531,6 @@ export function InsiderScreen() {
                 Open stock page →
               </button>
             </div>
-
-            {/* Insiders vs funds, in words: sits above the two cards it compares. */}
-            {deepDive.hasAlign && (
-              <div style={{ padding: "14px 20px 0" }}>
-                <span
-                  style={{
-                    display: "inline-block",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    padding: "3px 8px",
-                    borderRadius: 6,
-                    border: `1px dashed ${deepDive.alignColor}`,
-                    color: deepDive.alignColor,
-                  }}
-                >
-                  ◆ {deepDive.alignText}
-                </span>
-              </div>
-            )}
 
             {/* Dual Verdict Cards */}
             <div
