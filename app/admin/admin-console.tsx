@@ -362,7 +362,9 @@ export function AdminConsole() {
           d.type === "admin:contentSubmit" ? "submit" :
           d.type === "admin:contentApprove" ? "approve" :
           d.type === "admin:contentSendBack" ? "sendBack" :
-          d.type === "admin:contentRetry" ? "retry" : null;
+          d.type === "admin:contentRetry" ? "retry" :
+          d.type === "admin:contentEdit" ? "edit" :
+          d.type === "admin:contentDelete" ? "delete" : null;
         if (!action) return;
         const reply = (m: Record<string, unknown>) =>
           iframeRef.current?.contentWindow?.postMessage({ type: "admin:contentResult", action, ...m }, window.location.origin);
@@ -374,6 +376,8 @@ export function AdminConsole() {
           else if (action === "submit") data = await apiPost("/api/admin/content", d.body ?? {});
           else if (action === "approve") data = await apiPost(`/api/admin/content/${id}/approve`, {});
           else if (action === "sendBack") data = await apiPost(`/api/admin/content/${id}/send-back`, { note: String(d.note ?? "") });
+          else if (action === "edit") data = await apiPatch(`/api/admin/content/${id}`, d.body ?? {});
+          else if (action === "delete") data = await apiDelete(`/api/admin/content/${id}`);
           else data = await apiPost(`/api/admin/content/${id}/retry`, {});
           reply({ ok: true, data });
         } catch (err) {
