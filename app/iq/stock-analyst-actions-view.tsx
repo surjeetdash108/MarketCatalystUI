@@ -7,7 +7,7 @@ import { apiGet } from "./backend";
 import { useWatchlistsContext } from "./hooks/useWatchlists";
 import type { AnalystConsensusDoc, AnalystRatingChange, CompanyDoc } from "./types";
 import { buildAnalystActions, type FirmStat, type ProcessedAction } from "./analyst-actions-engine";
-import { trendLine, trendWindow } from "./analyst-trend";
+import { latestFirmTargets, trendLine, trendWindow, type FirmTarget, type TrendWindow } from "./analyst-trend";
 
 type SortKey = "date" | "firm" | "act" | "to" | "pt" | "up" | "score";
 const PAGE_SIZE = 20;
@@ -162,43 +162,21 @@ export function StockAnalystActionsView({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
     {(rows.length > 0 || rated > 0) && (
-      <div className="card" style={{ width: "100%" }}>
-        <div className="card-b">
-          <div style={{ fontSize: ".95rem", fontWeight: 700, color: lineTone, marginBottom: 12 }}>{line}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>Consensus</div>
-              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>{rated > 0 ? consensus?.consensus : "—"}</div>
-              {rated > 0 && (
-                <>
-                  <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", margin: "6px 0 4px", background: "var(--surface-3)" }}>
-                    <div style={{ width: `${(buys / rated) * 100}%`, background: "var(--up)" }} />
-                    <div style={{ width: `${(holds / rated) * 100}%`, background: "var(--text-dim-solid)" }} />
-                    <div style={{ width: `${(sells / rated) * 100}%`, background: "var(--down)" }} />
-                  </div>
-                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{buys} buy · {holds} hold · {sells} sell</div>
-                </>
-              )}
-            </div>
-            <div>
-              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>Average target</div>
-              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>{target != null && target > 0 ? `$${target.toFixed(2)}` : "—"}</div>
-              {upside != null && (
-                <div style={{ fontSize: ".72rem", color: upside >= 0 ? "var(--up)" : "var(--down)" }}>{upside >= 0 ? "+" : ""}{upside.toFixed(1)}% from the current price</div>
-              )}
-            </div>
-            {[w30, w90].map((w) => (
-              <div key={w.days}>
-                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>Last {w.days} days</div>
-                <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>{w.calls} call{w.calls === 1 ? "" : "s"}</div>
-                <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                  <span className="up">▲ {w.upgrades + w.raises}</span> upgrades / raises · <span className="down">▼ {w.downgrades + w.cuts}</span> downgrades / cuts
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <StockAnalystSummary
+        line={line}
+        lineTone={lineTone}
+        consensusLabel={rated > 0 ? (consensus?.consensus ?? null) : null}
+        buys={buys}
+        holds={holds}
+        sells={sells}
+        target={target != null && target > 0 ? target : null}
+        targetLow={consensus?.priceTargetLow ?? null}
+        targetHigh={consensus?.priceTargetHigh ?? null}
+        upside={upside}
+        price={livePrice}
+        windows={[w30, w90]}
+        firms={latestFirmTargets(rows, cutoff)}
+      />
     )}
     <div className="card" style={{ width: "100%" }}>
       <div className="card-h" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -296,6 +274,147 @@ export function StockAnalystActionsView({
         )}
       </div>
     </div>
+    </div>
+  );
+}
+
+/* ── Summary above the table, in the Analyst Actions screen's style ──────── */
+
+const LBL: React.CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: "var(--text-dim-solid)", textTransform: "uppercase" };
+const SEC: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "var(--text-dim-solid)", textTransform: "uppercase", marginBottom: 8 };
+const VAL: React.CSSProperties = { fontFamily: "var(--f-mono, monospace)", fontSize: 16, fontWeight: 800, marginTop: 2, color: "var(--text-hi)" };
+const money = (v: number) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const ratingTone = (r: string | null | undefined) => {
+  const s = (r ?? "").toLowerCase();
+  if (/buy|outperform|overweight|positive|accumulate/.test(s)) return "var(--up)";
+  if (/sell|underperform|underweight|negative|reduce/.test(s)) return "var(--down)";
+  return "var(--warn)";
+};
+
+function StockAnalystSummary({
+  line, lineTone, consensusLabel, buys, holds, sells, target, targetLow, targetHigh, upside, price, windows, firms,
+}: {
+  line: string;
+  lineTone: string;
+  consensusLabel: string | null;
+  buys: number;
+  holds: number;
+  sells: number;
+  target: number | null;
+  targetLow: number | null;
+  targetHigh: number | null;
+  upside: number | null;
+  price: number | null;
+  windows: TrendWindow[];
+  firms: FirmTarget[];
+}) {
+  const rated = buys + holds + sells;
+  // The street's range: the consensus doc's low/high, else the firms' own targets.
+  const lo = targetLow != null && targetLow > 0 ? targetLow : firms.length ? Math.min(...firms.map(f => f.pt)) : null;
+  const hi = targetHigh != null && targetHigh > 0 ? targetHigh : firms.length ? Math.max(...firms.map(f => f.pt)) : null;
+  const pts = [lo, hi, price, target].filter((v): v is number => v != null && v > 0);
+  const min = pts.length ? Math.min(...pts) : 0, max = pts.length ? Math.max(...pts) : 0;
+  const pad = (max - min) * 0.06 || max * 0.05 || 1;
+  const pos = (v: number) => `${Math.max(0, Math.min(100, ((v - (min - pad)) / (max - min + 2 * pad)) * 100))}%`;
+  const showRail = lo != null && hi != null && price != null && price > 0;
+  const maxFirm = firms.length ? Math.max(...firms.map(f => f.pt), price ?? 0) : 0;
+  const shownFirms = firms.slice(0, 8);
+
+  return (
+    <div className="card" style={{ width: "100%" }}>
+      <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ fontSize: ".95rem", fontWeight: 700, color: lineTone }}>{line}</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+          {[
+            { k: "Consensus", v: consensusLabel ?? "—", c: consensusLabel ? ratingTone(consensusLabel) : "var(--text-hi)", mono: false },
+            { k: "Average target", v: target != null ? money(target) : "—", c: "var(--text-hi)", mono: true },
+            { k: "Implied upside", v: upside != null ? `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%` : "—", c: upside == null ? "var(--text-hi)" : upside >= 0 ? "var(--up)" : "var(--down)", mono: true },
+            { k: "Analysts", v: rated > 0 ? String(rated) : "—", c: "var(--text-hi)", mono: true },
+          ].map((m, i) => (
+            <div key={m.k} style={{ padding: "10px 12px", borderLeft: i > 0 ? "1px solid var(--border)" : undefined }}>
+              <div style={LBL}>{m.k}</div>
+              <div style={{ ...VAL, color: m.c, fontFamily: m.mono ? VAL.fontFamily : "inherit" }}>{m.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {showRail && (
+          <div>
+            <div style={SEC}>Where targets sit</div>
+            <div style={{ position: "relative", height: 78, margin: "0 18px" }}>
+              <div style={{ position: "absolute", left: 0, right: 0, top: 34, height: 2, background: "var(--border)" }} />
+              <div style={{ position: "absolute", top: 34, height: 2, left: pos(lo as number), width: `calc(${pos(hi as number)} - ${pos(lo as number)})`, background: "var(--brand-2)", opacity: 0.55 }} />
+              {firms.map((f, i) => (
+                <div key={i} title={`${f.firm}: ${money(f.pt)}`} style={{ position: "absolute", top: 28, left: pos(f.pt), width: 2, height: 14, background: f.pt >= (price as number) ? "var(--up)" : "var(--down)", opacity: 0.8 }} />
+              ))}
+              <div style={{ position: "absolute", top: 44, left: pos(lo as number), transform: "translateX(-50%)", fontSize: 11, color: "var(--text-dim-solid)", fontFamily: "var(--f-mono, monospace)", whiteSpace: "nowrap" }}>Low {money(lo as number)}</div>
+              <div style={{ position: "absolute", top: 44, left: pos(hi as number), transform: "translateX(-50%)", fontSize: 11, color: "var(--text-dim-solid)", fontFamily: "var(--f-mono, monospace)", whiteSpace: "nowrap" }}>High {money(hi as number)}</div>
+              <div style={{ position: "absolute", top: 40, left: pos(price as number), transform: "translateX(-50%)", textAlign: "center", fontSize: 12, fontFamily: "var(--f-mono, monospace)", color: "var(--text-hi)", whiteSpace: "nowrap", marginTop: 18 }}>
+                <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "6px solid var(--text-hi)", margin: "0 auto 2px" }} />
+                Now {money(price as number)}
+              </div>
+              {target != null && (
+                <div style={{ position: "absolute", top: 0, left: pos(target), transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-mono, monospace)" }}>Avg {money(target)}</div>
+                  <div style={{ width: 12, height: 12, borderRadius: "50%", margin: "6px auto 0", background: (target >= (price as number)) ? "var(--up)" : "var(--down)", boxShadow: "0 0 0 3px var(--surface-1)" }} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+          {rated > 0 && (
+            <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>
+              <div style={SEC}>Rating mix</div>
+              <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", background: "var(--surface-3)" }}>
+                <div style={{ width: `${(buys / rated) * 100}%`, background: "var(--up)" }} />
+                <div style={{ width: `${(holds / rated) * 100}%`, background: "var(--warn)" }} />
+                <div style={{ width: `${(sells / rated) * 100}%`, background: "var(--down)" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12, fontFamily: "var(--f-mono, monospace)" }}>
+                <span style={{ color: "var(--up)" }}>Buy {buys}</span>
+                <span style={{ color: "var(--warn)" }}>Hold {holds}</span>
+                <span style={{ color: "var(--down)" }}>Sell {sells}</span>
+              </div>
+            </div>
+          )}
+          {windows.map(w => (
+            <div key={w.days} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>
+              <div style={SEC}>Last {w.days} days · {w.calls} call{w.calls === 1 ? "" : "s"}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 10px", fontSize: 12 }}>
+                <span style={{ color: "var(--up)" }}>▲ Upgrades <b className="mono">{w.upgrades}</b></span>
+                <span style={{ color: "var(--down)" }}>▼ Downgrades <b className="mono">{w.downgrades}</b></span>
+                <span style={{ color: "var(--up)" }}>▲ Target raises <b className="mono">{w.raises}</b></span>
+                <span style={{ color: "var(--down)" }}>▼ Target cuts <b className="mono">{w.cuts}</b></span>
+              </div>
+              {w.avgTarget != null && (
+                <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim-solid)" }}>Avg new target <b className="mono" style={{ color: "var(--text-hi)" }}>{money(w.avgTarget)}</b></div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {shownFirms.length > 0 && (
+          <div>
+            <div style={SEC}>Latest target by firm{firms.length > shownFirms.length ? ` · top ${shownFirms.length} of ${firms.length}` : ""}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {shownFirms.map(f => (
+                <div key={f.firm} style={{ display: "grid", gridTemplateColumns: "minmax(110px, 1.2fr) 2fr 84px 90px 86px", gap: 10, alignItems: "center", fontSize: 12.5 }}>
+                  <span style={{ color: "var(--text-hi)", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.firm}</span>
+                  <div style={{ height: 6, borderRadius: 3, background: "var(--surface-3)", overflow: "hidden" }}>
+                    <div style={{ height: 6, width: `${Math.max(8, (f.pt / maxFirm) * 100)}%`, background: price != null && f.pt >= price ? "var(--up)" : "var(--down)" }} />
+                  </div>
+                  <span className="mono" style={{ textAlign: "right", color: "var(--text-hi)", fontWeight: 700 }}>{money(f.pt)}</span>
+                  <span style={{ color: ratingTone(f.rating), fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.rating}</span>
+                  <span className="mono" style={{ color: "var(--text-dim-solid)", textAlign: "right" }}>{formatUsDate(f.date)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
