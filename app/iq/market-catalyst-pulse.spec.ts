@@ -61,13 +61,13 @@ describe("Market Catalyst Pulse search", () => {
 });
 
 describe("Market Catalyst Pulse long posts", () => {
-  it("each post's text collapses with a Show more / Show less toggle", () => {
+  it("each post collapses to three lines and expands like Live Feed news (chevron, one open at a time)", () => {
     const src = read("./community-pulse.tsx");
-    assert.match(src, /<PulseText text=\{p\.text\} terms=\{terms\} \/>/);
-    assert.match(src, /Show more/);
-    assert.match(src, /Show less/);
+    assert.match(src, /<PulseText text=\{p\.text\} terms=\{terms\} open=\{openId === p\.id\}/);
+    assert.match(src, /setOpenId\(o => \(o === p\.id \? null : p\.id\)\)/);
+    assert.match(src, /className="cpulse-chev"/);
     assert.match(src, /aria-expanded=\{open\}/);
-    assert.match(read("../iq.css"), /\.cpulse-tw-text\.clamp \{[^}]*max-height: calc\(4 \* 1\.45em\)/);
+    assert.match(read("../iq.css"), /\.cpulse-tw-text\.clamp \{[^}]*max-height: calc\(3 \* 1\.45em\)/);
   });
 });
 
@@ -93,7 +93,7 @@ describe("Market Catalyst Pulse search highlight", () => {
   it("the card marks the text and ticker, and shows full posts while searching", () => {
     const src = read("./community-pulse.tsx");
     assert.match(src, /<mark key=\{i\} className="cpulse-hl">/);
-    assert.match(src, /<PulseText text=\{p\.text\} terms=\{terms\} \/>/);
+    assert.match(src, /<PulseText text=\{p\.text\} terms=\{terms\}/);
     assert.match(src, /const terms = pulseTerms\(q\)/);
     assert.match(src, /const clamped = !open && !searching/);
   });

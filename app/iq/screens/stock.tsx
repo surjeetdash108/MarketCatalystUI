@@ -1789,14 +1789,10 @@ export function StockScreen({
                       {ex && <>{ex} · </>}
                       <button
                         type="button"
+                        className="sd-sector-pill"
                         onClick={() => setInnerDrawer("industry")}
                         title={`See where ${group} ranks among all sectors today`}
-                        style={{
-                          background: "none", border: 0, padding: 0, margin: 0,
-                          font: "inherit", color: "inherit", cursor: "pointer",
-                          textDecoration: "underline dotted", textUnderlineOffset: 3,
-                        }}
-                      >{group}</button>
+                      >{group} <span aria-hidden="true">›</span></button>
                     </>) : (ex || data.name)}
                   </div>
                 </div>
@@ -2597,9 +2593,9 @@ export function StockScreen({
               ) : (
                 <>
                   {topSectors.map((s, i) => (
-                    <div key={s.sector} className="grouprow" style={s.sector === group ? { color: "var(--brand-2)" } : undefined}>
+                    <div key={s.sector} className="grouprow">
                       <span className="rk">{i + 1}</span>
-                      <span className="gn">{s.sector}</span>
+                      <span className="gn"><span className={s.sector === group ? "gn-on" : undefined}>{s.sector}</span></span>
                       <div className="bar"><i style={{ width: Math.max(8, (s.pctChange - pmnSector) / (pmxSector - pmnSector || 1) * 100) + "%" }} /></div>
                       <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(s.pctChange)}</span>
                     </div>
@@ -3800,10 +3796,8 @@ export function StockScreen({
                   <div key={s.sector} className="grouprow" style={{ cursor: "pointer" }}
                     onClick={() => { setInnerDrawer(null); openSector(s.sector); }}>
                     <span className="rk">{i + 1}</span>
-                    <span className="gn" style={{
-                      color: s.sector === group ? "var(--brand-2)" : undefined,
-                      fontWeight: s.sector === group ? 700 : undefined,
-                    }}>{s.sector}</span>
+                    {/* The stock's own sector sits in a green box; its text keeps the row colour. */}
+                    <span className="gn"><span className={s.sector === group ? "gn-on" : undefined}>{s.sector}</span></span>
                     <div className="bar"><i style={{ width: Math.max(8, (s.pctChange - pmnSector) / (pmxSector - pmnSector || 1) * 100) + "%" }} /></div>
                     <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(s.pctChange)}</span>
                   </div>
