@@ -34,10 +34,23 @@ export function isNonCommonListing(e: IpoLike): boolean {
   return NON_COMMON_TYPES.has((e.securityType ?? "").toUpperCase()) || listingKind(e) !== null;
 }
 
-/** Has it started trading? A past/today date and either a stored aftermarket price, a live quote, or a listed status. */
+/**
+ * Has it started trading? A past/today date and a price: a stored aftermarket
+ * price or a live quote. The feed's "history" status alone isn't proof: OPAY
+ * (30 Oct 2026) reads "history" but neither vendor has a single trade for it.
+ */
 export function hasListed(e: IpoLike, livePrice: number | null, today: string): boolean {
   if (!e.date || e.date > today || e.status === "withdrawn") return false;
-  return e.status === "history" || e.currentPrice != null || (livePrice != null && livePrice > 0);
+  return e.currentPrice != null || (livePrice != null && livePrice > 0);
+}
+
+/**
+ * A real IPO has an offer price (final, or the marketed range). Feed rows with
+ * none are exchange transfers and direct listings of companies already trading
+ * (GM, HLT, Nov 2026), so they have no offer to measure a return against.
+ */
+export function hasOfferPrice(e: { offerPrice?: number | null; priceLow?: number | null; priceHigh?: number | null }): boolean {
+  return [e.offerPrice, e.priceLow, e.priceHigh].some(v => v != null && v > 0);
 }
 
 /**
@@ -49,6 +62,6 @@ export function hasListed(e: IpoLike, livePrice: number | null, today: string): 
 export function displayStatus(e: IpoLike, livePrice: number | null, today: string): string {
   if (e.status === "withdrawn") return "withdrawn";
   if (hasListed(e, livePrice, today)) return "history";
-  if (e.date && e.date < today && ["pending", "new", "expected", "priced", "filed"].includes(e.status ?? "pending")) return "not_listed";
+  if (e.date && e.date < today && ["pending", "new", "expected", "priced", "filed", "history"].includes(e.status ?? "pending")) return "not_listed";
   return e.status ?? "pending";
 }
