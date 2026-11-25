@@ -641,6 +641,49 @@ export function planOf(c: CompanyDoc, risk: Risk | null, side: Side = "bull"): P
 const CRYPTO = /\b(bitcoin|ethereum|ether|crypto|solana|xrp|litecoin|dogecoin|digital assets?)\b/i;
 
 /** Common equity only: no ETFs/ETNs/funds/preferreds/warrants/units, leveraged or inverse products, crypto trusts. */
+/**
+ * True when the stored daily closes jump like an unadjusted split (a day-on-day
+ * ratio of 2.5x+ either way that holds): SNDK's 5-day closes went 755 → 79 on
+ * its 20 Nov 2026 split, so every history-derived figure (5-day / 1-month move,
+ * 52-week range, averages) mixed two price bases until the history is re-fetched.
+ */
+export function splitTainted(c: Pick<CompanyDoc, "week5Closes">): boolean {
+  const cl = (c.week5Closes ?? []).map(x => Number(x.close)).filter(v => v > 0);
+  for (let i = 1; i < cl.length; i++) {
+    const r = cl[i] / cl[i - 1];
+    // The level before the jump must itself be settled (not the far side of a bad print).
+    const settledBefore = i < 2 || Math.abs(cl[i - 1] / cl[i - 2] - 1) < 0.5;
+    if ((r >= 2.5 || r <= 0.4) && settledBefore) {
+      // A spike that reverts is a bad print, not a split; a split holds.
+      const after = cl.slice(i + 1);
+      if (after.every(v => Math.abs(v / cl[i] - 1) < 0.5)) return true;
+    }
+  }
+  return false;
+}
+
+/** The company with its history-derived fields blanked while it is split-tainted. */
+export function withoutSplitTaint(c: CompanyDoc): CompanyDoc {
+  if (!splitTainted(c)) return c;
+  return {
+    ...c,
+    week5ChangePct: null, week5Closes: null, week5BaseClose: null, monthChangePct: null,
+    pctFromHigh52: null, pctFromLow52: null, high52: null, low52: null,
+    sma50: null, sma200: null, aboveSma50: null, aboveSma200: null, realizedVol30: null,
+  } as CompanyDoc;
+}
+
+/** One company per ticker (the list can carry a ticker twice: AMRO on Analyst Upgrades). */
+export function uniqueTickers(cs: CompanyDoc[]): CompanyDoc[] {
+  const seen = new Set<string>();
+  return cs.filter(c => {
+    const t = (c.ticker ?? "").trim().toUpperCase();
+    if (!t || seen.has(t)) return false;
+    seen.add(t);
+    return true;
+  });
+}
+
 export function isPickable(c: CompanyDoc): boolean {
   if (!isCommonEquity(c)) return false;
   const name = c.name ?? "";
