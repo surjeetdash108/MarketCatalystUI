@@ -821,10 +821,26 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .pl-av img{width:100%;height:100%;object-fit:cover;background:#fff}
 .pl-card{display:flex;gap:10px;cursor:default}
 .pl-card .pl-main{min-width:0;flex:1}
-.pl-card .pl-top{display:flex;gap:6px;align-items:baseline;font-size:12px;padding-right:44px}
-.pl-card .pl-top b{color:var(--hi)}
-.pl-card .pl-top span{color:var(--dim2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pl-card .pl-text{font-size:13px;color:var(--text);line-height:1.45;margin:4px 0 6px;white-space:pre-wrap;word-break:break-word}
+.pl-card .pl-text{font-size:13px;color:var(--text);line-height:1.45;margin:0 0 6px;padding-right:44px;word-break:break-word}
+/* Pulse rich text (same rules as the app's pulse-rich.ts): toolbar, preview, rendered posts */
+.pr-tools{display:flex;gap:4px;margin:0 0 5px}
+.pr-tools button{min-width:28px;height:26px;padding:0 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font:600 12px var(--f-sans,inherit);cursor:pointer}
+.pr-tools button:hover{border-color:var(--brand2);color:var(--hi)}
+.pr-tools .pr-sep{width:1px;background:var(--border);margin:3px 2px}
+.pr-prev{margin-top:8px;padding:10px 12px;border:1px dashed var(--border);border-radius:9px;background:var(--surface2)}
+.pr-prev-h{font:600 10px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--dim2);margin-bottom:5px}
+.pr-rich{font-size:13px;color:var(--text);line-height:1.45;word-break:break-word}
+.pr-rich p{margin:0}
+.pr-rich p+p,.pr-rich p+ul,.pr-rich p+ol,.pr-rich ul+p,.pr-rich ol+p{margin-top:.45em}
+.pr-rich ul,.pr-rich ol{margin:.3em 0 0;padding-left:1.15em}
+.pr-rich ul{list-style:disc}.pr-rich ol{list-style:decimal}
+.pr-rich li{margin:.15em 0}
+.pr-rich li::marker{color:var(--brand2)}
+.pr-rich strong{font-weight:700;color:var(--hi)}
+.pr-rich em{font-style:italic}
+.pr-rich a{color:var(--brand2);text-decoration:none}
+.pr-rich a:hover{text-decoration:underline}
+.pr-empty{color:var(--dim2);font-size:12px}
 .pl-card .pl-foot{display:flex;gap:10px;align-items:center;font:600 11px var(--f-mono);color:var(--dim2)}
 .pl-card .pl-foot .tk{color:var(--brand2)}
 .pl-card .pl-edit{position:absolute;top:8px;right:30px;background:none;border:0;color:var(--dim2);cursor:pointer;font-size:12px}
@@ -1226,8 +1242,10 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
             <div class="zh"><span class="zdot" style="background:#4ADE80"></span><h4>New post</h4><span class="zpos">dashboard card</span></div>
             <div class="pl-form">
               <label class="fl" for="plText">Post</label>
+              <div class="pr-tools" data-pr-for="plText"></div>
               <textarea id="plText" class="inp" rows="4" maxlength="500" placeholder="NVDA, AMD lead chip bid in premarket as TSMC flags stronger AI demand into 2027."></textarea>
               <div class="pl-count"><span id="plCount">0</span> / 500</div>
+              <div class="pr-prev"><div class="pr-prev-h">Preview</div><div class="pr-rich" id="plPreview"><span class="pr-empty">Your post appears here as users will see it.</span></div></div>
               <label class="fl" for="plTicker">Ticker <span class="pl-opt">optional — its logo replaces the letter</span></label>
               <!-- Same search as Market Catalyst's box; a click selects the ticker. -->
               <div class="pl-tk">
@@ -1238,10 +1256,6 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
                 </div>
                 <div id="plTkList" class="pl-tklist" hidden></div>
                 <div id="plTkSel" class="pl-tksel" hidden></div>
-              </div>
-              <div class="pl-two">
-                <div><label class="fl" for="plName">Name</label><input id="plName" class="inp" maxlength="40" placeholder="MarketCatalyst"></div>
-                <div><label class="fl" for="plHandle">Handle</label><input id="plHandle" class="inp" maxlength="31" placeholder="@MarketCatalyst"></div>
               </div>
               <div class="pl-actions">
                 <button class="btn-add ghost" id="plCancel" type="button" hidden onclick="plReset()">Cancel edit</button>
@@ -1325,7 +1339,8 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
             <div class="cp-block" id="cpPulseBlock" hidden>
               <h4>Market Catalyst Pulse <span class="cp-tagnow">posts as entered, right away</span></h4>
               <div><label class="cp-lbl" for="cpPulseHeader">Header</label><input id="cpPulseHeader" class="inp" oninput="cpPulseCount()"></div>
-              <div><label class="cp-lbl" for="cpPulseBody">Body</label><textarea id="cpPulseBody" class="inp" rows="3" oninput="cpPulseCount()"></textarea><div class="cp-help"><span id="cpPulseCount">0</span> characters</div></div>
+              <div><label class="cp-lbl" for="cpPulseBody">Body</label><div class="pr-tools" data-pr-for="cpPulseBody"></div><textarea id="cpPulseBody" class="inp" rows="4" oninput="cpPulseCount()"></textarea><div class="cp-help"><span id="cpPulseCount">0</span> characters · the header shows in bold above the body</div>
+                <div class="pr-prev"><div class="pr-prev-h">Preview</div><div class="pr-rich" id="cpPulsePreview"><span class="pr-empty">Your post appears here as users will see it.</span></div></div></div>
               <div><span class="cp-lbl">Ticker <i>(optional)</i></span><div data-cp-picker="pulse"></div></div>
             </div>
 
@@ -5627,6 +5642,91 @@ function plTime(iso){
   const sameDay=d.toLocaleDateString('en-US',{timeZone:'America/New_York'})===now.toLocaleDateString('en-US',{timeZone:'America/New_York'});
   return sameDay?tm:d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/New_York'})+' · '+tm;
 }
+/* ── Pulse rich text ──────────────────────────────────────────────────────
+   Same rules as the app's app/iq/pulse-rich.ts: **bold**, *italic*,
+   [label](https://…), bare https:// links, "* "/"- " bullets, "1. " numbered,
+   blank line = new paragraph, line break = line break. Everything is escaped
+   first; only web links become anchors. */
+const PR_INLINE=/\*\*(.+?)\*\*|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]*[^\s<.,;:!?)\]'"])|\*(?=\S)(.+?)(?<=\S)\*/g;
+function prHref(raw){ try{ const u=new URL(raw); return (u.protocol==='https:'||u.protocol==='http:')?u.toString():null; }catch(e){ return null; } }
+function prInline(t){
+  let out='', last=0;
+  for(const m of String(t).matchAll(PR_INLINE)){
+    out+=xesc(t.slice(last,m.index)); last=m.index+m[0].length;
+    if(m[1]!=null) out+='<strong>'+prInline(m[1])+'</strong>';
+    else if(m[2]!=null){ const h=prHref(m[3]); out+=h?'<a href="'+xesc(h)+'" target="_blank" rel="noopener noreferrer nofollow">'+prInline(m[2])+'</a>':xesc(m[0]); }
+    else if(m[4]!=null){ const h=prHref(m[4]); out+=h?'<a href="'+xesc(h)+'" target="_blank" rel="noopener noreferrer nofollow">'+xesc(m[4])+'</a>':xesc(m[0]); }
+    else if(m[5]!=null) out+='<em>'+prInline(m[5])+'</em>';
+  }
+  return out+xesc(String(t).slice(last));
+}
+function prRich(text){
+  const blocks=[]; let cur=null;
+  const close=()=>{ if(cur) blocks.push(cur); cur=null; };
+  String(text||'').replace(/\r\n?/g,'\n').split('\n').forEach(raw=>{
+    const line=raw.replace(/\s+$/,'');
+    if(!line.trim()){ close(); return; }
+    const b=/^\s*[*\-•]\s+(.*)$/.exec(line), n=b?null:/^\s*\d{1,3}[.)]\s+(.*)$/.exec(line);
+    const k=b?'ul':n?'ol':'p', body=b?b[1]:n?n[1]:line.trim();
+    if(!cur||cur.k!==k){ close(); cur={k,rows:[]}; }
+    cur.rows.push(prInline(body));
+  });
+  close();
+  return blocks.map(b=>b.k==='p'?'<p>'+b.rows.join('<br>')+'</p>':'<'+b.k+'>'+b.rows.map(r=>'<li>'+r+'</li>').join('')+'</'+b.k+'>').join('');
+}
+/* Text a textarea's preview shows: the Pulse tab posts the box as is; the
+   pipeline's Pulse is "**header**" + a blank line + body (pulseText). */
+function prSource(id){
+  if(id==='cpPulseBody'){
+    const h=(document.getElementById('cpPulseHeader')||{}).value||'', b=(document.getElementById(id)||{}).value||'';
+    return (h.trim()?'**'+h.trim()+'**\n\n':'')+b.trim();
+  }
+  return ((document.getElementById(id)||{}).value||'').trim();
+}
+const PR_PREVIEW={plText:'plPreview', cpPulseBody:'cpPulsePreview', cpPulseHeader:'cpPulsePreview'};
+function prPreview(id){
+  const src=id==='cpPulseHeader'?'cpPulseBody':id, box=document.getElementById(PR_PREVIEW[id]); if(!box) return;
+  const t=prSource(src);
+  box.innerHTML=t?prRich(t):'<span class="pr-empty">Your post appears here as users will see it.</span>';
+}
+/* Toolbar: wraps the selection (or inserts a placeholder) and keeps the
+   selection on the wrapped text so the next click can build on it. */
+function prApply(id, kind){
+  const ta=document.getElementById(id); if(!ta) return;
+  const v=ta.value, a=ta.selectionStart, z=ta.selectionEnd, sel=v.slice(a,z);
+  let ins, s0, s1;
+  if(kind==='b'||kind==='i'){
+    const mk=kind==='b'?'**':'*', inner=sel||(kind==='b'?'bold text':'italic text');
+    ins=mk+inner+mk; s0=a+mk.length; s1=s0+inner.length;
+  } else if(kind==='ul'||kind==='ol'){
+    const lineStart=v.lastIndexOf('\n',a-1)+1;
+    const block=v.slice(lineStart,z)||'';
+    const lines=(block||'List item').split('\n');
+    const out=lines.map((l,i)=>(kind==='ul'?'* ':(i+1)+'. ')+l.replace(/^\s*(?:[*\-•]|\d{1,3}[.)])\s+/,'')).join('\n');
+    ta.setRangeText(out,lineStart,z,'end');
+    ta.focus(); ta.dispatchEvent(new Event('input',{bubbles:true})); return;
+  } else if(kind==='link'){
+    const url=prompt('Link address (https://…)','https://'); if(!url) return;
+    if(!prHref(url.trim())){ toast('Links must start with https:// or http://'); return; }
+    const label=sel||'link text'; ins='['+label+']('+url.trim()+')'; s0=a+1; s1=s0+label.length;
+  }
+  ta.setRangeText(ins,a,z,'end'); ta.focus(); ta.setSelectionRange(s0,s1);
+  ta.dispatchEvent(new Event('input',{bubbles:true}));
+}
+(function prInit(){
+  document.querySelectorAll('.pr-tools[data-pr-for]').forEach(bar=>{
+    const id=bar.getAttribute('data-pr-for');
+    bar.innerHTML='<button type="button" title="Bold (wraps the selection in **)" data-k="b"><b>B</b></button>'
+      +'<button type="button" title="Italic (wraps the selection in *)" data-k="i"><i>I</i></button>'
+      +'<span class="pr-sep"></span>'
+      +'<button type="button" title="Bullet list" data-k="ul">• List</button>'
+      +'<button type="button" title="Numbered list" data-k="ol">1. List</button>'
+      +'<span class="pr-sep"></span>'
+      +'<button type="button" title="Link" data-k="link">Link</button>';
+    bar.querySelectorAll('button').forEach(btn=>{ btn.onmousedown=e=>e.preventDefault(); btn.onclick=()=>prApply(id,btn.dataset.k); });
+  });
+  Object.keys(PR_PREVIEW).forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',()=>prPreview(id)); });
+})();
 function plAvatar(p,i){
   const letter=xesc(((p.text||'').trim()[0]||'M').toUpperCase());
   const bg=PL_AV[i%PL_AV.length];
@@ -5638,9 +5738,9 @@ function plRender(){
   plEl('plN').textContent=PL.posts.length;
   list.innerHTML=PL.posts.length?PL.posts.map((p,i)=>'<div class="zcard pl-card" data-id="'+plAttr(p.id)+'">'
     +plAvatar(p,i)
-    +'<div class="pl-main"><div class="pl-top"><b>'+xesc(p.name)+'</b><span>@'+xesc(p.handle)+'</span><span>'+xesc(plAgo(p.createdAt))+'</span></div>'
-    +'<div class="pl-text">'+xesc(p.text)+'</div>'
-    +'<div class="pl-foot">'+(p.ticker?'<span class="tk">$'+xesc(p.ticker)+'</span>':'')+'<span>'+xesc(plTime(p.createdAt))+' ET</span></div></div>'
+    +'<div class="pl-main">'
+    +'<div class="pl-text pr-rich">'+prRich(p.text)+'</div>'
+    +'<div class="pl-foot">'+(p.ticker?'<span class="tk">$'+xesc(p.ticker)+'</span>':'')+'<span>'+xesc(plTime(p.createdAt))+' ET · '+xesc(plAgo(p.createdAt))+'</span></div></div>'
     +'<button class="pl-edit" title="Edit" onclick="plEdit(\''+plAttr(p.id)+'\')">Edit</button>'
     +'<button class="zx" title="Delete" onclick="plDelete(\''+plAttr(p.id)+'\')">×</button></div>').join('')
     :'<div class="zempty">No posts here yet</div>';
@@ -5687,15 +5787,14 @@ function plRows(rows,q){
   });
 }
 function plReset(){
-  PL.editId=null; plEl('plText').value=''; plEl('plName').value=''; plEl('plHandle').value='';
+  PL.editId=null; plEl('plText').value=''; prPreview('plText');
   plEl('plCount').textContent='0'; plSetTicker(null);
   plEl('plSubmit').textContent='Post'; plEl('plCancel').hidden=true;
 }
 function plEdit(id){
   const p=PL.posts.find(x=>x.id===id); if(!p) return;
   PL.editId=id; plEl('plText').value=p.text; plEl('plCount').textContent=String(p.text.length);
-  plEl('plName').value=p.name==='MarketCatalyst'?'':p.name;
-  plEl('plHandle').value=p.handle==='MarketCatalyst'?'':'@'+p.handle;
+  prPreview('plText');
   plSetTicker(p.ticker);
   plEl('plSubmit').textContent='Save changes'; plEl('plCancel').hidden=false;
   plEl('plText').focus();
@@ -5705,7 +5804,7 @@ function plSave(){
   if(!text){ toast('Write something to post'); return; }
   if(!BLOG_BRIDGE){ toast('Posting works in the live console only'); return; }
   plEl('plSubmit').disabled=true;
-  plPost({type:'admin:pulseSave', id:PL.editId, text, ticker:PL.ticker||'', name:plEl('plName').value.trim(), handle:plEl('plHandle').value.trim()});
+  plPost({type:'admin:pulseSave', id:PL.editId, text, ticker:PL.ticker||''});
 }
 function plDelete(id){
   if(!confirm('Delete this post from every dashboard?')) return;
@@ -5807,7 +5906,7 @@ function cpPulseCount(){ cpEl('cpPulseCount').textContent = String(cpEl('cpPulse
 function cpClear(){
   ['cpBlogHeadline','cpBlogNotes','cpBlogLinks','cpPulseHeader','cpPulseBody','cpFeedHeader','cpFeedBody'].forEach(function(id){ cpEl(id).value=''; });
   Object.keys(CP.pickers).forEach(function(k){ CP.pickers[k].set([]); });
-  cpEl('cpErr').textContent = ''; cpPulseCount();
+  cpEl('cpErr').textContent = ''; cpPulseCount(); prPreview('cpPulseBody');
 }
 function cpSubmit(e){
   e.preventDefault();
