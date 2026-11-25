@@ -1202,19 +1202,36 @@ export function InsiderScreen() {
                   fontWeight: 600,
                 }}
               />
-              <span
+              {/* Clears the search (was a "/" shortcut hint). */}
+              <button
+                type="button"
+                aria-label="Clear search"
+                title="Clear search"
+                disabled={!searchQuery}
+                onClick={() => {
+                  setSearchQuery("");
+                  searchInputRef.current?.focus();
+                }}
                 style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11.5,
-                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 22,
+                  height: 22,
+                  padding: 0,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  lineHeight: 1,
                   color: "var(--text-pure-dim)",
+                  background: "transparent",
                   border: "1px solid var(--border)",
                   borderRadius: 4,
-                  padding: "1px 6px",
+                  cursor: searchQuery ? "pointer" : "default",
+                  opacity: searchQuery ? 1 : 0.45,
                 }}
               >
-                /
-              </span>
+                ✕
+              </button>
             </div>
           </div>
 
