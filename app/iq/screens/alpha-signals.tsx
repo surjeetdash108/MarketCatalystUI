@@ -19,6 +19,7 @@ import { StockLogo, DataState, cls, sign, fmtPrice } from "../utils";
 import {
   COMP_INFO, DAY, KEYS, LABEL, LABEL_COLOR, MAX_PICKS, SCREENS, WEIGHTS, bearWhy, planOf, screenAction,
   type ActionKey, type Comp, type DisplayLabel, type ScreenRow, type Signal, type Trend,
+  uniqueRows,
 } from "../alpha-signals-model";
 import { POOL_SCREENER, type IComp, type IntradaySignal } from "../alpha-intraday";
 
@@ -233,8 +234,10 @@ export function AlphaSignals() {
   const { watchlists, addTicker, removeTicker, createList, tickerLimit } = useWatchlistsContext();
   const A = useAlphaPicks({ limit: MAX_PICKS, pool: POOL_SCREENER, barsPollMs: BARS_POLL_MS });
   const { data: ipos } = useApiList<IpoEventDoc>("/market-data/ipos");
-  const { data: members } = useApiResource<{ sp500: string[] }>("/market-data/index-members");
-  const indexMembers = useMemo(() => (members?.sp500?.length ? { sp500: new Set(members.sp500) } : undefined), [members]);
+  const { data: members } = useApiResource<{ sp500?: string[]; nasdaq100?: string[] }>("/market-data/index-members");
+  const indexMembers = useMemo(() => (members?.sp500?.length || members?.nasdaq100?.length
+    ? { sp500: members?.sp500?.length ? new Set(members.sp500) : undefined, nasdaq100: members?.nasdaq100?.length ? new Set<string>(members.nasdaq100) : undefined }
+    : undefined), [members]);
 
   const [mode, setMode] = useState<Mode>("Intraday");
   const [dir, setDir] = useState<Dir>("Bullish");
@@ -264,7 +267,8 @@ export function AlphaSignals() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const ctx = useMemo(() => ({ companies: A.companies, sigs: A.sigs, analyst: A.analyst, ipos, now: A.now, quotes: A.quotes, indexMembers }), [A.companies, A.sigs, A.analyst, ipos, A.now, A.quotes, indexMembers]);
-  const rowsBy = useMemo(() => new Map(SCREENS.map(s => [s.id, s.rows(ctx)])), [ctx]);
+  // Each list names a ticker once, whatever its source carried (AMRO was listed twice).
+  const rowsBy = useMemo(() => new Map(SCREENS.map(s => [s.id, uniqueRows(s.rows(ctx))])), [ctx]);
 
   const screen = SCREENS.find(s => s.id === screenId) ?? SCREENS[0];
   const allRows = rowsBy.get(screen.id) ?? [];

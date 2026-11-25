@@ -16,6 +16,7 @@
 
 import type { AnalystConsensusDoc, CompanyDoc, IpoEventDoc } from "./types";
 import { INDEX_MEMBERS } from "./index-constituents";
+import { hasOfferPrice, isNonCommonListing } from "./ipo-rows";
 import { isCommonEquity } from "./universe.util";
 import { isLeveragedProduct } from "./data";
 
@@ -773,7 +774,7 @@ export interface ScreenCtx {
   ipos: IpoEventDoc[];
   now: number;
   /** Live index membership (GET /market-data/index-members), when loaded. */
-  indexMembers?: { sp500?: Set<string> };
+  indexMembers?: { sp500?: Set<string>; nasdaq100?: Set<string> };
   /** The app-wide live quotes (tickers outside `companies`, e.g. new IPOs, too). */
   quotes?: Map<string, { price: number | null; pctChange: number | null }>;
 }
@@ -830,6 +831,33 @@ const quarterKey = (asOf: string | null | undefined) => {
 /** Prior-quarter 13F shares below this share of today's make a % change meaningless (> +900%). */
 const INST_MIN_BASE_SHARE = 0.1;
 
+/**
+ * Investable floor for the ranked screens (RS Leaders, Institutional
+ * Accumulation): $10+ and $20M+ traded a day. Without it both lists were led by
+ * $0.47-$6 names (ZENA, PBM, ANTX, AGPU) whose ranks mean little.
+ */
+const RANK_MIN_PRICE = 10;
+const RANK_MIN_DOLLAR_VOL = 20_000_000;
+const investable = (c: CompanyDoc) =>
+  (c.price as number) >= RANK_MIN_PRICE && c.avgVolume20 != null && c.avgVolume20 * (c.price as number) >= RANK_MIN_DOLLAR_VOL;
+/**
+ * A company listed within this many days is left off Institutional
+ * Accumulation: its first 13F quarters always show holders "rising" from
+ * nothing (Cerebras, listed May 2026, led the list).
+ */
+const INST_MIN_LISTED_DAYS = 270;
+
+/** A screen's rows with each ticker once (first, i.e. best-ranked, kept). */
+export function uniqueRows<T extends { ticker: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter(r => {
+    const t = r.ticker.trim().toUpperCase();
+    if (seen.has(t)) return false;
+    seen.add(t);
+    return true;
+  });
+}
+
 export const SCREENS: Screen[] = [
   {
     id: "sp", label: "Top S&P 500", desc: "By market cap",
@@ -841,6 +869,17 @@ export const SCREENS: Screen[] = [
         .filter(c => spMembers.has(c.ticker) && c.marketCap != null)
         .sort((a, b) => (b.marketCap as number) - (a.marketCap as number))
         .map((c, i) => rowOf(c, `#${i + 1} S&P 500 constituent by market cap (${compact(c.marketCap as number)}).`));
+    },
+  },
+  {
+    id: "ndx", label: "Top Nasdaq 100", desc: "By market cap",
+    src: "FMP · company profile + quote",
+    rows: ({ companies, indexMembers }) => {
+      const nd = indexMembers?.nasdaq100 && indexMembers.nasdaq100.size >= 80 ? indexMembers.nasdaq100 : INDEX_MEMBERS.NDX;
+      return priced(companies)
+        .filter(c => nd.has(c.ticker) && c.marketCap != null)
+        .sort((a, b) => (b.marketCap as number) - (a.marketCap as number))
+        .map((c, i) => rowOf(c, `#${i + 1} Nasdaq-100 constituent by market cap (${compact(c.marketCap as number)}).`));
     },
   },
   {
@@ -881,8 +920,10 @@ export const SCREENS: Screen[] = [
     src: "Polygon · rs-rating job",
     rows: ({ companies }) =>
       stocks(companies)
-        .filter(c => c.rsRating != null && c.rsRating >= 85)
-        .sort((a, b) => (b.rsRating as number) - (a.rsRating as number))
+        .filter(c => c.rsRating != null && c.rsRating >= 85 && investable(c))
+        // Dozens tie at 99: the raw weighted-return score breaks the tie.
+        .sort((a, b) => (b.rsRating as number) - (a.rsRating as number)
+          || (Number((b as { rsScore?: number }).rsScore ?? 0) - Number((a as { rsScore?: number }).rsScore ?? 0)))
         .map(c => rowOf(c, `RS rating ${Math.round(c.rsRating as number)}/99 — outperforming most of the market.`)),
   },
   {
@@ -954,10 +995,13 @@ export const SCREENS: Screen[] = [
   {
     id: "inst", label: "Institutional Accumulation", desc: "13F holders and shares rising",
     src: "FMP · 13F institutional ownership",
-    rows: ({ companies }) => {
+    rows: ({ companies, now: ctxNow }) => {
       // One quarter per list: rows whose 13F rollup is older than the newest
       // reported quarter would compare a different period (Q2 beside Q3).
-      const rising = stocks(companies).filter(c => (c.inst13FHoldersChange ?? 0) > 0 && (c.inst13FSharesChange ?? 0) > 0);
+      const listedBefore = ctxNow - INST_MIN_LISTED_DAYS * DAY;
+      const rising = stocks(companies).filter(c => (c.inst13FHoldersChange ?? 0) > 0 && (c.inst13FSharesChange ?? 0) > 0
+        && investable(c)
+        && !(c.listingDate && Date.parse(c.listingDate) > listedBefore));
       const newest = rising.reduce((m, c) => Math.max(m, quarterKey(c.instAsOf)), 0);
       return rising
         .filter(c => quarterKey(c.instAsOf) === newest)
@@ -994,6 +1038,10 @@ export const SCREENS: Screen[] = [
         // Operating companies only: no SPAC units (BHAIU) or blank-check shares (TCXB).
         .filter(e => !NON_STOCK_IPO.has(String(e.securityType ?? "").toUpperCase()) && !SPAC_NAME.test(e.name ?? "")
           && String(byT.get(e.symbol as string)?.sicCode ?? "") !== SPAC_SIC)
+        // Company IPOs only, as on the IPO screen: no ETFs/funds (GMIX, DAU, IQQI)
+        // and no exchange transfers or direct listings without an offer price.
+        .filter(e => !isNonCommonListing(e) && hasOfferPrice(e)
+          && !(byT.get(e.symbol as string)?.type && !STOCK_TYPES.has(String(byT.get(e.symbol as string)?.type).toUpperCase())))
         .sort((a, b) => b.date.localeCompare(a.date))
         .map(e => {
           const sym = e.symbol as string;
