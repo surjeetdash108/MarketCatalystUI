@@ -91,7 +91,10 @@ export type QuarterRow = {
   /** Period-end date (ISO) and its "Sep-24" month label. */
   end: string;
   monthLabel: string;
-  /** GAAP diluted EPS. */
+  /**
+   * GAAP diluted EPS; the adjusted figure when the quarter has no GAAP number,
+   * so the EPS cell is never blank beside a surprise % computed from it.
+   */
   eps: number | null;
   /** FMP adjusted EPS — the basis of epsEst and epsSurp. */
   epsAdj: number | null;
@@ -285,7 +288,12 @@ export function quarterlyEpsSalesRows(
 
   return asc.map((r, i) => {
     const yoy = yearAgoOf(r, i);
-    const eps = gaapQuarterEps(r);
+    // A quarter with an adjusted actual but no GAAP figure (older periods filled
+    // from the reported-EPS history) showed "—" for EPS beside a surprise %, and
+    // read as data missing with a % change present. It shows the adjusted
+    // figure instead; %chg stays GAAP-to-GAAP, so it is "—" for such a row.
+    const gaap = gaapQuarterEps(r);
+    const eps = gaap ?? r.epsActualReported ?? null;
     return {
       // Always show fiscal quarter + year (e.g. "Q3 2026"); fall back to the
       // period-end month/year only when the fiscal labels are missing.
@@ -299,8 +307,8 @@ export function quarterlyEpsSalesRows(
       // Adjusted actual: the basis of the estimate and the surprise beside it.
       epsAdj: r.epsActualReported ?? null,
       epsEst: r.epsEstimateReported ?? null,
-      epsChg: pctChangeStr(eps, yoy ? gaapQuarterEps(yoy) : null),
-      epsSurp: quarterEpsSurpriseStr(r),
+      epsChg: pctChangeStr(gaap, yoy ? gaapQuarterEps(yoy) : null),
+      epsSurp: eps == null ? "—" : quarterEpsSurpriseStr(r),
       sales: r.revenue != null ? r.revenue / 1e6 : null,
       salesChg: pctChangeStr(r.revenue, yoy?.revenue),
       salesSurp: pctCell(
