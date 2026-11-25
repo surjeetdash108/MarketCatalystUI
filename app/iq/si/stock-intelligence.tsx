@@ -1831,7 +1831,7 @@ export function StockIntelligenceScreen() {
           <ProfileMenu />
           </div>
         </div>
-        <div style={{ maxWidth: 640, width: "100%", textAlign: "center", marginTop: 40 }}>
+        <div style={{ maxWidth: 640, width: "100%", textAlign: "center", marginTop: 70 }}>
           <div
             style={{
               fontFamily: "'Barlow Condensed', sans-serif",
