@@ -13711,6 +13711,15 @@ h6.sd-sec {
 .iq-root .cpulse-av.sm { width: 26px; height: 26px; font-size: .66rem; }
 .iq-root .cpulse-tw { display: flex; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); transition: background .15s; }
 .iq-root .cpulse-tw:hover { background: var(--surface-2); }
+/* Pulse posts in Live Feed story boxes (.lfb-row): boxed, spaced, no divider. */
+.iq-root .cpulse-body { padding: 8px 10px 4px; }
+.iq-root .cpulse-tw.lfb-row { border-bottom: 1px solid var(--border-soft, var(--border)); margin: 0 0 8px; flex: none; }
+.iq-root .cpulse-tw.lfb-row:hover { background: var(--lfb-bg); }
+.iq-root .cpulse-tw .lfb-new { top: 10px; right: 12px; }
+/* Opening the dashboard: the top three drop in one by one with the green flash. */
+.iq-root .cpulse-intro { animation: cpulse-drop .55s cubic-bezier(.2,.8,.2,1) backwards, lfb-flash 3.2s ease-out backwards; }
+@keyframes cpulse-drop { from { opacity: 0; transform: translateY(-26px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .iq-root .cpulse-intro { animation: none; } }
 .iq-root .cpulse-tw-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .iq-root .cpulse-tw-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .iq-root .cpulse-tw-top .nm { font-weight: 700; font-size: .8rem; color: var(--text-hi); white-space: nowrap; }

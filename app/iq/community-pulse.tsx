@@ -5,6 +5,8 @@ import { useIQActions } from "./shell";
 import { useApiResource } from "./hooks/useApiResource";
 import { StockLogo } from "./utils";
 import { parsePulse, pulsePlainText, type PulseInline } from "./pulse-rich";
+import { useFreshStories } from "./hooks/useFreshStories";
+import { useArrivalMotion } from "./hooks/useArrivalMotion";
 
 /*
  * Market Catalyst Pulse — short posts the MarketCatalyst desk writes from the
@@ -174,6 +176,17 @@ export function CommunityPulse() {
   }, [q]);
   const { data, loading } = useApiResource<{ posts: PulsePost[] }>(pulseQueryPath(sentQ), POLL_MS);
   const posts = data?.posts ?? [];
+  // Live Feed look: a post that arrives while the card is open flashes green
+  // with a NEW chip and drops in (useFreshStories + useArrivalMotion). Searching
+  // shows a different list, so nothing is "new" there.
+  const ready = !!data && !loading;
+  const freshIds = useFreshStories(sentQ.trim() ? [] : posts.map(p => [p.id]), ready && !sentQ.trim());
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useArrivalMotion(bodyRef, sentQ.trim() ? `q:${sentQ.trim()}` : "latest");
+  // Opening the dashboard: the top three posts drop in one after another, as
+  // if they had just come in. Once per mount (each visit to the dashboard).
+  const [introIds, setIntroIds] = useState<string[] | null>(null);
+  if (introIds === null && ready && !sentQ.trim() && posts.length > 0) setIntroIds(posts.slice(0, 3).map(p => p.id));
   // Highlights follow the box as it is typed; the posts below catch up after the pause.
   const terms = pulseTerms(q);
   const searching = sentQ.trim().length > 0;
@@ -218,14 +231,24 @@ export function CommunityPulse() {
         {q && <button type="button" className="clr" aria-label="Clear search" onClick={() => setQ("")}>×</button>}
       </div>
 
-      <div className="cpulse-body">
+      <div className="cpulse-body" ref={bodyRef}>
         {posts.length === 0 && (
           <div style={{ padding: "18px 4px", fontSize: ".8rem", color: "var(--text-dim-solid)", textAlign: "center" }}>
             {loading && !data ? (searching ? "Searching…" : "Loading…") : searching ? `No posts match “${sentQ.trim()}”.` : "No posts yet."}
           </div>
         )}
-        {posts.map((p, i) => (
-          <div key={p.id} className="cpulse-tw">
+        {posts.map((p, i) => {
+          const fresh = freshIds.has(p.id);
+          const intro = !fresh && !searching && introIds ? introIds.indexOf(p.id) : -1;
+          return (
+          <div
+            key={p.id}
+            className={`cpulse-tw lfb-row${fresh ? " lfb-fresh" : ""}${intro >= 0 ? " cpulse-intro" : ""}`}
+            style={intro >= 0 ? { animationDelay: `${intro * 220}ms` } : undefined}
+            data-fid={p.id}
+            data-fresh={fresh ? "1" : undefined}
+          >
+            {fresh && <span className="lfb-new">NEW</span>}
             {p.ticker ? (
               <span className="cpulse-av" style={{ background: "transparent", overflow: "hidden" }}>
                 <StockLogo sym={p.ticker} size={22} />
@@ -243,7 +266,8 @@ export function CommunityPulse() {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
