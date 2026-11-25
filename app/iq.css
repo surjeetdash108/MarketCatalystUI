@@ -13711,7 +13711,23 @@ h6.sd-sec {
 .iq-root .cpulse-tw-top .hd { color: var(--text-dim-solid); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .iq-root .cpulse-tw-top .ago { margin-left: auto; flex: none; color: var(--text-dim-solid); font-size: .72rem; }
 .iq-root .cpulse-tw-text { font-size: .8rem; line-height: 1.45; color: var(--text-hi); text-wrap: pretty; }
-.iq-root .cpulse-tw-text.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+/* Four lines collapsed. A height cap rather than line-clamp: the text is now
+   paragraphs and lists, and line-clamp only counts one block's lines. */
+.iq-root .cpulse-tw-text.clamp { max-height: calc(4 * 1.45em); overflow: hidden; }
+/* Rich text (pulse-rich.ts): paragraphs, line breaks, lists, bold, italic, links. */
+.iq-root .cpulse-tw-text p { margin: 0; }
+.iq-root .cpulse-tw-text p + p,
+.iq-root .cpulse-tw-text p + ul, .iq-root .cpulse-tw-text p + ol,
+.iq-root .cpulse-tw-text ul + p, .iq-root .cpulse-tw-text ol + p { margin-top: .45em; }
+.iq-root .cpulse-tw-text ul, .iq-root .cpulse-tw-text ol { margin: .3em 0 0; padding-left: 1.15em; }
+.iq-root .cpulse-tw-text ul { list-style: disc; }
+.iq-root .cpulse-tw-text ol { list-style: decimal; }
+.iq-root .cpulse-tw-text li { margin: .15em 0; padding-left: .1em; }
+.iq-root .cpulse-tw-text li::marker { color: var(--brand-2); }
+.iq-root .cpulse-tw-text strong { font-weight: 700; color: var(--text-hi); }
+.iq-root .cpulse-tw-text em { font-style: italic; }
+.iq-root .cpulse-tw-text a { color: var(--brand-2); text-decoration: none; word-break: break-word; }
+.iq-root .cpulse-tw-text a:hover { text-decoration: underline; }
 .iq-root .cpulse-more { align-self: flex-start; background: none; border: 0; padding: 0; font: inherit; font-size: .74rem; font-weight: 700; color: var(--brand-2); cursor: pointer; }
 .iq-root .cpulse-more:hover { text-decoration: underline; }
 /* Bright yellow with dark ink, like the browser's find-in-page, so a match is seen at a glance. */

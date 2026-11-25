@@ -67,7 +67,7 @@ describe("Market Catalyst Pulse long posts", () => {
     assert.match(src, /Show more/);
     assert.match(src, /Show less/);
     assert.match(src, /aria-expanded=\{open\}/);
-    assert.match(read("../iq.css"), /\.cpulse-tw-text\.clamp \{[^}]*-webkit-line-clamp: 4/);
+    assert.match(read("../iq.css"), /\.cpulse-tw-text\.clamp \{[^}]*max-height: calc\(4 \* 1\.45em\)/);
   });
 });
 
@@ -90,7 +90,7 @@ describe("Market Catalyst Pulse search highlight", () => {
     assert.deepEqual(pulseSegments("a (b) c", pulseTerms("(b")).filter(s => s.hit).map(s => s.t), ["(b"]);
     assert.deepEqual(pulseSegments("plain text", []), [{ t: "plain text", hit: false }]);
   });
-  it("the card marks the text, name, handle and ticker, and shows full posts while searching", () => {
+  it("the card marks the text and ticker, and shows full posts while searching", () => {
     const src = read("./community-pulse.tsx");
     assert.match(src, /<mark key=\{i\} className="cpulse-hl">/);
     assert.match(src, /<PulseText text=\{p\.text\} terms=\{terms\} \/>/);
