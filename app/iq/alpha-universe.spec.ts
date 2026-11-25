@@ -31,7 +31,30 @@ describe("Recent IPOs drop SPAC units and blank-check issuers", () => {
 
 describe("singular holder (Nov 19 Logic #4)", () => {
   it("'1 more institutional holder'", () => {
-    const c = { ticker: "PBM", name: "PBM", sector: "Health Technology", type: "CS", price: 5, pctChange: 0, inst13FShares: 1_285_000, inst13FSharesChange: 285_000, inst13FHolders: 9, inst13FHoldersChange: 1, instAsOf: "Q3 2026" } as CompanyDoc;
+    const c = { ticker: "XYZ", name: "XYZ", sector: "Health Technology", type: "CS", price: 25, avgVolume20: 2_000_000, pctChange: 0, inst13FShares: 1_285_000, inst13FSharesChange: 285_000, inst13FHolders: 9, inst13FHoldersChange: 1, instAsOf: "Q3 2026" } as CompanyDoc;
     assert.match(rows("inst", [c])[0].why, /^1 more institutional holder and /);
+  });
+});
+
+describe("ranked screens: investable floor, tie-break, new listings, Nasdaq 100", () => {
+  const base = { sector: "Technology", type: "CS", pctChange: 0 };
+  it("RS Leaders: $10+ and $20M+ a day, ties broken by the raw RS score", () => {
+    const cs = [
+      { ...base, ticker: "PENNY", price: 5, avgVolume20: 9e6, rsRating: 99, rsScore: 3 },
+      { ...base, ticker: "LOWER", price: 50, avgVolume20: 1e6, rsRating: 99, rsScore: 1.2 },
+      { ...base, ticker: "TOP", price: 50, avgVolume20: 1e6, rsRating: 99, rsScore: 2.5 },
+    ] as unknown as CompanyDoc[];
+    assert.deepEqual(rows("rsl", cs).map(r => r.ticker), ["TOP", "LOWER"]);
+  });
+  it("Institutional Accumulation leaves out stocks listed in the last 9 months (first 13F quarters)", () => {
+    const inst = { ...base, price: 80, avgVolume20: 1e6, inst13FShares: 100e6, inst13FSharesChange: 18e6, inst13FHolders: 600, inst13FHoldersChange: 150, instAsOf: "Q3 2026" };
+    const cs = [
+      { ...inst, ticker: "CBRS", listingDate: "2026-05-14" },
+      { ...inst, ticker: "OLD", listingDate: "2010-01-04" },
+    ] as unknown as CompanyDoc[];
+    assert.deepEqual(rows("inst", cs).map(r => r.ticker), ["OLD"]);
+  });
+  it("there is a Top Nasdaq 100 screen", () => {
+    assert.ok(SCREENS.some(s => s.id === "ndx" && s.label === "Top Nasdaq 100"));
   });
 });

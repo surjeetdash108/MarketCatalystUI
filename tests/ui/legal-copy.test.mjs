@@ -1,62 +1,34 @@
-// Terms §12 and Privacy must describe how billing actually works, and stay
-// flagged for legal review until approved. Run: node --test tests/ui/
+// The app's Terms and Privacy carry no draft markers (W-22, 24 Nov 2026 audit):
+// §12 is the neutral pre-launch paragraph until counsel approves the full text,
+// which is kept in docs/legal only. Run: node --test tests/ui/
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const terms = read("app/auth/legal/terms-content.tsx");
 const privacy = read("app/auth/legal/privacy-content.tsx");
+const entity = read("app/auth/legal/legal-entity.ts");
 
-describe("Terms §12 matches the subscription system", () => {
-  for (const phrase of [
-    "Manage Plan page",
-    "you keep access to your paid plan until that date",
-    "charges a prorated amount for the rest of the current period",
-    "takes effect at the end of your current billing period",
-    "we retry it over the following 7 days",
-    "once per person",
-    "Each paid plan can start with a 7-day free trial, once per person",
-    "at least 30 days",
-    "There is no free plan",
-    "Before you confirm a switch, we show you when the new plan starts and what you pay",
-    "the difference is kept as Market Catalyst credits",
-    "your next charge is for the new plan",
-  ]) it(`says: ${phrase}`, () => assert.ok(terms.includes(phrase), phrase));
-  for (const gone of ["credited to your account balance", "We do not currently offer free trials", "take effect immediately. Upgrades"])
-    it(`no longer says: ${gone}`, () => assert.ok(!terms.includes(gone), gone));
-  it("never mentions 'Free plan' in Terms §12", () => {
-    const sec12 = terms.slice(terms.indexOf('<h2 id="subscriptions">'), terms.indexOf("</ul>", terms.indexOf('<h2 id="subscriptions">')));
-    assert.doesNotMatch(sec12, /Free plan/);
+describe("app legal pages", () => {
+  it("no placeholders, example addresses or draft notices", () => {
+    for (const src of [terms, privacy]) {
+      assert.doesNotMatch(src, /PLACEHOLDER/);
+      assert.doesNotMatch(src, /example\.com/);
+      assert.doesNotMatch(src, /Draft — legal review required/);
+    }
   });
-  it("is flagged for legal review and uses placeholders, not invented details", () => {
-    assert.match(terms, /\[LEGAL REVIEW PLACEHOLDER/);
-    assert.match(terms, /MarketCatalyst LLC \[PLACEHOLDER\]/);
-    assert.match(terms, /support@example\.com/);
+  it("§12 is the neutral pre-launch paragraph", () => {
+    assert.ok(terms.includes("Paid plans are launching soon. Subscription terms will be published here before any charge."));
+    assert.ok(!terms.includes("7-day free trial"));
   });
-});
-
-describe("Privacy discloses billing data handling", () => {
-  it("mentions the retained hashed email for the retention offer and the email provider", () => {
+  it("entity and Last Updated come from legal-entity.ts, one format", () => {
+    assert.match(entity, /LEGAL_ENTITY = "MarketCatalyst Analytics LLC"/);
+    for (const src of [terms, privacy]) assert.match(src, /Last Updated: <strong>\{LEGAL_UPDATED\}<\/strong>/);
+  });
+  it("Privacy: billing data disclosures stay", () => {
     assert.match(privacy, /one-way cryptographic hash of your email address/);
-    assert.match(privacy, /kept after you close your account/);
     assert.match(privacy, /through our email provider, Twilio SendGrid,/);
-    assert.doesNotMatch(privacy, /\[EMAIL PROVIDER PLACEHOLDER\]/);
-  });
-});
-
-describe("checkout v2 copy (draft, flagged for legal review)", () => {
-  it("Terms §12 refund paragraph is the generated REFUND_WINDOW_DAYS copy (one switch)", () => {
-    assert.match(terms, /<strong>Refunds\.<\/strong> <span data-testid="terms-refunds">\{REFUND_POLICY\.termsParagraph\}<\/span>/);
-    assert.match(terms, /import \{ REFUND_POLICY \} from "\.\.\/\.\.\/iq\/billing\/refund-policy\.generated"/);
-    assert.doesNotMatch(terms, /We do not provide refunds or credits for partial billing periods or unused time, except as required by law or where we decide otherwise/);
-  });
-  it("Terms §12 describes renewal at the full price and the recorded renewal consent", () => {
-    assert.match(terms, /Renewals are charged at the full price of your plan/);
-    assert.match(terms, /ticking the renewal consent box; we keep a record of when you agreed, the wording you saw, the plan, billing period and price, and your IP address/);
-  });
-  it("Privacy: no phone number collected; only country/state/ZIP of the address", () => {
     assert.doesNotMatch(privacy, /Phone number/);
     assert.match(privacy, /We keep only your country, state and ZIP\/postal code/);
-    assert.match(privacy, /We do not collect government ID numbers or your date of birth/);
   });
 });

@@ -7,7 +7,7 @@ import { useIntradayBars } from "./useIntradayBars";
 import { etParts, getMarketStatus, type MarketPhase } from "../market-status";
 import { pairedQuote, useLiveQuotes, type LiveQuote } from "../live-quotes-context";
 import type { AnalystConsensusDoc, CompanyDoc } from "../types";
-import { pickBear, pickTop, scoreCompany, type Signal } from "../alpha-signals-model";
+import { pickBear, pickTop, scoreCompany, uniqueTickers, withoutSplitTaint, type Signal } from "../alpha-signals-model";
 import {
   evaluateIntraday, intradayCandidates, intradayLists, metricsFromBars,
   type IntradaySignal, type SessionMetrics,
@@ -164,7 +164,8 @@ export function useAlphaPicks({ limit, pool, barsPollMs, fill = false, enabled =
   const { data: earningsEvents } = useApiList<{ ticker: string; date: string }>(enabled ? "/market-data/earnings" : null);
   const today = etParts(new Date(now)).isoDate;
   const companies = useMemo(
-    () => withNextEarnings(storedCompanies, earningsEvents, today).map(c => withLiveQuote(c, quotes.get(c.ticker))),
+    // One doc per ticker; history-derived fields blanked while a split is unadjusted (SNDK).
+    () => uniqueTickers(withNextEarnings(storedCompanies, earningsEvents, today)).map(c => withoutSplitTaint(withLiveQuote(c, quotes.get(c.ticker)))),
     [storedCompanies, earningsEvents, today, quotes],
   );
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { splitTainted } from "../heatmap-design";
 import { fmtDate } from "../calendar-range";
 import dynamic from "next/dynamic";
 import { type Mover, maPostureLabel, isLeveragedProduct } from "../data";
@@ -452,9 +453,10 @@ function mergeMovers(
       marketCap: canon.marketCap,
       cap: canon.cap,
       // Real 5-session change from technical-indicators.job; null → "—".
-      weekPct: c?.week5ChangePct ?? null,
-      weekBase: c?.week5BaseClose ?? null,
-      weekCloses: c?.week5Closes ?? null,
+      // Null across an unadjusted split (SNDK 755 → 79), not "-90% this week".
+      weekPct: c && splitTainted(c) ? null : (c?.week5ChangePct ?? null),
+      weekBase: c && splitTainted(c) ? null : (c?.week5BaseClose ?? null),
+      weekCloses: c && splitTainted(c) ? null : (c?.week5Closes ?? null),
       techContext: `Live EOD data as of ${l.asOfDate}.`,
       newsContext: "",
     };
@@ -553,9 +555,9 @@ export function MoversScreen() {
       marketCap: canon.marketCap,
       // No 1-day fallback: today's % under a "5-day" header is a wrong number,
       // and it ranked rows on the weekly board by their daily move.
-      weekPct: c.week5ChangePct ?? null,
-      weekBase: c.week5BaseClose ?? null,
-      weekCloses: c.week5Closes ?? null,
+      weekPct: splitTainted(c) ? null : (c.week5ChangePct ?? null),
+      weekBase: splitTainted(c) ? null : (c.week5BaseClose ?? null),
+      weekCloses: splitTainted(c) ? null : (c.week5Closes ?? null),
       techContext: "",
       newsContext: "",
     };

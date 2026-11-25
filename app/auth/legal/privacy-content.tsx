@@ -1,9 +1,10 @@
+import { LEGAL_ENTITY, LEGAL_UPDATED } from "./legal-entity";
 export function PrivacyContent() {
   return (
     <div className="legal-content-root">
       <article id="privacy-top" className="privacy-card">
         <h1 className="privacy-title">Privacy Policy</h1>
-        <p className="legal-updated">Last Updated: Oct 22, 2026</p>
+        <p className="legal-updated">Last Updated: <strong>{LEGAL_UPDATED}</strong></p>
         <div className="legal-toc">
           <div className="legal-toc-title">Contents</div>
           <ol style={{ gridTemplateRows: "repeat(10,auto)" }}>
@@ -66,7 +67,7 @@ export function PrivacyContent() {
             </li>
           </ol>
         </div>
-        <p>This Privacy Policy explains how MarketCatalyst Analytics LLC (&quot;MarketCatalyst,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) collects, uses, and shares personal information when you use marketcatalyst.ai, app.marketcatalyst.ai, and related services (the &quot;Service&quot;). It also explains your privacy choices and rights.</p>
+        <p>This Privacy Policy explains how {LEGAL_ENTITY} (&quot;MarketCatalyst,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) collects, uses, and shares personal information when you use marketcatalyst.ai, app.marketcatalyst.ai, and related services (the &quot;Service&quot;). It also explains your privacy choices and rights.</p>
         <p>The Service is intended for users in the United States. This Privacy Policy is part of our Terms of Service.</p>
         <h2 id="collect">1. Information We Collect</h2>
         <p>
@@ -84,7 +85,7 @@ export function PrivacyContent() {
                   <li>
                     <strong>Messages:</strong> your name, email address, company (optional), and message when you use our contact form or email us, along with any support correspondence.</li>
                     <li>
-                      <strong>Payment and subscription information:</strong> your plan, billing history, and billing contact details. Payments are processed by our third-party payment processor, Stripe, Inc. (&quot;Stripe&quot;), whose use of your information is governed by its privacy policy at <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">https://stripe.com/privacy</a>. We do not store your full payment card number. We keep a record of your plan, invoices, discounts and plan changes to run your subscription and for accounting. If you accept a retention offer when cancelling, we keep a one-way cryptographic hash of your email address (not the address itself) so the offer is not shown again; this hash is kept after you close your account. [LEGAL REVIEW PLACEHOLDER]</li>
+                      <strong>Payment and subscription information:</strong> your plan, billing history, and billing contact details. Payments are processed by our third-party payment processor, Stripe, Inc. (&quot;Stripe&quot;), whose use of your information is governed by its privacy policy at <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">https://stripe.com/privacy</a>. We do not store your full payment card number. We keep a record of your plan, invoices, discounts and plan changes to run your subscription and for accounting. If you accept a retention offer when cancelling, we keep a one-way cryptographic hash of your email address (not the address itself) so the offer is not shown again; this hash is kept after you close your account.</li>
                       <li>
                       <strong>Transactional email:</strong> we send billing emails (receipts, renewal reminders, payment problems, plan changes and cancellation confirmations) through our email provider, Twilio SendGrid,, which processes your email address on our behalf.</li>
                       <li>
@@ -410,7 +411,7 @@ export function PrivacyContent() {
                                                                                             <p>We may update this Privacy Policy from time to time. We will post the updated version on the Service and change the &quot;Last Updated&quot; date above. If we make material changes, such as using personal information in a materially different way, we will notify you by email or by a prominent notice on the Service before the changes take effect, and we will get your consent where required by law.</p>
                                                                                             <h2 id="contact">19. Contact Us</h2>
                                                                                             <p>For questions about this Privacy Policy or your personal information, or to submit a privacy request:</p>
-                                                                                            <p>MarketCatalyst Analytics LLC<br/>Email: <a href="mailto:contact@marketcatalyst.ai">contact@marketcatalyst.ai</a>
+                                                                                            <p>{LEGAL_ENTITY}<br/>Email: <a href="mailto:contact@marketcatalyst.ai">contact@marketcatalyst.ai</a>
                                                                                             </p>
                                                                                             <a className="privacy-back-top" href="#privacy-top">↑ Back to top</a>
                                                                                           </article>

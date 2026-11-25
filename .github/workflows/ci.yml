@@ -1,0 +1,21 @@
+# Runs on every push and pull request. A red ✗ here means: don't deploy.
+# The placeholder gate also runs inside `npm run build` (prebuild), which is
+# what the Firebase Hosting deploy builds from, so a failing gate blocks it too.
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: No placeholders in shipped copy
+        run: npm run check:placeholders
+      - name: Tests
+        run: npm test

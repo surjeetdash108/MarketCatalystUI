@@ -28,14 +28,19 @@ describe("Recent IPOs: live price, since-IPO from it, honest gaps", () => {
     const [r] = rows([ipo({ symbol: "IAM", offerPrice: "16" as unknown as number })], new Map([["IAM", { price: 14.64, pctChange: 3 }]]));
     assert.match(r.why, /at \$16\.00 · -8% since IPO/); // 14.64 / 16 − 1 = −8.5%
   });
-  it("no trades yet (HRIAU units): says so instead of a bare dash", () => {
-    const [r] = rows([ipo({ symbol: "HRIAU", offerPrice: 10, currentPrice: null, returnSinceIpoPct: null })]);
+  it("no trades yet: says so instead of a bare dash", () => {
+    const [r] = rows([ipo({ symbol: "HRIA", offerPrice: 10, currentPrice: null, returnSinceIpoPct: null })]);
     assert.equal(r.price, null);
     assert.match(r.why, /no trades yet/i);
   });
-  it("no offer price: says it's unavailable rather than inventing one", () => {
-    const [r] = rows([ipo({ symbol: "ABC", offerPrice: null })], new Map([["ABC", { price: 5, pctChange: 0 }]]));
-    assert.match(r.why, /offer price unavailable/);
-    assert.doesNotMatch(r.why, /since IPO/);
+  it("company IPOs only: no ETFs, units or listings without an offer price", () => {
+    const out = rows([
+      ipo({ symbol: "DAU", name: "GraniteShares Autocallable AMD ETF", securityType: "ETF" }),
+      ipo({ symbol: "GMIX", name: "BlackRock ETF Trust" }),
+      ipo({ symbol: "HRIAU", offerPrice: 10 }),
+      ipo({ symbol: "GUER", name: "Guerrilla RF, Inc.", offerPrice: null }),
+      ipo({ symbol: "WWB", name: "Windward Bio", offerPrice: 17 }),
+    ]);
+    assert.deepEqual(out.map(r => r.ticker), ["WWB"]);
   });
 });

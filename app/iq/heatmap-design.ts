@@ -85,9 +85,23 @@ export function framePct(
   live?: FrameLive | null,
 ): number | null {
   if (frame === "1D") return day;
+  // An unadjusted split in the stored closes (SNDK 755 → 79) makes any window
+  // across it meaningless: no figure rather than "-90%".
+  if (c?.week5Closes && splitTainted({ week5Closes: c.week5Closes })) return null;
   if (frame === "1W") return (live ? windowPctToLive(c?.week5Closes, live.price, live.dateIso) : null) ?? c?.week5ChangePct ?? null;
   if (frame === "1M") return (live ? windowPctToLive(c?.month21Closes, live.price, live.dateIso) : null) ?? c?.monthChangePct ?? null;
   return null;
+}
+
+/** A day-on-day jump of 2.5x+ either way that holds: an unadjusted split. Same rule as alpha-signals-model.splitTainted. */
+export function splitTainted(c: { week5Closes?: DatedClose[] | null }): boolean {
+  const cl = (c.week5Closes ?? []).map(x => Number(x.close)).filter(v => v > 0);
+  for (let i = 1; i < cl.length; i++) {
+    const r = cl[i] / cl[i - 1];
+    const settledBefore = i < 2 || Math.abs(cl[i - 1] / cl[i - 2] - 1) < 0.5;
+    if ((r >= 2.5 || r <= 0.4) && settledBefore && cl.slice(i + 1).every(v => Math.abs(v / cl[i] - 1) < 0.5)) return true;
+  }
+  return false;
 }
 
 /**

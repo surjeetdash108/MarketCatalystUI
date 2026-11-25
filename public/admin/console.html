@@ -841,6 +841,12 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .pr-rich a{color:var(--brand2);text-decoration:none}
 .pr-rich a:hover{text-decoration:underline}
 .pr-empty{color:var(--dim2);font-size:12px}
+.cp-rowtools{display:inline-flex;gap:6px;margin-left:6px}
+.cp-btn.danger{color:#F87171;border-color:rgba(248,113,113,.4)}
+.cp-modal{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.cp-modal[hidden]{display:none !important}
+.cp-modal-card{width:min(620px,100%);max-height:90vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+.cp-modal-card h3{margin:0 0 12px;font-size:16px;color:var(--hi)}
 .pl-card .pl-foot{display:flex;gap:10px;align-items:center;font:600 11px var(--f-mono);color:var(--dim2)}
 .pl-card .pl-foot .tk{color:var(--brand2)}
 .pl-card .pl-edit{position:absolute;top:8px;right:30px;background:none;border:0;color:var(--dim2);cursor:pointer;font-size:12px}
@@ -1391,6 +1397,17 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
 
 <!-- CONTENT PIPELINE PREVIEW -->
 <div class="scrim" id="cpScrim" onclick="cpClosePreview()"></div>
+<div id="cpEditModal" class="cp-modal" hidden>
+          <div class="cp-modal-card" role="dialog" aria-modal="true" aria-labelledby="cpEditTitle">
+            <h3 id="cpEditTitle">Edit</h3>
+            <div id="cpEditFields"></div>
+            <div id="cpEditErr" class="cp-err"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+              <button class="cp-btn alt" type="button" onclick="cpEditClose()">Cancel</button>
+              <button class="cp-btn" id="cpEditSave" type="button" onclick="cpEditSave()">Save</button>
+            </div>
+          </div>
+        </div>
 <aside class="drawer cp-drawer" id="cpDrawer" aria-label="Preview">
   <div class="cp-dh"><div id="cpDTitle" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div><button class="cp-ghost" onclick="cpClosePreview()" aria-label="Close preview">✕</button></div>
   <div class="cp-db" id="cpDBody"></div>
@@ -6015,6 +6032,11 @@ function cpPaint(){
       else if (it.status === 'posted') act = '<button class="cp-btn alt" onclick="cpPreview(\''+cpAttr(it.id)+'\')">View</button>';
       else if (it.status === 'queued' && !CP.ai) act = '<button class="cp-btn alt" onclick="cpRetry(\''+cpAttr(it.id)+'\')">Retry</button>';
       else act = '<span class="cp-help">No action yet</span>';
+      // Edit (Pulse / Live Feed text, or a blog item's notes before it is written) and Delete on every row.
+      act += ' <span class="cp-rowtools">'
+        + (it.canEdit ? '<button class="cp-btn alt" onclick="cpEditOpen(\''+cpAttr(it.id)+'\')">Edit</button> ' : '')
+        + '<button class="cp-btn alt danger" onclick="cpDelete(\''+cpAttr(it.id)+'\')">Delete</button></span>'
+        + (it.heldReasons && it.heldReasons.length ? '<div class="cp-note" style="color:#FCD34D">Held: '+it.heldReasons.map(xesc).join(' · ')+'</div>' : '');
       return '<tr'+(it.status==='review'?' class="cp-row-review"':'')+'>'
         + '<td><b>'+xesc(it.title || '(untitled)')+'</b><div class="cp-note">Submitted '+fmtWhen(it.createdAt)+(it.tickers && it.tickers.length ? ' · $'+it.tickers.map(xesc).join(' $') : '')+(it.kind==='blog'?' · AI-written':' · posted as entered')+'</div></td>'
         + '<td><span class="cp-where">'+xesc(it.where)+'</span></td>'
@@ -6034,6 +6056,44 @@ function cpPaint(){
 }
 function cpFilter(f){ CP.filter = f; cpPaint(); }
 function cpRetry(id){ cpPost({ type:'admin:contentRetry', id:id }); }
+/* Edit: loads the item, then a small form — header / body / tickers for Pulse
+   and Live Feed (changed in place), headline / notes for a blog item not yet
+   written (saved and re-queued). Delete removes the item and what it posted. */
+CP.editing = null;
+function cpEditOpen(id){ CP.editing = id; cpPost({ type:'admin:contentGet', id:id, purpose:'edit' }); }
+function cpEditPaint(data){
+  const it = data.item, inp = data.input || {}, m = cpEl('cpEditModal');
+  const isBlog = it.kind === 'blog';
+  cpEl('cpEditTitle').textContent = 'Edit · ' + it.where;
+  cpEl('cpEditFields').innerHTML = isBlog
+    ? '<label class="cp-lbl" for="cpEdHeadline">Working headline</label><input id="cpEdHeadline" class="inp" value="'+cpAttr(inp.headline || '')+'">'
+      + '<label class="cp-lbl" for="cpEdNotes" style="margin-top:10px">Notes for the AI</label><textarea id="cpEdNotes" class="inp" rows="10">'+xesc(inp.notes || '')+'</textarea>'
+      + '<div class="cp-help">Saving sends it back to the writer.</div>'
+    : '<label class="cp-lbl" for="cpEdHeader">Header</label><input id="cpEdHeader" class="inp" value="'+cpAttr(inp.header || '')+'">'
+      + '<label class="cp-lbl" for="cpEdBody" style="margin-top:10px">Body</label><textarea id="cpEdBody" class="inp" rows="8">'+xesc(inp.body || '')+'</textarea>'
+      + '<label class="cp-lbl" for="cpEdTickers" style="margin-top:10px">Ticker'+(it.kind==='feed'?'s':'')+' <i>(optional'+(it.kind==='feed'?', comma-separated':'')+')</i></label><input id="cpEdTickers" class="inp" value="'+cpAttr((it.tickers||[]).join(', '))+'">';
+  cpEl('cpEditErr').textContent = '';
+  m.hidden = false;
+}
+function cpEditClose(){ CP.editing = null; cpEl('cpEditModal').hidden = true; }
+function cpEditSave(){
+  const id = CP.editing; if (!id) return;
+  const item = (CP.items || []).find(function(i){ return i.id === id; }) || {};
+  let body;
+  if (item.kind === 'blog') body = { headline: cpEl('cpEdHeadline').value, notes: cpEl('cpEdNotes').value };
+  else {
+    const t = cpEl('cpEdTickers').value.trim();
+    body = { header: cpEl('cpEdHeader').value, body: cpEl('cpEdBody').value };
+    if (item.kind === 'pulse') body.ticker = t.split(/[\s,]+/)[0] || ''; else body.tickers = t;
+  }
+  cpEl('cpEditSave').disabled = true;
+  cpPost({ type:'admin:contentEdit', id:id, body:body });
+}
+function cpDelete(id){
+  const item = (CP.items || []).find(function(i){ return i.id === id; }) || {};
+  if (!confirm('Delete "'+(item.title || 'this item')+'"? '+(item.status === 'posted' ? 'It will also be removed from '+(item.where || 'where it was posted')+'.' : ''))) return;
+  cpPost({ type:'admin:contentDelete', id:id });
+}
 
 /* ── Preview drawer ── */
 function cpPreview(id){ CP.preview = id; cpEl('cpDBody').innerHTML = '<div class="cp-help">Loading…</div>'; cpEl('cpDTitle').innerHTML = ''; cpEl('cpScrim').classList.add('on'); cpEl('cpDrawer').classList.add('on'); cpPost({ type:'admin:contentGet', id:id }); }
@@ -6084,6 +6144,16 @@ window.addEventListener('message', function(e){
     else CP.err = d.error || 'Could not load the pipeline.';
     cpPaint();
     return;
+  }
+  if (d.action === 'get' && CP.editing && d.ok && d.data.item.id === CP.editing){ cpEditPaint(d.data); return; }
+  if (d.action === 'edit'){
+    cpEl('cpEditSave').disabled = false;
+    if (!d.ok){ cpEl('cpEditErr').textContent = d.error || 'Could not save.'; return; }
+    cpEditClose(); toast('Saved'); cpLoad(true); return;
+  }
+  if (d.action === 'delete'){
+    if (!d.ok){ toast(xesc(d.error || 'Could not delete')); return; }
+    cpClosePreview(); toast('Deleted'); cpLoad(true); return;
   }
   if (d.action === 'get'){
     if (!d.ok){ cpEl('cpDBody').innerHTML = '<div class="cp-err">'+xesc(d.error || 'Could not load this item.')+'</div>'; return; }
