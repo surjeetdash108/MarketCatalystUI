@@ -28,10 +28,8 @@ describe("Recent IPOs: live price, since-IPO from it, honest gaps", () => {
     const [r] = rows([ipo({ symbol: "IAM", offerPrice: "16" as unknown as number })], new Map([["IAM", { price: 14.64, pctChange: 3 }]]));
     assert.match(r.why, /at \$16\.00 · -8% since IPO/); // 14.64 / 16 − 1 = −8.5%
   });
-  it("no trades yet: says so instead of a bare dash", () => {
-    const [r] = rows([ipo({ symbol: "HRIA", offerPrice: 10, currentPrice: null, returnSinceIpoPct: null })]);
-    assert.equal(r.price, null);
-    assert.match(r.why, /no trades yet/i);
+  it("a deal that never traded isn't listed: left off (OPAY)", () => {
+    assert.deepEqual(rows([ipo({ symbol: "HRIA", offerPrice: 10, currentPrice: null, returnSinceIpoPct: null })]), []);
   });
   it("company IPOs only: no ETFs, units or listings without an offer price", () => {
     const out = rows([
