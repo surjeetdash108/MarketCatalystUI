@@ -11,6 +11,8 @@ import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs, pulseFromLive } from "../live-market-indices";
 import type { SectorApiDoc, LiveEarningsDoc, NewsArticleDoc, MacroEventDoc, RecapDoc, CompanyDoc, EarningsAnnouncementDoc, AnalystConsensusDoc } from "../types";
 import { surprisePct } from "../types";
+import { isLeveragedProduct } from "../data";
+import { recapMovers, type RecapMoverRow } from "../recap-movers";
 
 // Same embedded stock detail the IPO / Movers drawers use.
 const StockScreenEmbed = dynamic<{ initialSym?: string }>(
@@ -136,6 +138,13 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
           mcclellan: recapInternals?.mcclellan ?? null,
         };
       })();
+  // Top gainers / losers: live from today's company quotes; the settled recap's
+  // lists when the quotes aren't in (e.g. before the first poll).
+  const liveMovers = recapMovers(companiesLive, isLeveragedProduct, 8);
+  const toRow = (m: { ticker: string; name?: string | null; price?: number | null; pctChange: number | null }): RecapMoverRow | null =>
+    m.pctChange == null ? null : { ticker: m.ticker, name: m.name ?? null, price: m.price ?? null, pctChange: m.pctChange };
+  const topGainers = liveMovers.gainers.length ? liveMovers.gainers : (latestRecap?.topGainers ?? []).map(toRow).filter((r): r is RecapMoverRow => r != null).slice(0, 8);
+  const topLosers = liveMovers.losers.length ? liveMovers.losers : (latestRecap?.topLosers ?? []).map(toRow).filter((r): r is RecapMoverRow => r != null).slice(0, 8);
   const newHighs = with52.length ? with52.filter(c => c.price != null && c.high52 != null && c.price >= c.high52).length : null;
   const newLows = with52.length ? with52.filter(c => c.price != null && c.low52 != null && c.price <= c.low52).length : null;
   // Earnings movers by post-announcement price reaction (EDGAR 8-K item 2.02).
@@ -397,6 +406,29 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
     </div>
   );
 
+  const renderMoverCard = (list: RecapMoverRow[], title: string, pillCls: string) => (
+    <div className="col-6">
+      <div className="card">
+        <div className="card-h">
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{title}</h3><VendorTag v={["fmp", "polygon"]} /></div>
+          <button className="link" onClick={() => router.push("/menu/movers")}>View all →</button>
+        </div>
+        <div className="card-b" style={{ paddingTop: 6 }}>
+          {list.length === 0 ? (
+            <DataState label="No movers for today yet." />
+          ) : list.map(m => (
+            <div key={m.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.ticker)}>
+              <StockLogo sym={m.ticker} size={20} />
+              <span className="tkr">{m.ticker}</span>
+              <span className="mid" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name ?? ""}</span>
+              <span className={`r mono ${pillCls}`} style={{ fontWeight: 700 }}>{sign(m.pctChange)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   // Weekly sector-heatmap shell (same head as the live daily card, empty body).
   const WeeklyHeatCard = (
     <div className="card" style={{ marginTop: 14 }}>
@@ -575,6 +607,12 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
           {renderSectorPerfCard(leaders, "Sector leaders", "up", isWeek ? "Week" : "Today", "Sector performance not synced for this period yet.")}
           {renderSectorPerfCard(laggards, "Sector laggards", "dn", isWeek ? "Week" : "Today", "Sector performance not synced for this period yet.")}
         </div>
+        {!isWeek && (
+          <div className="dash" style={{ marginTop: 14, padding: 0 }}>
+            {renderMoverCard(topGainers, "Top gainers", "up")}
+            {renderMoverCard(topLosers, "Top losers", "down")}
+          </div>
+        )}
         {EarningsMoversCard(dlSurprises, isWeek ? "Biggest earnings surprises this week" : "Biggest earnings surprises today")}
         {earnMovers.length > 0 && (
           <div className="dash" style={{ marginTop: 14, padding: "0 0 14px" }}>
