@@ -1315,24 +1315,24 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
               <h4>Blog <span class="cp-tagai">AI writes it · you review before it posts</span></h4>
               <div><span class="cp-lbl">Section</span><div class="chips" id="cpSections"></div></div>
               <div class="cp-two">
-                <div><label class="cp-lbl" for="cpBlogHeadline">Working headline <i>(optional; the AI writes the final one)</i></label><input id="cpBlogHeadline" class="inp" maxlength="200" placeholder="e.g. Lucid's robotaxi step vs. weak EV demand"></div>
+                <div><label class="cp-lbl" for="cpBlogHeadline">Working headline <i>(optional; the AI writes the final one)</i></label><input id="cpBlogHeadline" class="inp" placeholder="e.g. Lucid's robotaxi step vs. weak EV demand"></div>
                 <div><span class="cp-lbl">Tickers <i>(optional)</i></span><div data-cp-picker="blog" data-multi="1"></div></div>
               </div>
-              <div><label class="cp-lbl" for="cpBlogNotes">Notes and source material for the AI</label><textarea id="cpBlogNotes" class="inp" rows="9" maxlength="20000" placeholder="Paste the facts, numbers and quotes you found. Bullets are fine."></textarea><div class="cp-help">The AI only uses what you give it. Include every number you want in the article.</div></div>
+              <div><label class="cp-lbl" for="cpBlogNotes">Notes and source material for the AI</label><textarea id="cpBlogNotes" class="inp" rows="9" placeholder="Paste the facts, numbers and quotes you found. Bullets are fine."></textarea><div class="cp-help">The AI only uses what you give it. Include every number you want in the article.</div></div>
               <div><label class="cp-lbl" for="cpBlogLinks">Source links <i>(optional, one per line)</i></label><textarea id="cpBlogLinks" class="inp" rows="2" placeholder="https://…"></textarea></div>
             </div>
 
             <div class="cp-block" id="cpPulseBlock" hidden>
               <h4>Market Catalyst Pulse <span class="cp-tagnow">posts as entered, right away</span></h4>
-              <div><label class="cp-lbl" for="cpPulseHeader">Header</label><input id="cpPulseHeader" class="inp" maxlength="200" oninput="cpPulseCount()"></div>
-              <div><label class="cp-lbl" for="cpPulseBody">Body <i>(header + body up to 500 characters)</i></label><textarea id="cpPulseBody" class="inp" rows="3" maxlength="500" oninput="cpPulseCount()"></textarea><div class="cp-help"><span id="cpPulseCount">0</span> / 500</div></div>
+              <div><label class="cp-lbl" for="cpPulseHeader">Header</label><input id="cpPulseHeader" class="inp" oninput="cpPulseCount()"></div>
+              <div><label class="cp-lbl" for="cpPulseBody">Body</label><textarea id="cpPulseBody" class="inp" rows="3" oninput="cpPulseCount()"></textarea><div class="cp-help"><span id="cpPulseCount">0</span> characters</div></div>
               <div><span class="cp-lbl">Ticker <i>(optional)</i></span><div data-cp-picker="pulse"></div></div>
             </div>
 
             <div class="cp-block" id="cpFeedBlock" hidden>
               <h4>Live Feed <span class="cp-tagnow">posts as entered, right away</span></h4>
-              <div><label class="cp-lbl" for="cpFeedHeader">Header</label><input id="cpFeedHeader" class="inp" maxlength="200"></div>
-              <div><label class="cp-lbl" for="cpFeedBody">Body</label><textarea id="cpFeedBody" class="inp" rows="8" maxlength="4000"></textarea><div class="cp-help">Summary line first, then bullets starting with *, e.g. "* Robotaxi Progress: …".</div></div>
+              <div><label class="cp-lbl" for="cpFeedHeader">Header</label><input id="cpFeedHeader" class="inp"></div>
+              <div><label class="cp-lbl" for="cpFeedBody">Body</label><textarea id="cpFeedBody" class="inp" rows="8"></textarea><div class="cp-help">Summary line first, then bullets starting with *, e.g. "* Robotaxi Progress: …".</div></div>
               <div><span class="cp-lbl">Tickers <i>(optional)</i></span><div data-cp-picker="feed" data-multi="1"></div></div>
             </div>
 
@@ -5823,7 +5823,6 @@ function cpSubmit(e){
   if (pulse){
     const h = cpEl('cpPulseHeader').value.trim(), b = cpEl('cpPulseBody').value.trim();
     if (!h || !b){ err.textContent = 'Pulse needs a header and a body.'; return; }
-    if (h.length + 2 + b.length > 500){ err.textContent = 'Pulse header and body together are limited to 500 characters.'; return; }
     body.pulse = { header:h, body:b, ticker:(CP.pickers.pulse.get()[0] || '') };
   }
   if (feed){
