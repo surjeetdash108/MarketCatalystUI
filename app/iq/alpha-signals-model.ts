@@ -222,11 +222,18 @@ function relStrength(c: CompanyDoc): Part {
     : { v: Math.round(clamp(c.rsRating)), metric: `RS rating ${Math.round(c.rsRating)}/99` };
 }
 
+/** A growth % for display; past ±999% (a near-zero base: FDMT revenue "+230195%") it reads "over +999%". */
+export function growthText(pct: number): string {
+  if (pct > 999) return "over +999%";
+  if (pct < -999) return "below -999%";
+  return signed(pct, 0);
+}
+
 function fundamentals(c: CompanyDoc): Part {
   const parts: number[] = [];
   const bits: string[] = [];
-  if (num(c.epsGrowthYoY)) { parts.push(clamp(50 + c.epsGrowthYoY * 100 * 0.8)); bits.push(`EPS ${signed(c.epsGrowthYoY * 100, 0)} YoY`); }
-  if (num(c.revenueGrowthYoY)) { parts.push(clamp(50 + c.revenueGrowthYoY * 100 * 1.5)); bits.push(`revenue ${signed(c.revenueGrowthYoY * 100, 0)} YoY`); }
+  if (num(c.epsGrowthYoY)) { parts.push(clamp(50 + c.epsGrowthYoY * 100 * 0.8)); bits.push(`EPS ${growthText(c.epsGrowthYoY * 100)} YoY`); }
+  if (num(c.revenueGrowthYoY)) { parts.push(clamp(50 + c.revenueGrowthYoY * 100 * 1.5)); bits.push(`revenue ${growthText(c.revenueGrowthYoY * 100)} YoY`); }
   const v = mean(parts);
   return { v: v == null ? null : Math.round(v), metric: bits.length ? bits.join(" · ") : "No growth figures returned yet" };
 }
@@ -846,6 +853,38 @@ const investable = (c: CompanyDoc) =>
  * nothing (Cerebras, listed May 2026, led the list).
  */
 const INST_MIN_LISTED_DAYS = 270;
+/** A one-quarter 13F share jump above this is a data error, not accumulation (CRWD read +290%). */
+const INST_MAX_PCT = 100;
+
+/**
+ * Floor for the other ranked screens (52W high/low, volatility, earnings,
+ * fundamentals, upgrades): $300M+ market cap, $3+ and $5M+ traded a day. The
+ * QA sweep found $3M-$49M companies under $2 leading several of them.
+ */
+const LIST_MIN_CAP = 300_000_000;
+const listable = (c: CompanyDoc) =>
+  (c.marketCap ?? 0) >= LIST_MIN_CAP && (c.price as number) >= 3
+  && c.avgVolume20 != null && c.avgVolume20 * (c.price as number) >= 5_000_000;
+
+/**
+ * Distance from the 52-week high / low measured to TODAY's price (the stored
+ * figure ends at the last bar: OMC read "0.4% below its high of $89.57" at $91),
+ * or null when the stored range can't describe this price: a stored distance
+ * 30+ points away from the live one is an unadjusted split (LOBO "0.1% above its
+ * low of $0.33" at $2.27).
+ */
+function offHighLive(c: CompanyDoc): number | null {
+  if (!num(c.high52) || !num(c.price) || c.high52 <= 0) return null;
+  const live = Math.min(0, (c.price / c.high52 - 1) * 100);
+  if (num(c.pctFromHigh52) && Math.abs(live - Math.min(0, c.pctFromHigh52)) > 30) return null;
+  return live;
+}
+function offLowLive(c: CompanyDoc): number | null {
+  if (!num(c.low52) || !num(c.price) || c.low52 <= 0) return null;
+  const live = Math.max(0, (c.price / c.low52 - 1) * 100);
+  if (num(c.pctFromLow52) && Math.abs(live - Math.max(0, c.pctFromLow52)) > 30) return null;
+  return live;
+}
 
 /** A screen's rows with each ticker once (first, i.e. best-ranked, kept). */
 export function uniqueRows<T extends { ticker: string }>(rows: T[]): T[] {
@@ -887,22 +926,30 @@ export const SCREENS: Screen[] = [
     src: "Polygon · daily aggregates",
     rows: ({ companies }) =>
       stocks(companies)
-        .filter(c => c.pctFromHigh52 != null && c.pctFromHigh52 >= -1.5)
-        .sort((a, b) => (b.pctFromHigh52 as number) - (a.pctFromHigh52 as number))
-        .map(c => rowOf(c, (c.pctFromHigh52 as number) >= -0.05
-          ? `Trading at its 52-week high${c.high52 != null ? ` of ${money(c.high52)}` : ""}.`
-          : `${Math.abs(c.pctFromHigh52 as number).toFixed(1)}% below its 52-week high${c.high52 != null ? ` of ${money(c.high52)}` : ""}.`)),
+        .filter(listable)
+        .map(c => ({ c, off: offHighLive(c) }))
+        .filter((x): x is { c: CompanyDoc; off: number } => x.off != null && x.off >= -1.5)
+        .sort((a, b) => b.off - a.off)
+        .map(({ c, off }) => rowOf(c, (c.price as number) > (c.high52 as number)
+          ? `At a new 52-week high, above the prior ${money(c.high52 as number)}.`
+          : off >= -0.05
+            ? `Trading at its 52-week high of ${money(c.high52 as number)}.`
+            : `${Math.abs(off).toFixed(1)}% below its 52-week high of ${money(c.high52 as number)}.`)),
   },
   {
     id: "l52", label: "New 52W Low", desc: "Weakening momentum and relative strength",
     src: "Polygon · daily aggregates",
     rows: ({ companies }) =>
       stocks(companies)
-        .filter(c => c.pctFromLow52 != null && c.pctFromLow52 <= 5)
-        .sort((a, b) => (a.pctFromLow52 as number) - (b.pctFromLow52 as number))
-        .map(c => rowOf(c, (c.pctFromLow52 as number) <= 0.05
-          ? `Trading at its 52-week low${c.low52 != null ? ` of ${money(c.low52)}` : ""}.`
-          : `Only ${(c.pctFromLow52 as number).toFixed(1)}% above its 52-week low${c.low52 != null ? ` of ${money(c.low52)}` : ""}.`)),
+        .filter(listable)
+        .map(c => ({ c, off: offLowLive(c) }))
+        .filter((x): x is { c: CompanyDoc; off: number } => x.off != null && x.off <= 5)
+        .sort((a, b) => a.off - b.off)
+        .map(({ c, off }) => rowOf(c, (c.price as number) < (c.low52 as number)
+          ? `At a new 52-week low, below the prior ${money(c.low52 as number)}.`
+          : off <= 0.05
+            ? `Trading at its 52-week low of ${money(c.low52 as number)}.`
+            : `Only ${off.toFixed(1)}% above its 52-week low of ${money(c.low52 as number)}.`)),
   },
   {
     id: "vol", label: "Highest Volatility", desc: "Elevated 30-day realized volatility",
@@ -910,7 +957,7 @@ export const SCREENS: Screen[] = [
     rows: ({ companies }) =>
       stocks(companies)
         // A floor so the list isn't sub-$1 shells: $5+ and $20M+ traded a day.
-        .filter(c => c.realizedVol30 != null && c.realizedVol30 >= 40 && (c.price as number) >= 5
+        .filter(c => listable(c) && c.realizedVol30 != null && c.realizedVol30 >= 40 && (c.price as number) >= 5
           && c.avgVolume20 != null && c.avgVolume20 * (c.price as number) >= 20_000_000)
         .sort((a, b) => (b.realizedVol30 as number) - (a.realizedVol30 as number))
         .map(c => rowOf(c, `30-day realized volatility ${Math.round(c.realizedVol30 as number)}% — large recent price swings.`)),
@@ -956,9 +1003,9 @@ export const SCREENS: Screen[] = [
       // the adjusted series, labelled as such, until the doc is refreshed.
       const eps = (c: CompanyDoc) => (num(c.epsDilutedGrowthYoY) ? c.epsDilutedGrowthYoY : c.epsGrowthYoY ?? null);
       return stocks(companies)
-        .filter(c => { const e = eps(c); return e != null && e >= 0.25; })
+        .filter(c => { const e = eps(c); return listable(c) && e != null && e >= 0.25; })
         .sort((a, b) => (eps(b) as number) - (eps(a) as number))
-        .map(c => rowOf(c, `${num(c.epsDilutedGrowthYoY) ? "EPS (diluted, FY)" : "Adjusted EPS"} ${signed((eps(c) as number) * 100, 0)} YoY${c.revenueGrowthYoY != null ? `, revenue ${signed(c.revenueGrowthYoY * 100, 0)} YoY` : ""}.`));
+        .map(c => rowOf(c, `${num(c.epsDilutedGrowthYoY) ? "EPS (diluted, FY)" : "Adjusted EPS"} ${growthText((eps(c) as number) * 100)} YoY${c.revenueGrowthYoY != null ? `, revenue ${growthText(c.revenueGrowthYoY * 100)} YoY` : ""}.`));
     },
   },
   {
@@ -967,7 +1014,7 @@ export const SCREENS: Screen[] = [
     rows: ctx => {
       const sg = sig(ctx);
       return stocks(ctx.companies)
-        .filter(c => (compVal(sg.get(c.ticker), "f") ?? 0) >= 65 && (compVal(sg.get(c.ticker), "c") ?? 0) >= 60)
+        .filter(c => listable(c) && (compVal(sg.get(c.ticker), "f") ?? 0) >= 65 && (compVal(sg.get(c.ticker), "c") ?? 0) >= 60)
         .sort((a, b) => {
           const sa = sg.get(a.ticker), sb = sg.get(b.ticker);
           return ((compVal(sb, "f") ?? 0) + (compVal(sb, "c") ?? 0)) - ((compVal(sa, "f") ?? 0) + (compVal(sa, "c") ?? 0));
@@ -983,6 +1030,7 @@ export const SCREENS: Screen[] = [
     src: "FMP · upgrades-downgrades",
     rows: ctx =>
       stocks(ctx.companies)
+        .filter(listable)
         .map(c => ({ c, g: recentGrades(ctx.analyst.get(c.ticker), 30, ctx.now) }))
         .filter(x => x.g.ups.length > x.g.downs.length)
         .sort((a, b) => (b.g.ups.length - b.g.downs.length) - (a.g.ups.length - a.g.downs.length)
@@ -1015,6 +1063,7 @@ export const SCREENS: Screen[] = [
           const pct = base > 0 && base >= shares * INST_MIN_BASE_SHARE ? (change / base) * 100 : null;
           return { c, change, pct };
         })
+        .filter(x => !(x.pct != null && x.pct > INST_MAX_PCT))
         .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || (b.c.inst13FHoldersChange as number) - (a.c.inst13FHoldersChange as number))
         .map(({ c, change, pct }) => rowOf(c, `${c.inst13FHoldersChange} more institutional ${c.inst13FHoldersChange === 1 ? "holder" : "holders"} and ${
           pct != null ? `${pct.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% more shares` : `${Math.round(change).toLocaleString("en-US")} more shares (almost none reported the prior quarter)`
@@ -1055,11 +1104,14 @@ export const SCREENS: Screen[] = [
           const bits = [`Listed ${e.date}${offer != null ? ` at ${money(offer)}` : " · offer price unavailable"}`];
           if (offer != null && price != null) bits.push(`${signed((price / offer - 1) * 100, 0)} since IPO`);
           if (price == null) bits.push("no trades yet");
+          // (rows with no trade at all are dropped below: not listed yet, e.g. OPAY)
           return {
             ticker: sym, name: e.name, sector: e.sector ?? co?.sector ?? null,
             price, pct, why: `${bits.join(" · ")}.`,
           };
-        });
+        })
+        // A deal that never traded hasn't listed (OPAY): not a recent IPO.
+        .filter(r => r.price != null);
     },
   },
 ];

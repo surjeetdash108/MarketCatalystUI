@@ -40,7 +40,7 @@ describe("decision 9: stock screens list stocks", () => {
   const etf = stock({ ticker: "UUP", name: "Invesco DB US Dollar Index Bullish Fund", type: "ETV", pctFromHigh52: -0.1, high52: 29.6 });
   const spac = stock({ ticker: "QRED", name: "Quasaredge Acquisition Corporation", sicCode: "6770", pctFromHigh52: -0.1, high52: 10.1 } as Partial<CompanyDoc>);
   const pfd = stock({ ticker: "WVVIP", type: "PFD", pctFromHigh52: -0.1, high52: 5 });
-  const real = stock({ ticker: "AAPL", pctFromHigh52: -0.2, high52: 360 });
+  const real = stock({ ticker: "AAPL", price: 359.3, pctFromHigh52: -0.2, high52: 360 });
   it("ETFs, preferreds and SPACs are off New 52W High", () => {
     assert.deepEqual(rows("h52", ctx([etf, spac, pfd, real])).map(r => r.ticker), ["AAPL"]);
   });

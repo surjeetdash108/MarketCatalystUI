@@ -4,7 +4,7 @@ import { SCREENS } from "./alpha-signals-model";
 import type { CompanyDoc } from "./types";
 
 const rows = (companies: CompanyDoc[]) => SCREENS.find(s => s.id === "eps")!.rows({ companies, sigs: [], analyst: new Map(), ipos: [], now: 0 });
-const co = (o: Partial<CompanyDoc>) => ({ ticker: "MU", name: "Micron", sector: "Electronic Technology", type: "CS", price: 750, pctChange: 1, ...o }) as CompanyDoc;
+const co = (o: Partial<CompanyDoc>) => ({ ticker: "MU", name: "Micron", sector: "Electronic Technology", type: "CS", price: 750, pctChange: 1, marketCap: 8e11, avgVolume20: 2e7, ...o }) as CompanyDoc;
 
 // Nov 19 rows 9–10: EPS and revenue on one basis (FY reported statement).
 describe("Earnings Acceleration shows EPS and revenue on the same FY basis", () => {
