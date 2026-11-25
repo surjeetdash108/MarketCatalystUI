@@ -2736,7 +2736,7 @@ export function StockScreen({
             // Next fiscal year's consensus EPS (the first starred year in Financials).
             const nextFyEps = forwardAnnualEstimates(financialsDoc)[0]?.epsEstimate ?? null;
             const trailingPe = eps != null && eps > 0 ? data.peRatio : null;
-            const fwdPe = forwardPe(dispPrice, nextFyEps);
+            const fwdPe = forwardPe(dispPrice, nextFyEps, trailingPe);
             const peg = pegRatio(trailingPe, eps, nextFyEps);
             const fundamentalRows: Row[] = [
               { k: "Market cap",    v: mc != null ? cap(mc) : null },

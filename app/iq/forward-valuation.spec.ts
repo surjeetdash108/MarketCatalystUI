@@ -7,6 +7,8 @@ describe("forward valuation", () => {
     assert.equal(forwardPe(100, 4), 25);
     assert.equal(forwardPe(100, -1), null);
     assert.equal(forwardPe(null, 4), null);
+    assert.equal(forwardPe(87.9, 71.2, 8.45), null, "PDD: estimate in yuan vs a dollar price");
+    assert.equal(forwardPe(147, 9.6, 15.8)?.toFixed(1), "15.3");
   });
   it("PEG is trailing P/E over expected EPS growth %", () => {
     // EPS 2 → 2.5 is 25% growth; P/E 50 → PEG 2.
