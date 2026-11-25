@@ -15,6 +15,7 @@ import { LaunchingSoonBanner } from "../billing/launching-soon-banner";
 import { useApiResource } from "../hooks/useApiResource";
 import { WmnCarousel, type WmnSlide } from "../wmn-carousel";
 import { CommunityPulse } from "../community-pulse";
+import { lowestForwardPe } from "../lowest-forward-pe";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-context";
 import { INDEX_MEMBERS } from "../index-constituents";
@@ -441,6 +442,7 @@ export function DashboardScreen() {
     return m;
   }, [liveEarnings]);
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
+  const lowFwdPe = useMemo(() => lowestForwardPe(companies, 8), [companies]);
   const { data: sectorsLive } = useApiList<SectorApiDoc>("/market-data/sectors");
   // Starter widgets: fetch only when the plan includes them, so a Free user
   // makes no request the backend would refuse (403); the card shows a lock.
@@ -1335,6 +1337,30 @@ export function DashboardScreen() {
                 </div>
               ))}
               </EntitlementGate>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 11. Lowest forward P/E (price ÷ next fiscal year's consensus EPS) ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Lowest forward P/E</h3><VendorTag v="fmp" /></div>
+              <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>S&amp;P 500 · Nasdaq-100</span>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              {lowFwdPe.length === 0 ? (
+                <DataState loading={companiesLoading} label="Forward estimates haven't synced yet." height={80} />
+              ) : lowFwdPe.map(x => (
+                <div key={x.ticker} className="minirow" style={{ cursor: "pointer" }}
+                  title={`${x.name ?? x.ticker}: price ÷ next fiscal year's consensus EPS`}
+                  onClick={() => openStock(x.ticker)}>
+                  <StockLogo sym={x.ticker} size={26} />
+                  <span className="tkr">{x.ticker}</span>
+                  <span className="mid" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.name ?? ""}</span>
+                  <span className="r mono" style={{ color: "var(--text-hi)", fontWeight: 700 }}>{x.forwardPe.toFixed(1)}×</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
