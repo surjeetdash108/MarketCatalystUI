@@ -36,21 +36,19 @@ import {
   smaOf,
   getSixMonthMajorEvents,
   aboutTicker,
-  trendRead,
-  trendRows,
-  type TrendRow,
 } from "./data";
 import { summarizeNewsSentiment } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
 import { InfoTip, highlightSignedPercents } from "./read-cards";
 import { weekMove } from "./week-move";
 import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
-import { fundamentalReadText, technicalReadText } from "./read-text";
+import { fundamentalRead, overallVerdict, supportResistance, technicalRead, verdictStatus, type Read } from "./si-reads";
+import { TechnicalTiles, PriceLadder } from "./technical-tiles";
 import { SiOverview, type NavItem, type Tone } from "./si-overview";
 import { SiMasthead, SiTabRail } from "./si-masthead";
-import { ReadPanel, MovedPanel, CouldPanel } from "./overview-panels";
+import { ReadPanel, MovedPanel, CouldPanel, type ReadRow } from "./overview-panels";
 import { ConfidenceDialog } from "./confidence-dialog";
-import { growthSeries, levelsToWatch, scoreRows, statusForTone, toneForScore } from "./overview-model";
+import { growthSeries, levelsToWatch, scoreRows, statusForTone } from "./overview-model";
 import { SI_TOKENS_CSS, SI_TYPE_CSS } from "./si-redesign-css";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
@@ -160,25 +158,6 @@ function highlightScoreNote(text: string, gradeCol: string): React.ReactNode[] {
   if (last < text.length) out.push(text.slice(last));
   return out;
 }
-
-/** How the Technical Read card on Overview is worked out (shown by its "i" button). */
-const TECHNICAL_READ_INFO: [string, string][] = [
-  ["TREND", "compares the price to the 50 DMA and the 200 DMA."],
-  ["Bullish (green):", "price is above both."],
-  ["Bearish (red):", "price is below both."],
-  ["Mixed (steel blue):", "price is between them."],
-  ["MOMENTUM", "uses 14-day RSI."],
-  ["Overbought (amber):", "RSI 70 or above."],
-  ["Strong (green):", "RSI 55 to under 70."],
-  ["Neutral (amber):", "RSI above 45 and under 55."],
-  ["Weak (red):", "RSI above 30 and up to 45."],
-  ["Oversold (red):", "RSI 30 or below."],
-  ["52W HIGH", "is how far price sits below its 52-week high. Within 3% reads as at / near the high."],
-  ["RISK", "uses 30-day realized volatility, which is annualized price volatility and not beta or drawdown."],
-  ["High (red):", "50% or more."],
-  ["Elevated (amber):", "30% to under 50%."],
-  ["Moderate (green):", "under 30%."],
-];
 
 export function StockIntelligenceScreen() {
   const { data: ent } = useEntitlements();
@@ -1588,65 +1567,6 @@ export function StockIntelligenceScreen() {
     ["Bands:", "75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak."],
   ];
 
-  // Technical Read card: shown on Overview and on the Technicals tab.
-  const technicalReadCard = (
-    <div
-      style={{
-        position: "relative",
-        border: "1px solid var(--si-border, #1c2733)",
-        background: "var(--si-card, #0c1118)",
-        boxShadow: "var(--si-shadow, none)",
-        padding: "20px 22px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-      }}
-    >
-
-      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-        ✦ TECHNICAL READ
-        <InfoTip lines={TECHNICAL_READ_INFO} />
-      </span>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-        {stockDetail.read.map((rd, i) => (
-          <div key={i} style={{ border: `1px solid ${rd.col}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 }}>
-              {rd.k}
-            </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: rd.col }}>
-              {rd.v}
-            </div>
-          </div>
-        ))}
-      </div>
-      {(() => {
-        const rows = trendRows(siFacts.price, siFacts.sma50, siFacts.sma200, siFacts.rsi14);
-        // No moving-average data at all: keep the plain sentence ("not available yet").
-        if (rows.length === 0) {
-          return (
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-              {trendRead(siFacts.price, siFacts.sma50, siFacts.sma200)}
-            </div>
-          );
-        }
-        const col = (t: TrendRow["tone"]) => (t === "good" ? "var(--up, #16a34a)" : t === "bad" ? "var(--down, #dc2626)" : t === "warn" ? "#f5b031" : "var(--si-text-mid, #93a1af)");
-        return (
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {rows.map((r) => (
-              <div key={r.title} style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 10, alignItems: "baseline", padding: "9px 0", borderTop: "1px solid var(--si-border, #1c2733)" }}>
-                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.title}</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: col(r.tone), whiteSpace: "pre" }}>{r.value}</span>
-                {r.note && (
-                  <span style={{ gridColumn: "1 / 3", fontFamily: "'Manrope', sans-serif", fontSize: 14, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-    </div>
-  );
-
   if (isUnsubscribed) {
     return (
       <div
@@ -2021,28 +1941,26 @@ export function StockIntelligenceScreen() {
         {activeTab === "overview" && (() => {
           const price = siFacts.price ?? stock.p;
           const scores = scoreRows(overviewRun.cats, SHORT);
-          const mean = (names: string[]) => {
-            const v = scores.filter((x) => names.includes(x.k)).map((x) => x.v);
-            return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
-          };
           const upChecks = stockDetail.valid;
           const downChecks = [...stockDetail.broken, ...stockDetail.invalid];
-          const readTone = toneForScore(mcConfidence);
-          const fundTone = toneForScore(mean(["Business", "Earnings", "Valuation"]));
-          const techTone = toneForScore(scores.find((x) => x.k === "Technicals")?.v);
+          const tech = technicalRead(siFacts);
+          const fund = fundamentalRead(siFacts, fpeVal);
+          const overall = overallVerdict(tech.verdict, fund.verdict, mcConfidence);
+          const rowsOf = (reads: Read[]): ReadRow[] =>
+            reads.map((r) => ({ title: r.k, value: r.headline, tone: r.caution ? "warn" : r.dir === "up" ? "good" : r.dir === "down" ? "bad" : "neutral", note: r.detail }));
           const weekTone: Tone = movedWeek ? (movedWeek.pct >= 0.05 ? "up" : movedWeek.pct <= -0.05 ? "down" : "flat") : "flat";
           const couldTone: Tone = upChecks.length > downChecks.length ? "up" : downChecks.length > upChecks.length ? "down" : "flat";
           const nav: NavItem[] = [
-            { id: "read", label: "MarketCatalyst read", status: statusForTone(readTone), tone: readTone },
-            { id: "fund", label: "Fundamentals", status: statusForTone(fundTone), tone: fundTone },
-            { id: "tech", label: "Technicals", status: statusForTone(techTone), tone: techTone },
+            { id: "read", label: "MarketCatalyst read", ...verdictStatus(overall) },
+            { id: "fund", label: "Fundamentals", ...verdictStatus(fund.verdict) },
+            { id: "tech", label: "Technicals", ...verdictStatus(tech.verdict) },
             { id: "moved", label: "Why it moved", status: statusForTone(weekTone), tone: weekTone },
             { id: "could", label: "Why it could move", status: statusForTone(couldTone), tone: couldTone },
           ];
           // The MarketCatalyst take: its first sentence leads, the rest follows.
           const take = stockDetail.assess ?? "";
           const cut = take.search(/[.!?](\s|$)/);
-          const { low, high } = levelsToWatch(price, [siFacts.pivotS1, siFacts.pivotS2], [siFacts.pivotR1, siFacts.pivotR2]);
+          const { low, high } = levelsToWatch(price, [tech.nextSupport?.value], [tech.nextResistance?.value]);
           const nextEvent = upcomingCatalysts.find((u) => !u.past) ?? null;
           return (
             <>
@@ -2064,14 +1982,8 @@ export function StockIntelligenceScreen() {
                     onInfo: () => setConfOpen(true),
                   },
                   panels: {
-                    fund: <ReadPanel text={fundamentalReadText(stock.t, siFacts, stock.fpe)} onOpen={() => setActiveTab("fund")} />,
-                    tech: (
-                      <ReadPanel
-                        text={technicalReadText(siFacts)}
-                        rows={trendRows(siFacts.price, siFacts.sma50, siFacts.sma200, siFacts.rsi14)}
-                        onOpen={() => setActiveTab("tech")}
-                      />
-                    ),
+                    fund: <ReadPanel text={fund.action} rows={rowsOf(fund.reads)} onOpen={() => setActiveTab("fund")} />,
+                    tech: <ReadPanel text={tech.action} rows={rowsOf(tech.reads)} onOpen={() => setActiveTab("tech")} />,
                     moved: <MovedPanel pct={movedWeek?.pct ?? null} text={movedWeek ? movedWeek.text : stockDetail.movedTxt} bullets={movedWeek ? movedWeek.ev : stockDetail.movedEv} />,
                     could: <CouldPanel next={nextEvent} up={upChecks} down={downChecks} />,
                   },
@@ -2719,23 +2631,12 @@ export function StockIntelligenceScreen() {
             TAB 5: TECHNICALS (Issue 2: Full Live Technical Chart)
             ==================================================== */}
         {activeTab === "tech" && (
-          <div className="si-ov" style={{ alignItems: "stretch" }}>
-            <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
-            {/* Live technical chart with the full MC stock-function toolbar */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <TechnicalTiles reads={stockDetail.read} facts={siFacts} high52={hi52} />
+            <div className="si-ov" style={{ alignItems: "stretch" }}>
+              <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
+              {/* Live technical chart with the full MC stock-function toolbar */}
             <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--si-border, #1c2733)", flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <StockLogo sym={stock.t} size={34} />
-                  <div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{stock.t}</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-hi, #ffffff)", opacity: 0.7, marginTop: 3 }}>{stock.name || liveCompany?.name}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, whiteSpace: "nowrap" }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{usd(stock.p)}</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: stock.c >= 0 ? UP : DN }}>{pct(stock.c)}</span>
-                </div>
-              </div>
               <div className="si-tech-chart" style={{ minHeight: 540, width: "100%" }}>
                 <style>{`.si-tech-chart .cc-tvbtn.icon{display:none}.si-tech-chart .cc-tvbtn{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:12.96px;font-weight:500;line-height:1.2;padding:6px 8px;background:none;border:0;color:var(--si-text-hi,#e8eef4);cursor:pointer;white-space:nowrap}.si-tech-chart .cc-tvbtn svg{opacity:.75}.si-tech-chart .cc-tvbtn b{font-weight:600}.si-tech-chart .cc-tvbtn b{font-size:inherit}${isLight ? "" : ".si-tech-chart .rng.indbtn{padding:4px 9px;border-radius:6px;font-weight:600;color:#6c747c;background:transparent}.si-tech-chart .rng.indbtn.on{background:#14181b;color:#f4f6f5}.si-tech-chart .cc-ma.on .cc-ma-all,.si-tech-chart .cc-ma.on .cc-ma-all *{color:#f4f6f5}.si-tech-chart .cc-ma:not(.on) .cc-ma-all,.si-tech-chart .cc-ma:not(.on) .cc-ma-all *{color:#6c747c}"}`}</style>
                 <StockChart
@@ -2756,20 +2657,13 @@ export function StockIntelligenceScreen() {
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-              {technicalReadCard}
-
-              {/* Key levels */}
-              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
-                  KEY SUPPORT & RESISTANCE LEVELS
-                </span>
-                {stockDetail.levels.map((lv, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)" }}>{lv.k}</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: lv.col === "#e8eef4" ? "var(--si-text-hi, #e8eef4)" : lv.col }}>{lv.v}</span>
-                  </div>
-                ))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+                <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
+                    <span data-caps>Where Price Sits {"\u00B7"} Support &amp; Resistance</span>
+                  </span>
+                  <PriceLadder price={siFacts.price} {...supportResistance(siFacts)} max={4} />
+                </div>
               </div>
             </div>
           </div>

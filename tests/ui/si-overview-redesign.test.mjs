@@ -77,3 +77,25 @@ describe("Overview", () => {
     assert.match(overview, /read\.low \|\| read\.high/);
   });
 });
+
+describe("Technicals tab", () => {
+  const tech = src.slice(src.indexOf('{activeTab === "tech"'), src.indexOf("TAB 7: AI RESEARCH"));
+  it("four tiles on top, then the chart beside the price ladder", () => {
+    assert.ok(tech.indexOf("<TechnicalTiles") > 0);
+    assert.ok(tech.indexOf("<TechnicalTiles") < tech.indexOf("<StockChart"), "tiles above the chart");
+    assert.ok(tech.indexOf("<StockChart") < tech.indexOf("<PriceLadder"), "chart before the ladder");
+    assert.match(tech, /Where Price Sits/);
+  });
+  it("the old read card and the key-levels list are gone", () => {
+    assert.doesNotMatch(src, /technicalReadCard|KEY SUPPORT & RESISTANCE LEVELS/);
+  });
+});
+
+describe("Overview reads", () => {
+  it("the menu statuses and the panels come from the read engine, not from the score rows", () => {
+    assert.match(src, /verdictStatus\(overall\)/);
+    assert.match(src, /verdictStatus\(fund\.verdict\)/);
+    assert.match(src, /verdictStatus\(tech\.verdict\)/);
+    assert.match(src, /levelsToWatch\(price, \[tech\.nextSupport\?\.value\], \[tech\.nextResistance\?\.value\]\)/);
+  });
+});
