@@ -23,9 +23,9 @@ const STEP_HELP: [string, string, string][] = [
 ];
 
 const AFTER_RUN: [string, string][] = [
-  ["What you do", "Review your score, target and invalidation, adjust them in Advanced mode, then save."],
-  ["Where it is saved", "In the Trade Tracker, as a row in the Tracked Trades list on the left."],
-  ["View, change or delete", "Click a row to view it, Edit in Trade Builder to change it, Delete to remove it."],
+  ["What you do", "Review the score, target and invalidation, adjust in Advanced mode, then save."],
+  ["Where it is saved", "In the Trade Tracker, as a row in the Tracked Trades list."],
+  ["View, change or delete", "Click a row to view it, Edit to change it, Delete to remove it."],
 ];
 
 /** Below the three steps: what each step means (the step still to do is brightest), and what happens after Run. */
@@ -46,7 +46,7 @@ export function TradeBuilderGuide({ done }: { done: boolean[] }) {
       </div>
       <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 18 }}>
         <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>
-          AFTER YOU RUN THE STRATEGY
+          <span data-caps>After You Run The Strategy</span>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 12 }}>
           {AFTER_RUN.map(([title, body]) => (

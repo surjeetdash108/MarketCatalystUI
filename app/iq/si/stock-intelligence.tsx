@@ -2758,7 +2758,7 @@ export function StockIntelligenceScreen() {
             <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", display: "flex", flexDirection: "column", minHeight: 560 }}>
               <div style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                 <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                  ✦ ASK ME ANYTHING
+                  <span data-caps>✦ AI research copilot</span>
                 </span>
               </div>
               <div style={{ flex: 1, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2861,7 +2861,7 @@ export function StockIntelligenceScreen() {
             {/* Suggested Prompts */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                SUGGESTED RESEARCH QUESTIONS
+                <span data-caps>Suggested Research Questions</span>
               </div>
               {[
                 `What is the institutional bull case for ${stock.t}?`,
@@ -2937,11 +2937,11 @@ export function StockIntelligenceScreen() {
                   style={{ scrollMarginTop: 110, maxWidth: 780, width: "100%", margin: "14px auto 20px", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 30px", display: "flex", flexDirection: "column", gap: 20 }}
                 >
                   <div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>TRADE BUILDER</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>BUILD YOUR TRADE STRATEGY FOR {stock.t}</div>
+                    <div data-caps style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>Trade Builder</div>
+                    <div data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>Build your trade strategy for {stock.t}</div>
                   </div>
                   <div>
-                    <div style={stepLabel}>STEP 1 · DIRECTION</div>
+                    <div data-caps style={stepLabel}>Step 1 · Direction</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {(["Bull", "Bear"] as const).map((d) => (
                         <button key={d} onClick={() => setPickDir(d)} style={choice(pickDir === d, d === "Bull" ? UP : DN, false)}>
@@ -2951,7 +2951,7 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
                   <div>
-                    <div style={stepLabel}>STEP 2 · HORIZON</div>
+                    <div data-caps style={stepLabel}>Step 2 · Horizon</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {["1M", "3M", "6M", "9M"].map((hz) => (
                         <button key={hz} disabled={pickDir == null} onClick={() => setPickHz(hz)} style={{ ...choice(pickHz === hz, STEEL, pickDir == null), minWidth: 80, fontFamily: "'JetBrains Mono', monospace" }}>
@@ -2961,7 +2961,7 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
                   <div>
-                    <div style={stepLabel}>STEP 3 · MODE</div>
+                    <div data-caps style={stepLabel}>Step 3 · Mode</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {([
                         ["NORMAL", "Normal", "Engine weights, fixed"],
@@ -2997,7 +2997,7 @@ export function StockIntelligenceScreen() {
                       }}
                       style={{ height: 50, padding: "0 30px", border: "none", background: ready ? "#5980a6" : "#1c2733", color: "#ffffff", opacity: ready ? 1 : 0.5, fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", cursor: ready ? "pointer" : "not-allowed" }}
                     >
-                      RUN STRATEGY →
+                      <span data-caps>Run Strategy →</span>
                     </button>
                   </div>
                 </div>
