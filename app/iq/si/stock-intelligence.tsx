@@ -44,7 +44,7 @@ import { localCopilotAnswer } from "./copilot-local";
 import { InfoTip, highlightNumbers, highlightSignedPercents } from "./read-cards";
 import { weekMove } from "./week-move";
 import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
-import { fundamentalRead, overallVerdict, sentenceCase, supportResistance, technicalRead, topTargets, verdictStatus } from "./si-reads";
+import { fundamentalRead, overallVerdict, sentenceCase, supportResistance, technicalRead, topTargets, verdictBreakdown, verdictStatus } from "./si-reads";
 import { headlineRead } from "./si-headline";
 import { TechnicalTiles, PriceLadder } from "./technical-tiles";
 import { SiOverview, type NavItem, type Tone } from "./si-overview";
@@ -55,6 +55,7 @@ import { ReadChart } from "./read-chart";
 import { LeadLine, LevelsRuler, ReadTiles } from "./read-tiles";
 import { bigMovesIn10, couldMove, dropForming, titleWords, weekRows, yesterdayMove, yesterdayRows, type MoveNews, type MoveRow, type MoveTone } from "./si-moves";
 import { ConfidenceDialog } from "./confidence-dialog";
+import { VerdictDialog } from "./verdict-dialog";
 import { growthSeries, scoreRows, statusForTone } from "./overview-model";
 import { SI_TOKENS_CSS, SI_TYPE_CSS } from "./si-redesign-css";
 import { analystTargetList, epsGrowths, grossMargins, mean, operatingMargins, peerAverage, peerStats, revenueGrowths, type FactQuarter } from "./facts-4q";
@@ -216,6 +217,7 @@ export function StockIntelligenceScreen() {
   const [pendingPeerOpen, setPendingPeerOpen] = useState<{ ticker: string; name?: string } | null>(null);
   // The "how MC Confidence is calculated" dialog, opened from the Overview ring and score rows.
   const [confOpen, setConfOpen] = useState(false);
+  const [verdictOpen, setVerdictOpen] = useState(false);
 
   // Form 13F Institutional Holdings (FMP)
   const [inst13FData, setInst13FData] = useState<Stock13FResponse | null>(null);
@@ -1606,26 +1608,6 @@ export function StockIntelligenceScreen() {
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
   const movedWeek = weekMove(stock.t, moveBars, tickerNews as unknown as Parameters<typeof weekMove>[2]);
   const mcConfidence = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
-  /** The MC Confidence band, on the same scale the score colours use. */
-  const mcConfidenceBand =
-    mcConfidence == null ? null : mcConfidence >= 75 ? "High conviction" : mcConfidence >= 60 ? "Constructive" : mcConfidence >= 45 ? "Mixed" : "Weak";
-
-  // How the number is worked out, with this stock's own scores and the weights actually applied.
-  const fmtNum = (n: number) => String(Math.round(n * 10) / 10);
-  const mcConfidenceInfo: [string, string][] = [
-    ["What it is:", "The seven signal scores combined into one 0–100 number (6-month, bullish view). Each score counts by its weight."],
-    ...overviewRun.cats.map((c): [string, string] => {
-      const name = String(SHORT[c.k] || c.label);
-      const label = name.charAt(0) + name.slice(1).toLowerCase();
-      return c.w > 0
-        ? [`${label} ${fmtNum(c.w)}%:`, `${Math.round(c.score)} × ${fmtNum(c.w)}% = ${fmtNum(c.pts)} pts`]
-        : [`${label}:`, "no data, left out"];
-    }),
-    ["Total:", `${overviewRun.conf != null ? fmtNum(overviewRun.conf) : "—"} pts, shown rounded.`],
-    ["Missing data:", "A signal with no data is left out and the other weights are scaled up to add to 100%."],
-    ["Bands:", "75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak."],
-  ];
-
   if (isUnsubscribed) {
     return (
       <div
@@ -2083,7 +2065,7 @@ export function StockIntelligenceScreen() {
                     nowText: usd(price),
                     low: read?.levels.find((l) => l.tone === "down") ?? null,
                     high: read?.levels.find((l) => l.tone === "up") ?? null,
-                    onInfo: () => setConfOpen(true),
+                    onInfo: () => setVerdictOpen(true),
                   },
                   panels: {
                     fund: (
@@ -2159,7 +2141,8 @@ export function StockIntelligenceScreen() {
                   },
                 }}
               />
-              {confOpen && <ConfidenceDialog conf={mcConfidence} band={mcConfidenceBand} lines={mcConfidenceInfo} onClose={() => setConfOpen(false)} />}
+              {confOpen && <ConfidenceDialog cats={overviewRun.cats} conf={mcConfidence} peerTickers={siFacts.peerTickers} onClose={() => setConfOpen(false)} />}
+              {verdictOpen && <VerdictDialog breakdown={verdictBreakdown(tech.verdict, fund.verdict, mcConfidence)} techReads={tech.reads} fundReads={fund.reads} onClose={() => setVerdictOpen(false)} />}
             </>
           );
         })()}

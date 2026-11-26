@@ -330,10 +330,46 @@ export function overallVerdict(technical: Verdict, fundamental: Verdict, mcConfi
   const asRead = (v: Verdict) => (v.n ? { score: v.score } : null);
   const mc = has(mcConfidence) ? { score: clamp((mcConfidence - 50) / 40) } : null;
   return blend([
-    { read: asRead(technical), w: 0.35 },
-    { read: asRead(fundamental), w: 0.3 },
-    { read: mc, w: 0.35 },
+    { read: asRead(technical), w: OVERALL_WEIGHTS.tech },
+    { read: asRead(fundamental), w: OVERALL_WEIGHTS.fund },
+    { read: mc, w: OVERALL_WEIGHTS.mc },
   ]);
+}
+
+/** How much each input counts in the overall verdict. */
+export const OVERALL_WEIGHTS = { tech: 0.35, fund: 0.3, mc: 0.35 } as const;
+
+export type VerdictPart = {
+  key: "tech" | "fund" | "mc";
+  name: string;
+  /** -1 (bearish) to +1 (bullish). */
+  score: number;
+  dir: Dir;
+  label: string;
+  /** Its share of the call once the inputs that have data are re-weighted to 100%. */
+  weight: number;
+  /** weight x score: what it adds to the total. */
+  contrib: number;
+};
+export type VerdictBreakdown = { parts: VerdictPart[]; total: number; dir: Dir; label: string; n: number };
+
+/**
+ * The overall verdict taken apart for the "How the verdict is decided" dialog: each input with data, its re-weighted
+ * share, its score, and what it adds. The adds sum to the total, which is the score `overallVerdict` has.
+ */
+export function verdictBreakdown(technical: Verdict, fundamental: Verdict, mcConfidence: number | null | undefined): VerdictBreakdown {
+  const raw: Array<Omit<VerdictPart, "weight" | "contrib"> & { w: number }> = [];
+  if (technical.n) raw.push({ key: "tech", name: "Technicals", w: OVERALL_WEIGHTS.tech, score: technical.score, dir: technical.dir, label: sentenceCase(technical.label) });
+  if (fundamental.n) raw.push({ key: "fund", name: "Fundamentals", w: OVERALL_WEIGHTS.fund, score: fundamental.score, dir: fundamental.dir, label: sentenceCase(fundamental.label) });
+  if (has(mcConfidence)) {
+    const score = clamp((mcConfidence - 50) / 40);
+    raw.push({ key: "mc", name: "MC score", w: OVERALL_WEIGHTS.mc, score, dir: dirOf(score), label: `${Math.round(mcConfidence)} out of 100` });
+  }
+  const sum = raw.reduce((a, p) => a + p.w, 0);
+  if (!sum) return { parts: [], total: 0, dir: "flat", label: "NOT ENOUGH DATA", n: 0 };
+  const parts = raw.map(({ w, ...p }) => ({ ...p, weight: w / sum, contrib: (w / sum) * p.score }));
+  const total = parts.reduce((a, p) => a + p.contrib, 0);
+  return { parts, total, dir: dirOf(total), label: verdictLabel(total), n: parts.length };
 }
 
 /** A verdict as the Overview menu shows it: its label in sentence case and its direction; "No data" without reads. */

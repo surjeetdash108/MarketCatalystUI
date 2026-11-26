@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EMPTY_FACTS, buildDrivers, thesisRun, type SiFacts } from "./data";
+import { DRIVER_CATEGORIES, DRIVER_DOCS } from "./scoring-docs";
 
 // The design file's own sample stock (NVDA): its facts, and the scores its engine gives them. Our engine must agree
 // to two decimals, with ONE exception we keep on purpose: News sentiment. Ours weighs headlines by impact and shrinks
@@ -129,6 +130,16 @@ test("a fully met rule scores 100: there is no 95 ceiling", () => {
 test("six-month weights: Business 25, Earnings 20, Technicals 15, Catalysts 10, Valuation 15, Flows 5, Macro 10", () => {
   const run = thesisRun("NVDA", "Bull", "6M", undefined, undefined, FACTS);
   assert.deepEqual(run.W, { BUS: 25, EARN: 20, TECH: 15, CAT: 10, VAL: 15, POS: 5, MAC: 10 });
+});
+
+test("the Scoring rules table documents every driver this stock gets, once, under a known category", () => {
+  const docs = DRIVER_DOCS.map((d) => d.driver);
+  const scored = Object.keys(DESIGN_DRIVERS);
+  assert.equal(new Set(docs).size, docs.length, "no driver is documented twice");
+  for (const name of scored) assert.ok(docs.includes(name), `${name} has a rule row`);
+  for (const d of DRIVER_DOCS) {
+    assert.ok(DRIVER_CATEGORIES.includes(d.cat), d.cat);
+  }
 });
 
 test("growth and margins fall back to the latest quarter without peers, and the peer rows disappear", () => {

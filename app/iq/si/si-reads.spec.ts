@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EMPTY_FACTS, type SiFacts } from "./data";
-import { blend, fundamentalRead, overallVerdict, supportResistance, technicalRead, topTargets, verdictLabel, verdictStatus } from "./si-reads";
+import { blend, fundamentalRead, overallVerdict, supportResistance, technicalRead, topTargets, verdictBreakdown, verdictLabel, verdictStatus } from "./si-reads";
 
 const facts = (over: Partial<SiFacts>): SiFacts => ({ ...EMPTY_FACTS, ...over });
 
@@ -189,4 +189,19 @@ test("the overall verdict takes the technical read, the fundamental read and MC 
 test("the menu status is the label in sentence case, or No data", () => {
   assert.deepEqual(verdictStatus({ dir: "up", score: 0.3, label: "LEAN BULLISH", n: 2 }), { status: "Lean bullish", tone: "up" });
   assert.deepEqual(verdictStatus({ dir: "flat", score: 0, label: "NOT ENOUGH DATA", n: 0 }), { status: "No data", tone: "flat" });
+});
+
+test("the verdict taken apart: re-weighted shares and adds that sum to the overall score", () => {
+  const tech = { dir: "up" as const, score: 0.4, label: "LEAN BULLISH", n: 3 };
+  const fund = { dir: "down" as const, score: -0.2, label: "LEAN BEARISH", n: 2 };
+  const b = verdictBreakdown(tech, fund, 70);
+  assert.deepEqual(b.parts.map((p) => [p.key, Math.round(p.weight * 100)]), [["tech", 35], ["fund", 30], ["mc", 35]]);
+  assert.equal(b.parts[2].label, "70 out of 100");
+  assert.ok(Math.abs(b.total - overallVerdict(tech, fund, 70).score) < 1e-9);
+  assert.ok(Math.abs(b.parts.reduce((a, p) => a + p.contrib, 0) - b.total) < 1e-9);
+  // An input without data is left out and the others are re-weighted to 100%.
+  const noMc = verdictBreakdown(tech, fund, null);
+  assert.deepEqual(noMc.parts.map((p) => p.key), ["tech", "fund"]);
+  assert.ok(Math.abs(noMc.parts.reduce((a, p) => a + p.weight, 0) - 1) < 1e-9);
+  assert.deepEqual(verdictBreakdown({ dir: "flat", score: 0, label: "NOT ENOUGH DATA", n: 0 }, { dir: "flat", score: 0, label: "NOT ENOUGH DATA", n: 0 }, null), { parts: [], total: 0, dir: "flat", label: "NOT ENOUGH DATA", n: 0 });
 });
