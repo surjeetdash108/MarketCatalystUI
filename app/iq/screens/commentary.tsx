@@ -670,10 +670,14 @@ function FeedItemBody({ item, i, total, isOpen, onToggle, onTicker, onStockOpen,
    (`fresh`) flashes green for a few seconds and carries a NEW chip — the same
    cue as the Live Feed preview. `data-fid` / `data-fresh` are what
    useArrivalMotion reads to drop the row in and slide the others down. */
-function FeedItem({ fresh, ...rest }: ComponentProps<typeof FeedItemBody> & { fresh: boolean }) {
+function FeedItem({ fresh, intro = -1, ...rest }: ComponentProps<typeof FeedItemBody> & { fresh: boolean; intro?: number }) {
+  // `intro` ≥ 0: one of the top three when the page opens — drops in with the
+  // green flash, one after another, like Market Catalyst Pulse.
+  const introOn = intro >= 0 && !fresh;
   return (
     <div
-      className={`lfb-row${fresh ? " lfb-fresh" : ""}`}
+      className={`lfb-row${fresh ? " lfb-fresh" : ""}${introOn ? " lfb-intro" : ""}`}
+      style={introOn ? { animationDelay: `${intro * 220}ms` } : undefined}
       data-fid={rest.item.id}
       data-fresh={fresh ? "1" : undefined}
     >
@@ -1086,6 +1090,11 @@ export function CommentaryScreen() {
   // A new story drops in at the top and the rows under it slide down. Scope =
   // which list this is, so a tab / filter / page change is not mistaken for an arrival.
   useArrivalMotion(feedBodyRef, `${feedKey}|${pw.page}`);
+  // Opening Live Feed: the top three stories drop in one after another with the
+  // green flash, as if they had just come in (same as Market Catalyst Pulse).
+  // Once per visit, on the first full load of page 1.
+  const [introIds, setIntroIds] = useState<string[] | null>(null);
+  if (introIds === null && feedReady && pw.page === 0 && pageFeed.length > 0) setIntroIds(pageFeed.slice(0, 3).map(n => n.id));
   const goPage = (p: number) => { setFeedPage(p); setOpenId(null); feedBodyRef.current?.scrollTo({ top: 0 }); };
 
   // LIVE %change for the tickers actually rendered in the feed, via the app-wide
@@ -1275,6 +1284,7 @@ export function CommentaryScreen() {
                   key={item.id}
                   item={item}
                   fresh={freshKeys.has(freshStoryKey(item))}
+                  intro={pw.page === 0 && introIds ? introIds.indexOf(item.id) : -1}
                   i={pw.from + i}
                   total={feed.length}
                   isOpen={openId === item.id}
