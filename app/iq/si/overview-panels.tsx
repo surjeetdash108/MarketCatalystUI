@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { highlightNumbers } from "./read-cards";
 
 /**
  * The panels that open beside the Overview's left menu (Fundamentals, Technicals, Why it moved,
@@ -29,35 +28,6 @@ export function PanelCard({ children }: { children: ReactNode }) {
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>{children}</div>
     </div>
-  );
-}
-
-const lead = (text: string) => <p style={{ margin: 0, fontSize: 16, lineHeight: 1.55, color: HI }}>{highlightNumbers(text)}</p>;
-
-export type ReadRow = { title: string; value: string; tone: "good" | "bad" | "warn" | "neutral"; note?: string };
-
-const rowColor = (tone: ReadRow["tone"]) => (tone === "good" ? UP : tone === "bad" ? DN : tone === "warn" ? "var(--ov-warn, #e6b94f)" : MUTED);
-
-/** A one-sentence read, then the facts behind it (title, value, and a note under them). */
-export function ReadPanel({ text, rows }: { text: string; rows?: ReadRow[] }) {
-  return (
-    <PanelCard>
-      {lead(text)}
-      {rows && rows.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {rows.map((r) => (
-            <div
-              key={r.title}
-              style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 10, alignItems: "baseline", padding: "9px 0", borderTop: "1px solid var(--si-border, #232830)" }}
-            >
-              <span style={{ fontSize: 15.5, fontWeight: 600, color: HI }}>{r.title}</span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: rowColor(r.tone), whiteSpace: "pre" }}>{r.value}</span>
-              {r.note && <span style={{ gridColumn: "1 / 3", fontSize: 14, lineHeight: 1.45, color: MUTED, marginTop: 2 }}>{r.note}</span>}
-            </div>
-          ))}
-        </div>
-      )}
-    </PanelCard>
   );
 }
 

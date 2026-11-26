@@ -44,12 +44,15 @@ import { localCopilotAnswer } from "./copilot-local";
 import { InfoTip, highlightNumbers, highlightSignedPercents } from "./read-cards";
 import { weekMove } from "./week-move";
 import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
-import { fundamentalRead, overallVerdict, sentenceCase, supportResistance, technicalRead, verdictStatus, type Read } from "./si-reads";
+import { fundamentalRead, overallVerdict, sentenceCase, supportResistance, technicalRead, topTargets, verdictStatus } from "./si-reads";
 import { headlineRead } from "./si-headline";
 import { TechnicalTiles, PriceLadder } from "./technical-tiles";
 import { SiOverview, type NavItem, type Tone } from "./si-overview";
 import { SiMasthead, SiTabRail } from "./si-masthead";
-import { ReadPanel, MovedPanel, CouldPanel, type PanelRow, type ReadRow } from "./overview-panels";
+import { PanelCard, MovedPanel, CouldPanel, type PanelRow } from "./overview-panels";
+import { chartSpec, type ChartInput } from "./overview-charts";
+import { ReadChart } from "./read-chart";
+import { LeadLine, LevelsRuler, ReadTiles } from "./read-tiles";
 import { bigMovesIn10, couldMove, dropForming, titleWords, weekRows, yesterdayMove, yesterdayRows, type MoveNews, type MoveRow, type MoveTone } from "./si-moves";
 import { ConfidenceDialog } from "./confidence-dialog";
 import { growthSeries, scoreRows, statusForTone } from "./overview-model";
@@ -2010,13 +2013,32 @@ export function StockIntelligenceScreen() {
           const tech = technicalRead(siFacts);
           const fund = fundamentalRead(siFacts, fpeVal);
           const overall = overallVerdict(tech.verdict, fund.verdict, mcConfidence);
-          const rowsOf = (reads: Read[]): ReadRow[] =>
-            reads.map((r) => ({ title: r.k, value: r.headline, tone: r.caution ? "warn" : r.dir === "up" ? "good" : r.dir === "down" ? "bad" : "neutral", note: r.detail }));
           const weekTone: Tone = movedWeek ? (movedWeek.pct >= 0.05 ? "up" : movedWeek.pct <= -0.05 ? "down" : "flat") : "flat";
           // The MarketCatalyst read: a headline, a short body and the two prices to watch. Without enough
           // data for one, the verdict and the two reads' own lines stand in.
           const read = headlineRead(stock.t, siFacts, tech, fund, overall, { bars: sixMonthBars, low52: lo52 });
           const nextEvent = upcomingCatalysts.find((u) => !u.past && u.iso) ?? null;
+          // The Fundamentals charts: revenue and EPS growth over the last four quarters, the four latest quarters, the P/Es.
+          const growth = growthSeries(financialsDoc?.quarters);
+          const latestFour = [...(financialsDoc?.quarters ?? [])]
+            .filter((q) => q.endDate)
+            .sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)))
+            .slice(0, 4);
+          const chartInput: ChartInput = {
+            ticker: stock.t,
+            facts: siFacts,
+            forwardPe: fpeVal,
+            revenue: growth.find((g) => g.key === "rev")?.rows ?? [],
+            eps: growth.find((g) => g.key === "eps")?.rows ?? [],
+            quarters: latestFour,
+          };
+          // The analysts' average target on the Technicals ruler: the top analysts' when known, else the mean target.
+          const topAnalysts = topTargets(siFacts.analystTargets);
+          const rulerTarget = topAnalysts
+            ? { avg: topAnalysts.avg, median: topAnalysts.median, n: topAnalysts.n }
+            : siFacts.targetMean != null
+              ? { avg: siFacts.targetMean, median: null, n: null }
+              : null;
           // Why it moved: yesterday and the last five sessions, from the daily bars and the stock's headlines.
           const todayNy = etTodayIso();
           const news = (Array.isArray(tickerNews) ? tickerNews : []) as unknown as MoveNews[];
@@ -2049,7 +2071,7 @@ export function StockIntelligenceScreen() {
               <SiOverview
                 key={stock.t}
                 data={{
-                  growth: growthSeries(financialsDoc?.quarters),
+                  growth,
                   scores,
                   conf: mcConfidence,
                   onScores: () => setConfOpen(true),
@@ -2064,8 +2086,48 @@ export function StockIntelligenceScreen() {
                     onInfo: () => setConfOpen(true),
                   },
                   panels: {
-                    fund: <ReadPanel text={fund.action} rows={rowsOf(fund.reads)} />,
-                    tech: <ReadPanel text={tech.action} rows={rowsOf(tech.reads)} />,
+                    fund: (
+                      <PanelCard>
+                        {fund.reads.length ? (
+                          <>
+                            <LeadLine text={fund.action} />
+                            <ReadTiles
+                              reads={fund.reads}
+                              glow
+                              chartFor={(r) => {
+                                const spec = chartSpec(r.k, chartInput);
+                                return spec ? <ReadChart spec={spec} /> : undefined;
+                              }}
+                            />
+                          </>
+                        ) : (
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>{fund.action}</span>
+                        )}
+                      </PanelCard>
+                    ),
+                    tech: (
+                      <PanelCard>
+                        {tech.reads.length ? (
+                          <>
+                            <LeadLine text={tech.action} />
+                            {price != null && (
+                              <LevelsRuler
+                                price={price}
+                                low52={lo52 ?? null}
+                                high52={hi52 ?? null}
+                                support={tech.nextSupport}
+                                resistance={tech.nextResistance}
+                                target={rulerTarget}
+                                money={usd}
+                              />
+                            )}
+                            <ReadTiles reads={tech.reads} />
+                          </>
+                        ) : (
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>{tech.action}</span>
+                        )}
+                      </PanelCard>
+                    ),
                     moved: (
                       <MovedPanel
                         yesterday={{
