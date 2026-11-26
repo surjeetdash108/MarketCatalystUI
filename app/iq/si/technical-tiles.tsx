@@ -66,7 +66,7 @@ export function TechnicalTiles({ reads, facts, high52 }: { reads: ReadonlyArray<
           >
             <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <span style={{ display: "flex", alignItems: "center" }}>
-                <span data-caps style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-white, #ffffff)", opacity: 0.7 }}>
+                <span data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-white, #ffffff)", opacity: 0.7 }}>
                   {TILE_LABEL[key]}
                 </span>
                 <InfoTip lines={TECH_TILE_INFO.filter(([name]) => name.toUpperCase().startsWith(key))} />

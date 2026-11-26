@@ -2134,8 +2134,8 @@ export function StockIntelligenceScreen() {
                         nextLabel={nextEvent ? titleWords(`NEXT EVENT \u00B7 ${nextEvent.date} \u00B7 ${nextEvent.days}`) : ""}
                         upTitle={titleWords("What could push it up")}
                         downTitle={titleWords("What could pull it down")}
-                        up={asRows(reasons.up)}
-                        down={asRows(reasons.down)}
+                        up={reasons.up.map(({ title, detail, tag, isNew }) => ({ title, detail, tag, isNew }))}
+                        down={reasons.down.map(({ title, detail, tag, isNew }) => ({ title, detail, tag, isNew }))}
                       />
                     ),
                   },
@@ -2842,8 +2842,8 @@ export function StockIntelligenceScreen() {
 
               <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
                 <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
-                    <span data-caps>Where Price Sits {"\u00B7"} Support &amp; Resistance</span>
+                  <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
+                    Where Price Sits {"\u00B7"} Support &amp; Resistance
                   </span>
                   <PriceLadder price={siFacts.price} {...supportResistance(siFacts)} max={4} />
                 </div>
@@ -2887,7 +2887,7 @@ export function StockIntelligenceScreen() {
                   </div>
                 )}
                 {aiChat.length === 0 && !aiAnalysisDoc?.analysis && (
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.6 }}>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.6 }}>
                     Ask anything about {stock.t}. The assistant already has full knowledge of current signals, catalysts, valuation metrics, and intraday factor attribution.
                   </div>
                 )}
@@ -2904,7 +2904,7 @@ export function StockIntelligenceScreen() {
                       background: m.role === "user" ? "rgba(89,128,166,0.18)" : "var(--si-card, rgba(12,17,24,0.95))",
                       padding: "12px 16px",
                       fontFamily: "'Manrope', sans-serif",
-                      fontSize: 14.5,
+                      fontSize: 17,
                       color: "var(--si-text-hi, #e8eef4)",
                       lineHeight: 1.55,
                       whiteSpace: m.role === "user" ? "pre-wrap" : "normal",
@@ -2912,14 +2912,14 @@ export function StockIntelligenceScreen() {
                   >
                     {m.role === "user" ? m.text : formatAiChatReply(m.text)}
                     {m.note && (
-                      <div style={{ marginTop: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-sub, #5d6b79)", lineHeight: 1.4 }}>
+                      <div style={{ marginTop: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-sub, #5d6b79)", lineHeight: 1.4 }}>
                         {m.note}
                       </div>
                     )}
                   </div>
                 ))}
                 {aiBusy && (
-                  <div style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-accent-soft, #7fa8d0)" }}>
+                  <div style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: "var(--si-accent-soft, #7fa8d0)" }}>
                     Synthesizing research on {stock.t}…
                   </div>
                 )}
@@ -2934,10 +2934,10 @@ export function StockIntelligenceScreen() {
                     flex: 1,
                     height: 42,
                     background: "var(--si-bg, #080b10)",
-                    border: "1px solid var(--si-border-sec, #2a3a4a)",
+                    border: "1px solid var(--si-border-sec, #2e343d)",
                     color: "var(--si-text-hi, #e8eef4)",
                     fontFamily: "'Manrope', sans-serif",
-                    fontSize: 14,
+                    fontSize: 16,
                     padding: "0 14px",
                     outline: "none",
                   }}
@@ -2951,7 +2951,7 @@ export function StockIntelligenceScreen() {
                     background: "#5980a6",
                     color: "#ffffff",
                     fontFamily: "'Manrope', sans-serif",
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: 700,
                     cursor: "pointer",
                   }}
@@ -2963,7 +2963,7 @@ export function StockIntelligenceScreen() {
 
             {/* Suggested Prompts */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                 <span data-tc>Suggested Research Questions</span>
               </div>
               {[
@@ -2982,7 +2982,7 @@ export function StockIntelligenceScreen() {
                     padding: 14,
                     color: "var(--si-text-hi, #e8eef4)",
                     fontFamily: "'Manrope', sans-serif",
-                    fontSize: 13.5,
+                    fontSize: 16,
                     lineHeight: 1.4,
                     cursor: "pointer",
                   }}
@@ -3000,17 +3000,17 @@ export function StockIntelligenceScreen() {
         {activeTab === "lab" && (() => {
           if (!labStarted) {
             const ready = pickDir != null && pickHz != null && pickMode != null;
-            const stepLabel: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 8 };
+            const stepLabel: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 8 };
             const choice = (active: boolean, accent: string, disabled: boolean): React.CSSProperties => ({
               height: 44,
               minWidth: 120,
               padding: "0 18px",
-              border: `1px solid ${active ? accent : "#1c2733"}`,
+              border: `1px solid ${active ? accent : "#232830"}`,
               background: active ? "rgba(89,128,166,0.2)" : "transparent",
-              color: "var(--si-text-hi, #ffffff)",
+              color: "var(--si-text-white, #ffffff)",
               opacity: disabled ? 0.35 : 1,
               fontFamily: "'Manrope', sans-serif",
-              fontSize: 15,
+              fontSize: 17,
               fontWeight: 700,
               cursor: disabled ? "not-allowed" : "pointer",
               transition: "background 160ms, border-color 160ms",
@@ -3018,7 +3018,7 @@ export function StockIntelligenceScreen() {
             return (
               <>
                 {labSavedNote && (
-                  <div style={{ maxWidth: 780, width: "100%", margin: "14px auto -6px", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.07)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ maxWidth: 920, width: "100%", margin: "14px auto -6px", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.07)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <span style={{ color: "var(--up, #4ade80)", fontSize: 16 }}>✓</span>
                     <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-hi, #ffffff)" }}>{labSavedNote}</span>
                     <button
@@ -3037,11 +3037,11 @@ export function StockIntelligenceScreen() {
                 )}
                 <div
                   id="si-trade-builder-top"
-                  style={{ scrollMarginTop: 110, maxWidth: 780, width: "100%", margin: "14px auto 20px", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 30px", display: "flex", flexDirection: "column", gap: 20 }}
+                  style={{ scrollMarginTop: 110, maxWidth: 920, width: "100%", margin: "14px auto 20px", border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "22px 30px", display: "flex", flexDirection: "column", gap: 20 }}
                 >
                   <div>
                     <div data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>Trade Builder</div>
-                    <div data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>Build your trade strategy for {stock.t}</div>
+                    <div data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-white, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>Build your trade strategy for {stock.t}</div>
                   </div>
                   <div>
                     <div data-tc style={stepLabel}>Step 1 · Direction</div>
@@ -3077,7 +3077,7 @@ export function StockIntelligenceScreen() {
                           style={{ ...choice(pickMode === m, STEEL, pickHz == null), height: 62, minWidth: 230, textAlign: "left", display: "flex", flexDirection: "column", justifyContent: "center", gap: 3 }}
                         >
                           <span>{title}</span>
-                          <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>{sub}</span>
+                          <span style={{ fontSize: 15, fontWeight: 500, opacity: 0.8 }}>{sub}</span>
                         </button>
                       ))}
                     </div>
@@ -3098,7 +3098,7 @@ export function StockIntelligenceScreen() {
                         setLabSavedNote(null);
                         setLabStarted(true);
                       }}
-                      style={{ height: 50, padding: "0 30px", border: "none", background: ready ? "#5980a6" : "#1c2733", color: "#ffffff", opacity: ready ? 1 : 0.5, fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", cursor: ready ? "pointer" : "not-allowed" }}
+                      style={{ height: 54, padding: "0 30px", border: "none", background: ready ? "#5980a6" : "#232830", color: "#ffffff", opacity: ready ? 1 : 0.5, fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", cursor: ready ? "pointer" : "not-allowed" }}
                     >
                       <span data-tc>Run Strategy →</span>
                     </button>

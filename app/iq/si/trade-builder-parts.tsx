@@ -33,27 +33,25 @@ const AFTER_RUN: [string, string][] = [
 export function TradeBuilderGuide({ done }: { done: boolean[] }) {
   const current = done.findIndex((d) => !d);
   return (
-    <div style={{ maxWidth: 780, width: "100%", margin: "0 auto 40px", display: "flex", flexDirection: "column", gap: 22 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ maxWidth: 920, width: "100%", margin: "0 auto 40px", display: "flex", flexDirection: "column", gap: 22 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {STEP_HELP.map(([num, title, body], i) => (
-          <div key={num} style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: 14, rowGap: 2, padding: "2px 2px", opacity: done[i] ? 0.4 : i === current ? 1 : 0.75, transition: "opacity 220ms ease" }}>
-            <span style={{ display: "inline-flex", alignItems: "baseline", gap: 10, minWidth: 120 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-accent, #5980a6)" }}>{num}</span>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-text-hi, #ffffff)" }}>{title.toUpperCase()}</span>
-            </span>
-            <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-hi, #ffffff)", opacity: 0.85, lineHeight: 1.55 }}>{body}</span>
+          <div key={num} className="si-guide-row" style={{ display: "grid", gridTemplateColumns: "36px 130px minmax(0, 1fr)", alignItems: "baseline", columnGap: 12, opacity: done[i] ? 0.45 : i === current ? 1 : 0.8, transition: "opacity 220ms ease" }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "var(--si-accent, #5980a6)" }}>{num}</span>
+            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-text-white, #ffffff)" }}>{title}</span>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-white, #ffffff)", opacity: 0.9, lineHeight: 1.5 }}>{body}</div>
           </div>
         ))}
       </div>
-      <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 18 }}>
-        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>
-          <span data-tc>After You Run The Strategy</span>
+      <div style={{ borderTop: "1px solid var(--si-border, #232830)", paddingTop: 18 }}>
+        <div data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>
+          After You Run The Strategy
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14, marginTop: 12 }}>
           {AFTER_RUN.map(([title, body]) => (
-            <div key={title}>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #ffffff)" }}>{title}</div>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-hi, #ffffff)", opacity: 0.85, lineHeight: 1.55, marginTop: 4 }}>{body}</div>
+            <div key={title} style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 700, color: "var(--si-text-white, #ffffff)" }}>{title}</div>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-white, #ffffff)", opacity: 0.88, lineHeight: 1.5 }}>{body}</div>
             </div>
           ))}
         </div>
