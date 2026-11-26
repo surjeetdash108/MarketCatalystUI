@@ -2843,7 +2843,7 @@ export function StockIntelligenceScreen() {
               <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
                 <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
                   <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
-                    Where Price Sits {"\u00B7"} Support &amp; Resistance
+                    {"Where Price Sits · Support & Resistance"}
                   </span>
                   <PriceLadder price={siFacts.price} {...supportResistance(siFacts)} max={4} />
                 </div>
