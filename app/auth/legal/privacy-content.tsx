@@ -195,7 +195,7 @@ export function PrivacyContent() {
                                           <strong>Other disclosures.</strong> We may also share information:</p>
                                           <ul>
                                             <li>With legal authorities or other parties when required by law, regulation, subpoena, court order, or other valid legal process, or when we believe in good faith that disclosure is necessary to protect the rights, property, or safety of MarketCatalyst, our users, or others;</li>
-                                            <li>With a successor entity, or its advisers, in connection with a merger, acquisition, financing, reorganization, bankruptcy, or sale of all or part of our business or assets; and</li>
+                                            <li>With a successor entity, or its advisors, in connection with a merger, acquisition, financing, reorganization, bankruptcy, or sale of all or part of our business or assets; and</li>
                                             <li>With your consent or at your direction.</li>
                                           </ul>
                                           <h2 id="no-sale">5. No Sale of Personal Information; No Targeted Advertising</h2>

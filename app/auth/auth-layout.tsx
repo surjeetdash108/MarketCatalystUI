@@ -7,7 +7,7 @@ const PILLS = [
   { label: "AI-generated briefs",    d: ".45s" },
   { label: "Earnings hub",           d: ".60s" },
   { label: "Analyst actions",        d: ".75s" },
-  { label: "Portfolio Pulse",        d: ".90s" },
+  { label: "Portfolio",        d: ".90s" },
   { label: "Insider & 13F flows",    d: "1.05s" },
   { label: "Market screener",        d: "1.20s" },
   { label: "VIX & macro",            d: "1.35s" },
