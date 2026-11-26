@@ -29,26 +29,38 @@ export function isChunkLoadError(err: unknown): boolean {
   );
 }
 
+/** In-memory copy of the last reload time, used when sessionStorage is missing or blocked. */
+let lastReloadMs = 0;
+
+function readLastReload(key: string): number {
+  try {
+    const v = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(key) : null;
+    if (v) return Math.max(lastReloadMs, parseInt(v, 10) || 0);
+  } catch { /* storage blocked (private mode, strict settings) */ }
+  return lastReloadMs;
+}
+
+function writeLastReload(key: string, now: number): void {
+  lastReloadMs = now;
+  try {
+    if (typeof sessionStorage !== "undefined") sessionStorage.setItem(key, String(now));
+  } catch { /* storage blocked: the in-memory copy still guards this page */ }
+}
+
 /**
- * Safely refreshes the browser window with an anti-infinite-loop guard.
+ * Safely refreshes the browser window with an anti-infinite-loop guard: at most
+ * once per 15 seconds. The guard used to live only in sessionStorage, so where
+ * storage is unavailable (blocked by the browser, or Node 22 in CI) it was
+ * skipped and every call reloaded; an in-memory copy now backs it up.
  */
 export function reloadForChunkError(reloadFn?: () => void): boolean {
   if (typeof window === "undefined" && !reloadFn) return false;
   const doReload = reloadFn || (() => window.location.reload());
-  try {
-    const RELOAD_KEY = "mc_chunk_reload_ts";
-    const last = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(RELOAD_KEY) : null;
-    const now = Date.now();
-    // Guard against rapid infinite reload loops (e.g. offline state or persistent outage):
-    // Max once per 15 seconds.
-    if (!last || now - parseInt(last, 10) > 15000) {
-      if (typeof sessionStorage !== "undefined") {
-        sessionStorage.setItem(RELOAD_KEY, String(now));
-      }
-      doReload();
-      return true;
-    }
-  } catch {
+  const RELOAD_KEY = "mc_chunk_reload_ts";
+  const now = Date.now();
+  // Guard against rapid infinite reload loops (e.g. offline state or persistent outage).
+  if (now - readLastReload(RELOAD_KEY) > 15000) {
+    writeLastReload(RELOAD_KEY, now);
     doReload();
     return true;
   }
