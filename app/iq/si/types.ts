@@ -109,8 +109,6 @@ export interface DetailStock {
 
 export type SITab =
   | "overview"
-  | "moved"
-  | "could"
   | "fund"
   | "tech"
   | "ai"

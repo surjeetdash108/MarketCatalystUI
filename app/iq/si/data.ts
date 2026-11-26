@@ -9,15 +9,14 @@ export const UP = "#4ade80";
 export const DN = "#f05656";
 export const STEEL = "#7fa8d0";
 
+/** The six Stock Intelligence tabs. Why it moved and Why it could move are panels on the Overview, not tabs. */
 export const TABS: [SITab, string][] = [
-  ["overview", "OVERVIEW"],
-  ["moved", "WHY IT MOVED"],
-  ["could", "WHY IT COULD MOVE"],
-  ["fund", "FUNDAMENTALS"],
-  ["tech", "TECHNICALS"],
-  ["ai", "AI RESEARCH"],
-  ["lab", "TRADE BUILDER"],
-  ["mon", "TRADE TRACKER"],
+  ["overview", "Overview"],
+  ["fund", "Fundamentals"],
+  ["tech", "Technicals"],
+  ["ai", "AI Research"],
+  ["lab", "Trade Builder"],
+  ["mon", "Trade Tracker"],
 ];
 
 export const LG_COL: Record<string, [string, string]> = {
