@@ -2509,7 +2509,7 @@ export function StockIntelligenceScreen() {
           const fundCard: React.CSSProperties = { border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10, minWidth: 0 };
           const fundCardHead = (title: string, sub: string) => (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>{title}</span>
+              <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>{title}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-white, #ffffff)", opacity: 0.6 }}>{sub}</span>
             </div>
           );
@@ -2523,7 +2523,7 @@ export function StockIntelligenceScreen() {
                     <div key={c.k} style={{ border: `1px solid ${c.g.col}`, background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6 }}>
                       <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                         <span style={{ display: "flex", alignItems: "center" }}>
-                          <span data-caps style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-white, #ffffff)", opacity: 0.7 }}>{c.label}</span>
+                          <span data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-white, #ffffff)", opacity: 0.7 }}>{c.label}</span>
                           <InfoTip lines={SCORECARD_INFO[c.k] ?? []} />
                         </span>
                         <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: c.g.col, textAlign: "right" }}>{c.g.word}</span>
@@ -2545,7 +2545,7 @@ export function StockIntelligenceScreen() {
                   return (
                   <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 18px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", columnGap: 8 }}>
-                      <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
+                      <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
                         {fm.k}
                       </span>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: fm.col, whiteSpace: "nowrap" }}>
@@ -2678,7 +2678,7 @@ export function StockIntelligenceScreen() {
                 {/* Valuation Multiples vs Reference Benchmark */}
                 <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       Valuation Multiples
                     </span>
                     <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.8 }}>
@@ -2710,7 +2710,7 @@ export function StockIntelligenceScreen() {
                 {/* Peer Comparison Table */}
                 <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       Peer Comparison
                     </span>
                     <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.75 }}>
@@ -2964,7 +2964,7 @@ export function StockIntelligenceScreen() {
             {/* Suggested Prompts */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                <span data-caps>Suggested Research Questions</span>
+                <span data-tc>Suggested Research Questions</span>
               </div>
               {[
                 `What is the institutional bull case for ${stock.t}?`,
@@ -3040,11 +3040,11 @@ export function StockIntelligenceScreen() {
                   style={{ scrollMarginTop: 110, maxWidth: 780, width: "100%", margin: "14px auto 20px", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 30px", display: "flex", flexDirection: "column", gap: 20 }}
                 >
                   <div>
-                    <div data-caps style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>Trade Builder</div>
-                    <div data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>Build your trade strategy for {stock.t}</div>
+                    <div data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>Trade Builder</div>
+                    <div data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>Build your trade strategy for {stock.t}</div>
                   </div>
                   <div>
-                    <div data-caps style={stepLabel}>Step 1 · Direction</div>
+                    <div data-tc style={stepLabel}>Step 1 · Direction</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {(["Bull", "Bear"] as const).map((d) => (
                         <button key={d} onClick={() => setPickDir(d)} style={choice(pickDir === d, d === "Bull" ? UP : DN, false)}>
@@ -3054,7 +3054,7 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
                   <div>
-                    <div data-caps style={stepLabel}>Step 2 · Horizon</div>
+                    <div data-tc style={stepLabel}>Step 2 · Horizon</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {["1M", "3M", "6M", "9M"].map((hz) => (
                         <button key={hz} disabled={pickDir == null} onClick={() => setPickHz(hz)} style={{ ...choice(pickHz === hz, STEEL, pickDir == null), minWidth: 80, fontFamily: "'JetBrains Mono', monospace" }}>
@@ -3064,7 +3064,7 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
                   <div>
-                    <div data-caps style={stepLabel}>Step 3 · Mode</div>
+                    <div data-tc style={stepLabel}>Step 3 · Mode</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {([
                         ["NORMAL", "Normal", "Engine weights, fixed"],
@@ -3100,7 +3100,7 @@ export function StockIntelligenceScreen() {
                       }}
                       style={{ height: 50, padding: "0 30px", border: "none", background: ready ? "#5980a6" : "#1c2733", color: "#ffffff", opacity: ready ? 1 : 0.5, fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", cursor: ready ? "pointer" : "not-allowed" }}
                     >
-                      <span data-caps>Run Strategy →</span>
+                      <span data-tc>Run Strategy →</span>
                     </button>
                   </div>
                 </div>

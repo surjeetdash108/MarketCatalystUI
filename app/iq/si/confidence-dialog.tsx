@@ -55,7 +55,7 @@ export function ConfidenceDialog({ cats, conf, peerTickers, onClose }: { cats: B
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
               type="button"
-              data-caps
+              data-tc
               onClick={() => setWeightsOpen(true)}
               style={{ height: 36, padding: "0 16px", whiteSpace: "nowrap", border: "1px solid var(--si-border-sec, #2e343d)", borderRadius: 4, background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: INTER, fontSize: 14, fontWeight: 600, letterSpacing: 0, cursor: "pointer" }}
             >

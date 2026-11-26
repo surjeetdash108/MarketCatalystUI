@@ -47,7 +47,7 @@ export function TradeBuilderGuide({ done }: { done: boolean[] }) {
       </div>
       <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 18 }}>
         <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>
-          <span data-caps>After You Run The Strategy</span>
+          <span data-tc>After You Run The Strategy</span>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 12 }}>
           {AFTER_RUN.map(([title, body]) => (
@@ -211,7 +211,7 @@ export function ConfidenceExplainer({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div data-caps style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
+          <div data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
             How The Trade Confidence Is Calculated
           </div>
           <button type="button" aria-label="Close" onClick={onClose} style={{ width: 26, height: 26, border: "1px solid var(--si-border-sec, #2e343d)", background: "transparent", color: "var(--si-text-white, #ffffff)", fontSize: 16, lineHeight: 1, cursor: "pointer", flex: "none" }}>
@@ -219,15 +219,15 @@ export function ConfidenceExplainer({
           </button>
         </div>
 
-        <div data-caps style={step}>1 · Each Driver Gets A Score</div>
+        <div data-tc style={step}>1 · Each Driver Gets A Score</div>
         <div style={body}>
           Every driver (revenue growth, trend vs moving averages, forward P/E and so on) is scored 0–100 from its own data. 50 is neutral, higher supports a long. For a bearish trade each score is flipped (100 − score), so a high number always means &quot;supports this trade&quot;.
         </div>
 
-        <div data-caps style={step}>2 · Drivers Roll Up Into 7 Categories</div>
+        <div data-tc style={step}>2 · Drivers Roll Up Into 7 Categories</div>
         <div style={body}>A category&apos;s score is the plain average of its drivers. Click a row in the Score Breakdown to see them.</div>
 
-        <div data-caps style={step}>3 · Engine Weights</div>
+        <div data-tc style={step}>3 · Engine Weights</div>
         <div style={body}>
           The weights say how much each category matters, and they depend on the horizon: short trades lean on price action and catalysts, long trades on the business and valuation. They always add up to 100%.
         </div>
@@ -258,14 +258,14 @@ export function ConfidenceExplainer({
           {custom ? " You are using custom weights from Advanced mode, rescaled to 100%." : ""}
         </div>
 
-        <div data-caps style={step}>4 · Points And Confidence</div>
+        <div data-tc style={step}>4 · Points And Confidence</div>
         <div style={body}>
           Points = weight × score ÷ 100.
           {top ? ` For example ${top.label}: ${Math.round(top.w)}% × ${Math.round(top.score)} = ${top.pts.toFixed(1)} points.` : ""} The points of all categories added together are the trade confidence
           {conf != null ? ` (${conf} here)` : ""}.
         </div>
 
-        <div data-caps style={step}>5 · What The Score Means</div>
+        <div data-tc style={step}>5 · What The Score Means</div>
         <div style={body}>The label on the confidence box comes from the score alone:</div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {SCORE_BANDS.map(([range, label, color, text]) => {
@@ -278,7 +278,7 @@ export function ConfidenceExplainer({
             return (
               <div key={label} style={{ display: "grid", gridTemplateColumns: "74px 150px minmax(0,1fr)", gap: 12, alignItems: "baseline", padding: "7px 8px", borderTop: "1px solid #141d27", background: now ? "rgba(89,128,166,0.16)" : "transparent" }}>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-text-white, #ffffff)" }}>{range}</span>
-                <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.08em", color }}>
+                <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.08em", color }}>
                   {titleWords(label)}
                   {now ? " ◄ Now" : ""}
                 </span>
@@ -288,7 +288,7 @@ export function ConfidenceExplainer({
           })}
         </div>
 
-        <div data-caps style={step}>6 · What The Score Changes In The Plan</div>
+        <div data-tc style={step}>6 · What The Score Changes In The Plan</div>
         <div style={body}>
           At a score of 50 the target and invalidation sit at their measured levels. A higher score reaches further for the target (up to 1.4× the distance) and gives the stop a little more room (up to 1.2×); a lower score pulls both in (down to 0.6× and 0.8×). In Trade Tracker a score under 45 marks the trade At risk and under 30 Invalidated.
         </div>

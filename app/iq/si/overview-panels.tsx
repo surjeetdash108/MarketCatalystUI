@@ -126,7 +126,7 @@ export function CouldPanel({ next, upTitle, downTitle, up, down, nextLabel }: { 
     <PanelCard>
       {next ? (
         <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card-sec, rgba(20, 23, 28,0.6))", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
-          <span data-caps style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, letterSpacing: "0.1em", color: MUTED }}>{nextLabel}</span>
+          <span data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, letterSpacing: "0.1em", color: MUTED }}>{nextLabel}</span>
           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 19, fontWeight: 700, color: HI }}>{next.n}</span>
           {next.txt && <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15.5, lineHeight: 1.45, color: MUTED }}>{next.txt}</span>}
         </div>

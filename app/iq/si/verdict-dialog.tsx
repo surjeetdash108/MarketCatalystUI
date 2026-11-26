@@ -167,7 +167,7 @@ export function VerdictDialog({ breakdown: b, techReads, fundReads, onClose }: {
             ] as const
           ).map(([title, reads]) => (
             <div key={title} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <span data-caps style={head}>{title}</span>
+              <span data-tc style={head}>{title}</span>
               {reads.length ? reads.map((r) => <ReadBiasRow key={r.k} read={r} />) : <span style={{ fontFamily: MANROPE, fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>No data yet.</span>}
             </div>
           ))}
