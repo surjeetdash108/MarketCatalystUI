@@ -67,3 +67,21 @@ test("Chunk Error Recovery & Screen Refresh", async (t) => {
     assert.equal(isChunkLoadError(errorWithUrl), true);
   });
 });
+
+test("reload guard still holds when sessionStorage throws (blocked storage)", async () => {
+  const g = globalThis as { sessionStorage?: unknown };
+  const saved = g.sessionStorage;
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get() { throw new Error("SecurityError: storage blocked"); },
+  });
+  try {
+    const mod = await import("./chunk-error-recovery");
+    let reloads = 0;
+    mod.reloadForChunkError(() => { reloads++; });
+    mod.reloadForChunkError(() => { reloads++; });
+    assert.ok(reloads <= 1, "at most one reload in 15 s even without storage");
+  } finally {
+    Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: saved, writable: true });
+  }
+});
