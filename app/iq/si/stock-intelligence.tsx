@@ -49,7 +49,8 @@ import { headlineRead } from "./si-headline";
 import { TechnicalTiles, PriceLadder } from "./technical-tiles";
 import { SiOverview, type NavItem, type Tone } from "./si-overview";
 import { SiMasthead, SiTabRail } from "./si-masthead";
-import { ReadPanel, MovedPanel, CouldPanel, type ReadRow } from "./overview-panels";
+import { ReadPanel, MovedPanel, CouldPanel, type PanelRow, type ReadRow } from "./overview-panels";
+import { bigMovesIn10, couldMove, dropForming, titleWords, weekRows, yesterdayMove, yesterdayRows, type MoveNews, type MoveRow, type MoveTone } from "./si-moves";
 import { ConfidenceDialog } from "./confidence-dialog";
 import { growthSeries, scoreRows, statusForTone } from "./overview-model";
 import { SI_TOKENS_CSS, SI_TYPE_CSS } from "./si-redesign-css";
@@ -278,6 +279,11 @@ export function StockIntelligenceScreen() {
     [liveCompany?.peers, currentTicker],
   );
   const scoringPeersKey = scoringPeers.join(",");
+  // The daily bars without the one still forming today, and how the peers and the two market indexes move today:
+  // the Overview's "Why it moved" and "Why it could move" panels read them.
+  const moveBars = useMemo(() => dropForming(sixMonthBars, etTodayIso()), [sixMonthBars]);
+  const moveTickers = useMemo(() => [...scoringPeers, "QQQ", "SPY"], [scoringPeers]);
+  const moveQuotes = useLiveQuotes(moveTickers);
   const [peerQuarters, setPeerQuarters] = useState<Record<string, FactQuarter[]>>({});
   const [peerPes, setPeerPes] = useState<Record<string, number | null>>({});
   const [peerFwdPes, setPeerFwdPes] = useState<Record<string, number | null>>({});
@@ -1595,7 +1601,7 @@ export function StockIntelligenceScreen() {
   // Overview signal scores and confidence come from one 6-month bullish forward run, the same
   // engine the Trade Builder uses (the old fallback showed fixed 88/87/80/… for every stock).
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
-  const movedWeek = weekMove(stock.t, sixMonthBars, tickerNews as unknown as Parameters<typeof weekMove>[2]);
+  const movedWeek = weekMove(stock.t, moveBars, tickerNews as unknown as Parameters<typeof weekMove>[2]);
   const mcConfidence = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
   /** The MC Confidence band, on the same scale the score colours use. */
   const mcConfidenceBand =
@@ -2001,15 +2007,36 @@ export function StockIntelligenceScreen() {
         {activeTab === "overview" && (() => {
           const price = siFacts.price ?? stock.p;
           const scores = scoreRows(overviewRun.cats, SHORT);
-          const upChecks = stockDetail.valid;
-          const downChecks = [...stockDetail.broken, ...stockDetail.invalid];
           const tech = technicalRead(siFacts);
           const fund = fundamentalRead(siFacts, fpeVal);
           const overall = overallVerdict(tech.verdict, fund.verdict, mcConfidence);
           const rowsOf = (reads: Read[]): ReadRow[] =>
             reads.map((r) => ({ title: r.k, value: r.headline, tone: r.caution ? "warn" : r.dir === "up" ? "good" : r.dir === "down" ? "bad" : "neutral", note: r.detail }));
           const weekTone: Tone = movedWeek ? (movedWeek.pct >= 0.05 ? "up" : movedWeek.pct <= -0.05 ? "down" : "flat") : "flat";
-          const couldTone: Tone = upChecks.length > downChecks.length ? "up" : downChecks.length > upChecks.length ? "down" : "flat";
+          // The MarketCatalyst read: a headline, a short body and the two prices to watch. Without enough
+          // data for one, the verdict and the two reads' own lines stand in.
+          const read = headlineRead(stock.t, siFacts, tech, fund, overall, { bars: sixMonthBars, low52: lo52 });
+          const nextEvent = upcomingCatalysts.find((u) => !u.past && u.iso) ?? null;
+          // Why it moved: yesterday and the last five sessions, from the daily bars and the stock's headlines.
+          const todayNy = etTodayIso();
+          const news = (Array.isArray(tickerNews) ? tickerNews : []) as unknown as MoveNews[];
+          const yMove = yesterdayMove(moveBars);
+          const toneCol = (t?: MoveTone) => (t === "up" ? "#4ade80" : t === "down" ? "#f05656" : "var(--si-text-mid, #93a1af)");
+          const asRows = (rows: MoveRow[]): PanelRow[] => rows.map((r) => ({ title: r.title, detail: r.detail, tag: r.tag, col: toneCol(r.tone), isNew: r.isNew }));
+          const weekReasons = weekRows(moveBars, news);
+          const weekFallback: PanelRow[] = (movedWeek ? movedWeek.ev : stockDetail.movedEv)
+            .slice(0, 3)
+            .map((ev) => ({ title: "Recent activity", detail: typeof ev === "string" ? highlightNumbers(ev) : ev }));
+          // Why it could move: what could push it up and what could pull it down.
+          const ctxQuote = (t: string) => moveQuotes.get(t)?.pctChange;
+          const reasons = couldMove(siFacts, {
+            sector: scoringPeers.flatMap((t) => (typeof ctxQuote(t) === "number" ? [{ t, pct: ctxQuote(t) as number }] : [])),
+            market: ([["QQQ", "Nasdaq 100"], ["SPY", "S&P 500"]] as const).flatMap(([t, label]) => (typeof ctxQuote(t) === "number" ? [{ label, pct: ctxQuote(t) as number }] : [])),
+            news,
+            bigMoves10: bigMovesIn10(moveBars),
+            todayIso: todayNy,
+          });
+          const couldTone: Tone = reasons.up.length > reasons.down.length ? "up" : reasons.down.length > reasons.up.length ? "down" : "flat";
           const nav: NavItem[] = [
             { id: "read", label: "MarketCatalyst read", ...verdictStatus(overall) },
             { id: "fund", label: "Fundamentals", ...verdictStatus(fund.verdict) },
@@ -2017,10 +2044,6 @@ export function StockIntelligenceScreen() {
             { id: "moved", label: "Why it moved", status: statusForTone(weekTone), tone: weekTone },
             { id: "could", label: "Why it could move", status: statusForTone(couldTone), tone: couldTone },
           ];
-          // The MarketCatalyst read: a headline, a short body and the two prices to watch. Without enough
-          // data for one, the verdict and the two reads' own lines stand in.
-          const read = headlineRead(stock.t, siFacts, tech, fund, overall, { bars: sixMonthBars, low52: lo52 });
-          const nextEvent = upcomingCatalysts.find((u) => !u.past) ?? null;
           return (
             <>
               <SiOverview
@@ -2043,8 +2066,34 @@ export function StockIntelligenceScreen() {
                   panels: {
                     fund: <ReadPanel text={fund.action} rows={rowsOf(fund.reads)} />,
                     tech: <ReadPanel text={tech.action} rows={rowsOf(tech.reads)} />,
-                    moved: <MovedPanel pct={movedWeek?.pct ?? null} text={movedWeek ? movedWeek.text : stockDetail.movedTxt} bullets={movedWeek ? movedWeek.ev : stockDetail.movedEv} />,
-                    could: <CouldPanel next={nextEvent} up={upChecks} down={downChecks} />,
+                    moved: (
+                      <MovedPanel
+                        yesterday={{
+                          label: yMove ? `YESTERDAY \u00B7 ${fmtMarketDate(yMove.t, { weekday: "short", month: "short", day: "numeric" })}` : "YESTERDAY",
+                          pct: yMove?.pct ?? null,
+                          heading: "Yesterday",
+                          rows: yMove ? asRows(yesterdayRows(yMove, news)) : [],
+                          empty: "Not enough price history to explain this move yet.",
+                        }}
+                        week={{
+                          label: "LAST 5 SESSIONS",
+                          pct: movedWeek?.pct ?? null,
+                          heading: "Last 5 Sessions",
+                          rows: weekReasons.length ? asRows(weekReasons) : weekFallback,
+                          empty: "Not enough price history to explain this week yet.",
+                        }}
+                      />
+                    ),
+                    could: (
+                      <CouldPanel
+                        next={nextEvent}
+                        nextLabel={nextEvent ? titleWords(`NEXT EVENT \u00B7 ${nextEvent.date} \u00B7 ${nextEvent.days}`) : ""}
+                        upTitle={titleWords("What could push it up")}
+                        downTitle={titleWords("What could pull it down")}
+                        up={asRows(reasons.up)}
+                        down={asRows(reasons.down)}
+                      />
+                    ),
                   },
                 }}
               />
