@@ -1099,9 +1099,27 @@ export function CommentaryScreen() {
   // Picked on the FIRST render of stories (not when every source has loaded), so
   // the top three start hidden and drop in at once — waiting for the full load
   // drew them first and replayed them a second later.
+  //
+  // The list is held back (loading state) until the feed settles — every source
+  // in, or 1.5 s — so it's drawn once: drawing the first batch and re-sorting it
+  // when the wire and earnings items arrived rebuilt the rows mid-intro, which
+  // blanked them and then showed them with no animation.
+  const [settleWait, setSettleWait] = useState(false);
+  useEffect(() => {
+    if (liveNewsLoading) return;
+    const t = setTimeout(() => setSettleWait(true), 1500);
+    return () => clearTimeout(t);
+  }, [liveNewsLoading]);
+  const listReady = feedReady || settleWait;
   const [introIds, setIntroIds] = useState<string[] | null>(null);
+  // Every row on screen when the intro starts; only these take part in it, so a
+  // row that appears or is rebuilt later is simply shown, never hidden.
+  const [introAll, setIntroAll] = useState<Set<string> | null>(null);
   const [introPhase, setIntroPhase] = useState(true);
-  if (introIds === null && pw.page === 0 && pageFeed.length > 0) setIntroIds(pageFeed.slice(0, 3).map(n => n.id));
+  if (introIds === null && listReady && pw.page === 0 && pageFeed.length > 0) {
+    setIntroIds(pageFeed.slice(0, 3).map(n => n.id));
+    setIntroAll(new Set(pageFeed.map(n => n.id)));
+  }
   useEffect(() => {
     if (!introIds) return;
     const t = setTimeout(() => setIntroPhase(false), 1800);
@@ -1284,7 +1302,9 @@ export function CommentaryScreen() {
               {activeTab === 0 && feedPage === 0 && mcShown.length > 0 && (
                 <McFeedPosts posts={mcShown} onTicker={sym => setSearch(sym)} />
               )}
-              {feed.length === 0 ? (
+              {!listReady && introIds === null && feed.length > 0 ? (
+                <DataState loading label="Loading the latest stories…" />
+              ) : feed.length === 0 ? (
                 <DataState loading={liveNewsLoading} label={
                   q 
                     ? `No matches for “${search.trim()}” in this tab.`
@@ -1297,7 +1317,7 @@ export function CommentaryScreen() {
                   item={item}
                   fresh={freshKeys.has(freshStoryKey(item))}
                   intro={pw.page === 0 && introIds && introPhase ? introIds.indexOf(item.id) : -1}
-                  introPhase={pw.page === 0 && introPhase && !!introIds}
+                  introPhase={pw.page === 0 && introPhase && !!introAll?.has(item.id)}
                   i={pw.from + i}
                   total={feed.length}
                   isOpen={openId === item.id}
