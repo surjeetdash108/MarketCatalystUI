@@ -13751,12 +13751,14 @@ h6.sd-sec {
 .iq-root .cpulse-tw.lfb-row:hover { background: var(--lfb-bg); }
 .iq-root .cpulse-tw .lfb-new { top: 10px; right: 12px; }
 /* Opening the dashboard: the top three drop in one by one with the green flash. */
-.iq-root .cpulse-intro { animation: cpulse-drop .55s cubic-bezier(.2,.8,.2,1) backwards, lfb-flash 3.2s ease-out backwards; }
-@keyframes cpulse-drop { from { opacity: 0; transform: translateY(-26px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .iq-root .cpulse-intro { animation: none; } }
-/* Live Feed News: the top three drop in on open with the same flash as Pulse. */
-.lfb-intro { animation: cpulse-drop .55s cubic-bezier(.2,.8,.2,1) backwards, lfb-flash 3.2s ease-out backwards; }
-@media (prefers-reduced-motion: reduce) { .lfb-intro { animation: none; } }
+/* Opening intro, Live Feed and Pulse alike (same motion as a live arrival,
+   useArrivalMotion): the top three drop 14px and fade in, 160ms apart, with a
+   soft green flash; the rest of the list fades in just after them. */
+.lfb-intro { animation: lfb-drop .62s cubic-bezier(.22,1,.36,1) backwards, lfb-flash 2.6s ease-out backwards; }
+.lfb-after { animation: lfb-fadein .45s ease-out .55s backwards; }
+@keyframes lfb-drop { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+@keyframes lfb-fadein { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .lfb-intro, .lfb-after { animation: none; } }
 .iq-root .cpulse-tw-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .iq-root .cpulse-tw-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .iq-root .cpulse-tw-top .nm { font-weight: 700; font-size: .8rem; color: var(--text-hi); white-space: nowrap; }
@@ -14494,12 +14496,12 @@ h6.sd-sec {
 }
 
 .lfb-fresh {
-  animation: lfb-flash 3.2s ease-out;
+  animation: lfb-flash 2.6s ease-out;
 }
 
 @keyframes lfb-flash {
   0% {
-    background: color-mix(in srgb, var(--brand) 26%, transparent);
+    background: color-mix(in srgb, var(--brand) 18%, transparent);
   }
 
   100% {

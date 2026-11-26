@@ -6,7 +6,7 @@ import { useApiResource } from "./hooks/useApiResource";
 import { StockLogo } from "./utils";
 import { parsePulse, pulsePlainText, type PulseInline } from "./pulse-rich";
 import { useFreshStories } from "./hooks/useFreshStories";
-import { useArrivalMotion } from "./hooks/useArrivalMotion";
+import { useArrivalMotion, ARRIVAL_STAGGER_MS } from "./hooks/useArrivalMotion";
 
 /*
  * Market Catalyst Pulse — short posts the MarketCatalyst desk writes from the
@@ -210,6 +210,12 @@ export function CommunityPulse() {
   // if they had just come in. Once per mount (each visit to the dashboard).
   const [introIds, setIntroIds] = useState<string[] | null>(null);
   if (introIds === null && ready && !sentQ.trim() && posts.length > 0) setIntroIds(posts.slice(0, 3).map(p => p.id));
+  const [introPhase, setIntroPhase] = useState(true);
+  useEffect(() => {
+    if (!introIds) return;
+    const t = setTimeout(() => setIntroPhase(false), 1800);
+    return () => clearTimeout(t);
+  }, [introIds]);
   // Highlights follow the box as it is typed; the posts below catch up after the pause.
   const terms = pulseTerms(q);
   const searching = sentQ.trim().length > 0;
@@ -262,12 +268,13 @@ export function CommunityPulse() {
         )}
         {posts.map((p, i) => {
           const fresh = freshIds.has(p.id);
-          const intro = !fresh && !searching && introIds ? introIds.indexOf(p.id) : -1;
+          const intro = !fresh && !searching && introIds && introPhase ? introIds.indexOf(p.id) : -1;
+          const after = !fresh && !searching && !!introIds && introPhase && intro < 0;
           return (
           <div
             key={p.id}
-            className={`cpulse-tw lfb-row${fresh ? " lfb-fresh" : ""}${intro >= 0 ? " cpulse-intro" : ""}`}
-            style={intro >= 0 ? { animationDelay: `${intro * 220}ms` } : undefined}
+            className={`cpulse-tw lfb-row${fresh ? " lfb-fresh" : ""}${intro >= 0 ? " lfb-intro" : ""}${after ? " lfb-after" : ""}`}
+            style={intro >= 0 ? { animationDelay: `${intro * ARRIVAL_STAGGER_MS}ms` } : undefined}
             data-fid={p.id}
             data-fresh={fresh ? "1" : undefined}
           >

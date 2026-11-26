@@ -10,7 +10,7 @@ import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
 import { useApiResource } from "../hooks/useApiResource";
 import { useNewsWire } from "../hooks/useNewsWire";
 import { useFreshStories } from "../hooks/useFreshStories";
-import { useArrivalMotion } from "../hooks/useArrivalMotion";
+import { useArrivalMotion, ARRIVAL_STAGGER_MS } from "../hooks/useArrivalMotion";
 import { freshStoryKey, freshStoryKeys } from "../fresh-stories";
 import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
@@ -670,14 +670,17 @@ function FeedItemBody({ item, i, total, isOpen, onToggle, onTicker, onStockOpen,
    (`fresh`) flashes green for a few seconds and carries a NEW chip — the same
    cue as the Live Feed preview. `data-fid` / `data-fresh` are what
    useArrivalMotion reads to drop the row in and slide the others down. */
-function FeedItem({ fresh, intro = -1, ...rest }: ComponentProps<typeof FeedItemBody> & { fresh: boolean; intro?: number }) {
+function FeedItem({ fresh, intro = -1, introPhase = false, ...rest }: ComponentProps<typeof FeedItemBody> & { fresh: boolean; intro?: number; introPhase?: boolean }) {
   // `intro` ≥ 0: one of the top three when the page opens — drops in with the
-  // green flash, one after another, like Market Catalyst Pulse.
+  // green flash, one after another (ARRIVAL_STAGGER_MS apart), like Pulse.
+  // While that plays, the other rows fade in just after it, so the top three lead
+  // instead of the rest of the list appearing first.
   const introOn = intro >= 0 && !fresh;
+  const after = introPhase && intro < 0 && !fresh;
   return (
     <div
-      className={`lfb-row${fresh ? " lfb-fresh" : ""}${introOn ? " lfb-intro" : ""}`}
-      style={introOn ? { animationDelay: `${intro * 220}ms` } : undefined}
+      className={`lfb-row${fresh ? " lfb-fresh" : ""}${introOn ? " lfb-intro" : ""}${after ? " lfb-after" : ""}`}
+      style={introOn ? { animationDelay: `${intro * ARRIVAL_STAGGER_MS}ms` } : undefined}
       data-fid={rest.item.id}
       data-fresh={fresh ? "1" : undefined}
     >
@@ -1093,8 +1096,17 @@ export function CommentaryScreen() {
   // Opening Live Feed: the top three stories drop in one after another with the
   // green flash, as if they had just come in (same as Market Catalyst Pulse).
   // Once per visit, on the first full load of page 1.
+  // Picked on the FIRST render of stories (not when every source has loaded), so
+  // the top three start hidden and drop in at once — waiting for the full load
+  // drew them first and replayed them a second later.
   const [introIds, setIntroIds] = useState<string[] | null>(null);
-  if (introIds === null && feedReady && pw.page === 0 && pageFeed.length > 0) setIntroIds(pageFeed.slice(0, 3).map(n => n.id));
+  const [introPhase, setIntroPhase] = useState(true);
+  if (introIds === null && pw.page === 0 && pageFeed.length > 0) setIntroIds(pageFeed.slice(0, 3).map(n => n.id));
+  useEffect(() => {
+    if (!introIds) return;
+    const t = setTimeout(() => setIntroPhase(false), 1800);
+    return () => clearTimeout(t);
+  }, [introIds]);
   const goPage = (p: number) => { setFeedPage(p); setOpenId(null); feedBodyRef.current?.scrollTo({ top: 0 }); };
 
   // LIVE %change for the tickers actually rendered in the feed, via the app-wide
@@ -1284,7 +1296,8 @@ export function CommentaryScreen() {
                   key={item.id}
                   item={item}
                   fresh={freshKeys.has(freshStoryKey(item))}
-                  intro={pw.page === 0 && introIds ? introIds.indexOf(item.id) : -1}
+                  intro={pw.page === 0 && introIds && introPhase ? introIds.indexOf(item.id) : -1}
+                  introPhase={pw.page === 0 && introPhase && !!introIds}
                   i={pw.from + i}
                   total={feed.length}
                   isOpen={openId === item.id}
