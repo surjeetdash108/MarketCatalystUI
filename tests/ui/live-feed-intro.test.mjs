@@ -11,9 +11,13 @@ const motion = read("app/iq/hooks/useArrivalMotion.ts");
 const css = read("app/iq.css");
 
 describe("smooth intro and arrivals", () => {
-  it("Live Feed picks the top three on the first render of stories, not after the full load", () => {
-    assert.match(feed, /if \(introIds === null && pw\.page === 0 && pageFeed\.length > 0\) setIntroIds\(pageFeed\.slice\(0, 3\)/);
-    assert.doesNotMatch(feed, /introIds === null && feedReady/);
+  it("Live Feed draws the list once it settles (all sources, or 1.5 s), then plays the intro", () => {
+    assert.match(feed, /const listReady = feedReady \|\| settleWait;/);
+    assert.match(feed, /if \(introIds === null && listReady && pw\.page === 0 && pageFeed\.length > 0\) \{/);
+    assert.match(feed, /!listReady && introIds === null && feed\.length > 0 \? \(\s*<DataState loading/);
+  });
+  it("only rows on screen when the intro starts take part, so a rebuilt row is never hidden", () => {
+    assert.match(feed, /introPhase=\{pw\.page === 0 && introPhase && !!introAll\?\.has\(item\.id\)\}/);
   });
   it("the rest of the list fades in after the top three (both screens)", () => {
     assert.match(css, /\.lfb-after \{ animation: lfb-fadein [^}]*\.55s backwards/);
