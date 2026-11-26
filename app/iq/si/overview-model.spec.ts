@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { growthSeries, levelsToWatch, scoreRows, statusForTone, toneForScore } from "./overview-model";
+import { growthSeries, scoreRows, statusForTone, toneForScore } from "./overview-model";
 import { growthHeadline } from "./si-overview";
 
 const q = (fiscalPeriod: string, fiscalYear: number, endDate: string, revenue: number | null, epsActual: number | null) => ({
@@ -106,21 +106,4 @@ test("a score reads bullish from 70, bearish under 40", () => {
   assert.equal(statusForTone("up"), "Bullish");
   assert.equal(statusForTone("down"), "Bearish");
   assert.equal(statusForTone("flat"), "Neutral");
-});
-
-test("levels to watch: nearest support under the price and nearest resistance over it", () => {
-  const { low, high } = levelsToWatch(165.05, [157.49, 150, 170], [172.06, 180, 160]);
-  assert.equal(low!.price, 157.49);
-  assert.equal(low!.priceText, "$157.49");
-  assert.equal(low!.sub, "Next support · 4.6% below today's price");
-  assert.equal(high!.price, 172.06);
-  assert.equal(high!.sub, "Next resistance · 4.2% above today's price");
-  assert.equal(low!.title, "Voids: a close below");
-  assert.equal(high!.title, "Confirms: a close above");
-});
-
-test("levels to watch leaves out a side with no level, and everything without a price", () => {
-  assert.equal(levelsToWatch(100, [null, 120], [110])!.low, null);
-  assert.equal(levelsToWatch(100, [90], [null, 90])!.high, null);
-  assert.deepEqual(levelsToWatch(null, [90], [110]), { low: null, high: null });
 });

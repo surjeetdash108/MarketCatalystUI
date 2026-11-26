@@ -96,6 +96,7 @@ describe("Overview reads", () => {
     assert.match(src, /verdictStatus\(overall\)/);
     assert.match(src, /verdictStatus\(fund\.verdict\)/);
     assert.match(src, /verdictStatus\(tech\.verdict\)/);
-    assert.match(src, /levelsToWatch\(price, \[tech\.nextSupport\?\.value\], \[tech\.nextResistance\?\.value\]\)/);
+    assert.match(src, /headlineRead\(stock\.t, siFacts, tech, fund, overall,/);
+    assert.match(src, /read\?\.levels\.find\(\(l\) => l\.tone === "down"\)/);
   });
 });

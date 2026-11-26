@@ -1,5 +1,5 @@
 import { gaapQuarterEps } from "../types/financials";
-import type { GrowthRow, GrowthSeries, ReadLevel, ScoreRow, Tone } from "./si-overview";
+import type { GrowthRow, GrowthSeries, ScoreRow, Tone } from "./si-overview";
 
 /** The parts of a reported quarter the growth chart reads. */
 export type GrowthQuarter = {
@@ -72,27 +72,3 @@ export function scoreRows(
 export const toneForScore = (v: number | null | undefined): Tone => (v == null ? "flat" : v >= 70 ? "up" : v < 40 ? "down" : "flat");
 
 export const statusForTone = (tone: Tone): "Bullish" | "Bearish" | "Neutral" => (tone === "up" ? "Bullish" : tone === "down" ? "Bearish" : "Neutral");
-
-const usdText = (v: number) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-/**
- * The two prices the Overview's "levels to watch" rail is drawn between: the nearest support under the price
- * (a close below it voids the setup) and the nearest resistance over it (a close above it confirms). Only real
- * levels count; with none on one side that side is left out.
- */
-export function levelsToWatch(
-  price: number | null | undefined,
-  supports: ReadonlyArray<number | null | undefined>,
-  resistances: ReadonlyArray<number | null | undefined>,
-): { low: ReadLevel | null; high: ReadLevel | null } {
-  if (price == null || !Number.isFinite(price) || price <= 0) return { low: null, high: null };
-  const below = supports.filter((v): v is number => v != null && Number.isFinite(v) && v > 0 && v < price);
-  const above = resistances.filter((v): v is number => v != null && Number.isFinite(v) && v > price);
-  const support = below.length ? Math.max(...below) : null;
-  const resistance = above.length ? Math.min(...above) : null;
-  const gap = (v: number) => (Math.abs(v - price) / price * 100).toFixed(1);
-  return {
-    low: support == null ? null : { price: support, title: "Voids: a close below", priceText: usdText(support), sub: `Next support · ${gap(support)}% below today's price` },
-    high: resistance == null ? null : { price: resistance, title: "Confirms: a close above", priceText: usdText(resistance), sub: `Next resistance · ${gap(resistance)}% above today's price` },
-  };
-}

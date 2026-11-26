@@ -42,13 +42,14 @@ import { localCopilotAnswer } from "./copilot-local";
 import { InfoTip, highlightSignedPercents } from "./read-cards";
 import { weekMove } from "./week-move";
 import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
-import { fundamentalRead, overallVerdict, supportResistance, technicalRead, verdictStatus, type Read } from "./si-reads";
+import { fundamentalRead, overallVerdict, sentenceCase, supportResistance, technicalRead, verdictStatus, type Read } from "./si-reads";
+import { headlineRead } from "./si-headline";
 import { TechnicalTiles, PriceLadder } from "./technical-tiles";
 import { SiOverview, type NavItem, type Tone } from "./si-overview";
 import { SiMasthead, SiTabRail } from "./si-masthead";
 import { ReadPanel, MovedPanel, CouldPanel, type ReadRow } from "./overview-panels";
 import { ConfidenceDialog } from "./confidence-dialog";
-import { growthSeries, levelsToWatch, scoreRows, statusForTone } from "./overview-model";
+import { growthSeries, scoreRows, statusForTone } from "./overview-model";
 import { SI_TOKENS_CSS, SI_TYPE_CSS } from "./si-redesign-css";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
@@ -1957,10 +1958,9 @@ export function StockIntelligenceScreen() {
             { id: "moved", label: "Why it moved", status: statusForTone(weekTone), tone: weekTone },
             { id: "could", label: "Why it could move", status: statusForTone(couldTone), tone: couldTone },
           ];
-          // The MarketCatalyst take: its first sentence leads, the rest follows.
-          const take = stockDetail.assess ?? "";
-          const cut = take.search(/[.!?](\s|$)/);
-          const { low, high } = levelsToWatch(price, [tech.nextSupport?.value], [tech.nextResistance?.value]);
+          // The MarketCatalyst read: a headline, a short body and the two prices to watch. Without enough
+          // data for one, the verdict and the two reads' own lines stand in.
+          const read = headlineRead(stock.t, siFacts, tech, fund, overall, { bars: sixMonthBars, low52: lo52 });
           const nextEvent = upcomingCatalysts.find((u) => !u.past) ?? null;
           return (
             <>
@@ -1973,12 +1973,12 @@ export function StockIntelligenceScreen() {
                   onScores: () => setConfOpen(true),
                   nav,
                   read: {
-                    headline: cut > 0 ? take.slice(0, cut + 1) : take,
-                    body: cut > 0 ? take.slice(cut + 1).trim() : "",
+                    headline: read ? read.headline : sentenceCase(overall.label),
+                    body: read ? read.body : `${fund.action} ${tech.action}`,
                     now: price ?? null,
                     nowText: usd(price),
-                    low,
-                    high,
+                    low: read?.levels.find((l) => l.tone === "down") ?? null,
+                    high: read?.levels.find((l) => l.tone === "up") ?? null,
                     onInfo: () => setConfOpen(true),
                   },
                   panels: {
