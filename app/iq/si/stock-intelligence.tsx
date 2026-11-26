@@ -34,6 +34,8 @@ import {
   getTP,
   normW,
   smaOf,
+  rsiOf,
+  dailyPivots,
   getSixMonthMajorEvents,
   aboutTicker,
 } from "./data";
@@ -51,6 +53,7 @@ import { ReadPanel, MovedPanel, CouldPanel, type ReadRow } from "./overview-pane
 import { ConfidenceDialog } from "./confidence-dialog";
 import { growthSeries, scoreRows, statusForTone } from "./overview-model";
 import { SI_TOKENS_CSS, SI_TYPE_CSS } from "./si-redesign-css";
+import { analystTargetList, epsGrowths, grossMargins, mean, operatingMargins, peerAverage, peerStats, revenueGrowths, type FactQuarter } from "./facts-4q";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
 import { StockChart } from "../stock-panel";
@@ -285,6 +288,58 @@ export function StockIntelligenceScreen() {
   const currentPrice = (headline.regPrice > 0 ? headline.regPrice : null) ?? live.tick?.price ?? sharedQuote?.price ?? liveCompany?.price ?? undefined;
   const currentChange = (headline.regPrice > 0 ? headline.regPct : null) ?? live.pct ?? sharedQuote?.pctChange ?? liveCompany?.pctChange ?? undefined;
 
+  // The top five company peers the scores are measured against: their reported quarters (one financials request
+  // each) and their P/E (one summary request for all five). With fewer than three peers that have data there
+  // is no peer average, and the "vs peers" rows and the four-quarter averages are left out.
+  const scoringPeers = useMemo(
+    () =>
+      (liveCompany?.peers ?? [])
+        .map((t) => (t ?? "").toUpperCase().trim())
+        .filter((t) => t && t !== (currentTicker ?? "").toUpperCase())
+        .slice(0, 5),
+    [liveCompany?.peers, currentTicker],
+  );
+  const scoringPeersKey = scoringPeers.join(",");
+  const [peerQuarters, setPeerQuarters] = useState<Record<string, FactQuarter[]>>({});
+  const [peerPes, setPeerPes] = useState<Record<string, number | null>>({});
+  const [peerFwdPes, setPeerFwdPes] = useState<Record<string, number | null>>({});
+  useEffect(() => {
+    setPeerQuarters({});
+    if (!scoringPeersKey) return;
+    let live = true;
+    for (const t of scoringPeersKey.split(",")) {
+      apiGet<{ quarters?: FactQuarter[] }>(`/live/financials?ticker=${encodeURIComponent(t)}`)
+        .then((b) => {
+          if (live && Array.isArray(b?.quarters)) setPeerQuarters((prev) => ({ ...prev, [t]: b.quarters as FactQuarter[] }));
+        })
+        .catch(() => {});
+    }
+    return () => {
+      live = false;
+    };
+  }, [scoringPeersKey]);
+  useEffect(() => {
+    setPeerPes({});
+    setPeerFwdPes({});
+    if (!scoringPeersKey) return;
+    let live = true;
+    apiGet<Array<{ ticker: string; peRatio?: number | null; forwardPe?: number | null }>>(`/live/peers-summary?tickers=${encodeURIComponent(scoringPeersKey)}`)
+      .then((rows) => {
+        if (!live || !Array.isArray(rows)) return;
+        const pick = (field: "peRatio" | "forwardPe") =>
+          Object.fromEntries(rows.map((r) => [String(r.ticker).toUpperCase(), typeof r[field] === "number" && (r[field] as number) > 0 ? (r[field] as number) : null]));
+        setPeerPes(pick("peRatio"));
+        setPeerFwdPes(pick("forwardPe"));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [scoringPeersKey]);
+  const peerGrowth = useMemo(() => peerStats(peerQuarters), [peerQuarters]);
+  const peerPeAvg = useMemo(() => peerAverage(peerPes), [peerPes]);
+  const peerFwdPeAvg = useMemo(() => peerAverage(peerFwdPes), [peerFwdPes]);
+
   // Every input the Stock Intelligence engine reasons from — all real data
   // loaded above. Missing inputs stay null; the engine drops what needs them.
   const siFacts: SiFacts = useMemo(() => {
@@ -332,7 +387,9 @@ export function StockIntelligenceScreen() {
       todayIso,
     );
     const erDays = erDate ? Math.round((Date.parse(erDate + "T00:00:00Z") - todayMs) / 86_400_000) : null;
-    const pivots = liveCompany?.keyLevels?.daily ?? null;
+    // Key levels from the company record, else from the last completed daily bar.
+    const etHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", hour12: false }).format(new Date())) % 24;
+    const pivots = liveCompany?.keyLevels?.daily ?? dailyPivots(yearBars ?? [], todayIso, etHour);
     const isBank = /bank|savings|thrift|financial/i.test(liveCompany?.industry ?? "") || /financial/i.test(liveCompany?.sector ?? "");
     const isUtilityOrSame = latest?.grossProfit != null && latest?.operatingIncome != null && latest.grossProfit === latest.operatingIncome;
     const suppressGross = isBank || isUtilityOrSame;
@@ -367,7 +424,7 @@ export function StockIntelligenceScreen() {
       sma21: smaOf(dailyCloses, 21),
       sma50: num(liveCompany?.sma50),
       sma200: num(liveCompany?.sma200),
-      rsi14: num(liveCompany?.rsi14),
+      rsi14: num(liveCompany?.rsi14) ?? rsiOf(dailyCloses, 14),
       rvol: num(liveCompany?.rvol),
       rsRating: num(liveCompany?.rsRating),
       pctFromHigh52: num(liveCompany?.pctFromHigh52),
@@ -391,8 +448,23 @@ export function StockIntelligenceScreen() {
       newsHighNeg: newsSent.total ? newsSent.highNeg : null,
       newsWPos: newsSent.total ? newsSent.wPos : null,
       newsWNeg: newsSent.total ? newsSent.wNeg : null,
+      analystTargets: cons ? analystTargetList(cons.recentGrades) : null,
+      // Four-quarter averages, and the same over the peers, only once the peers are known.
+      revGrowth4q: peerGrowth ? mean(revenueGrowths(qs)) : null,
+      epsGrowth4q: peerGrowth ? mean(epsGrowths(qs)) : null,
+      opMargin4q: peerGrowth ? mean(operatingMargins(qs)) : null,
+      grossMargin4q: peerGrowth && !suppressGross ? mean(grossMargins(qs)) : null,
+      peerRevGrowth4q: peerGrowth?.revGrowth ?? null,
+      peerEpsGrowth4q: peerGrowth?.epsGrowth ?? null,
+      peerOpMargin4q: peerGrowth?.opMargin ?? null,
+      peerGrossMargin4q: peerGrowth && !suppressGross ? peerGrowth.grossMargin : null,
+      peerTickers: peerGrowth?.tickers ?? null,
+      peerPe: peerPeAvg?.avg ?? null,
+      peerPeCount: peerPeAvg?.n ?? null,
+      peerFwdPe: peerFwdPeAvg?.avg ?? null,
+      peerFwdPeCount: peerFwdPeAvg?.n ?? null,
     };
-  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews, liveEarningsList, yearBars, sixMonthBars]);
+  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews, liveEarningsList, yearBars, sixMonthBars, peerGrowth, peerPeAvg, peerFwdPeAvg]);
 
   const stock: StockItem | null = useMemo(() => {
     if (!currentTicker) return null;
@@ -1201,7 +1273,6 @@ export function StockIntelligenceScreen() {
         }}
       >
 
-        <style>{SI_TYPE_CSS}</style>
       <style>{SI_TOKENS_CSS}</style>
       <style>{`
         .si-screen {
@@ -1230,14 +1301,14 @@ export function StockIntelligenceScreen() {
         .si-screen {
           --si-bg: #080b10;
           --si-topbar: rgba(8,11,16,0.96);
-          --si-card: rgba(12, 17, 24, 0.9);
-          --si-card-solid: #0c1118;
-          --si-card-sec: #0e151d;
-          --si-card-tert: #111822;
-          --si-card-tint: rgba(12, 17, 24, 0.8);
-          --si-border: #1c2733;
-          --si-border-sec: #2a3a4a;
-          --si-border-dashed: #2a3a4a;
+          --si-card: #14171c;
+          --si-card-solid: #14171c;
+          --si-card-sec: #0f1216;
+          --si-card-tert: #1a1e24;
+          --si-card-tint: rgba(20, 23, 28, 0.8);
+          --si-border: #232830;
+          --si-border-sec: #2e343d;
+          --si-border-dashed: #2e343d;
           --si-text-hi: #e8eef4;
           --si-text-body: #d5dfe9;
           --si-text-mid: #93a1af;
@@ -1250,7 +1321,7 @@ export function StockIntelligenceScreen() {
           --si-accent-btn: #5980a6;
           --si-evidence-bg: rgba(89, 128, 166, 0.08);
           --si-evidence-title: #a9c6e3;
-          --si-input-bg: #0c1118;
+          --si-input-bg: #14171c;
           --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
         }
         .si-screen[data-theme="light"],
@@ -1599,7 +1670,8 @@ export function StockIntelligenceScreen() {
         paddingBottom: 120, // Issue 8 fix: generous padding at bottom
       }}
     >
-
+      <style>{SI_TYPE_CSS}</style>
+      <style>{SI_TOKENS_CSS}</style>
       <style>{`
         .si-screen {
           --si-bg: #080b10;
@@ -1627,14 +1699,14 @@ export function StockIntelligenceScreen() {
         .si-screen {
           --si-bg: #080b10;
           --si-topbar: rgba(8,11,16,0.96);
-          --si-card: rgba(12, 17, 24, 0.9);
-          --si-card-solid: #0c1118;
-          --si-card-sec: #0e151d;
-          --si-card-tert: #111822;
-          --si-card-tint: rgba(12, 17, 24, 0.8);
-          --si-border: #1c2733;
-          --si-border-sec: #2a3a4a;
-          --si-border-dashed: #2a3a4a;
+          --si-card: #14171c;
+          --si-card-solid: #14171c;
+          --si-card-sec: #0f1216;
+          --si-card-tert: #1a1e24;
+          --si-card-tint: rgba(20, 23, 28, 0.8);
+          --si-border: #232830;
+          --si-border-sec: #2e343d;
+          --si-border-dashed: #2e343d;
           --si-text-hi: #e8eef4;
           --si-text-body: #d5dfe9;
           --si-text-mid: #93a1af;
@@ -1647,7 +1719,7 @@ export function StockIntelligenceScreen() {
           --si-accent-btn: #5980a6;
           --si-evidence-bg: rgba(89, 128, 166, 0.08);
           --si-evidence-title: #a9c6e3;
-          --si-input-bg: #0c1118;
+          --si-input-bg: #14171c;
           --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
         }
         .si-screen[data-theme="light"],

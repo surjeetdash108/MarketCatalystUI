@@ -186,6 +186,24 @@ export interface SiFacts {
   /** Impact-weighted counts the News sentiment score is built from (falls back to newsPos / newsNeg). */
   newsWPos?: number | null;
   newsWNeg?: number | null;
+  /** The top analysts' latest price targets (up to five firms), newest first. */
+  analystTargets?: ReadonlyArray<number> | null;
+  // Four-quarter averages of year-over-year growth (each quarter capped at +-100%) and of margins. Present only
+  // once at least three peers have reported quarters, so the two sides of a "vs peers" row are always like for like.
+  revGrowth4q?: number | null;
+  epsGrowth4q?: number | null;
+  opMargin4q?: number | null;
+  grossMargin4q?: number | null;
+  // The same averages over the top peers, and their P/E averages (three or more peers needed for each).
+  peerRevGrowth4q?: number | null;
+  peerEpsGrowth4q?: number | null;
+  peerOpMargin4q?: number | null;
+  peerGrossMargin4q?: number | null;
+  peerTickers?: ReadonlyArray<string> | null;
+  peerPe?: number | null;
+  peerPeCount?: number | null;
+  peerFwdPe?: number | null;
+  peerFwdPeCount?: number | null;
 }
 
 export const EMPTY_FACTS: SiFacts = {
@@ -208,7 +226,8 @@ export function newsSentimentText(f: Pick<SiFacts, "newsPos" | "newsNeg" | "news
   return `${hp + hn} high-impact (${parts}) · ${pos - hp} positive / ${neg - hn} negative other headlines (7 days)`;
 }
 
-const clamp = (v: number, lo = 5, hi = 95) => Math.max(lo, Math.min(hi, v));
+/** Keeps a score on the 0–100 scale. There is no 95 ceiling: a rule that is fully met scores 100. */
+const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 const has = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);
 
 /** Simple average of the last `n` closes (oldest → newest); null until there are `n` of them. */
@@ -219,6 +238,48 @@ export function smaOf(closes: ReadonlyArray<number>, n: number): number | null {
   const avg = sum / n;
   return Number.isFinite(avg) ? Math.round(avg * 100) / 100 : null;
 }
+/**
+ * 14-day RSI (Wilder's smoothing) from daily closes, oldest to newest; null with fewer than period + 1 closes.
+ * Used when the company record carries no RSI of its own.
+ */
+export function rsiOf(closes: ReadonlyArray<number>, period = 14): number | null {
+  if (closes.length < period + 1) return null;
+  let gain = 0;
+  let loss = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = closes[i] - closes[i - 1];
+    if (change >= 0) gain += change;
+    else loss -= change;
+  }
+  let avgGain = gain / period;
+  let avgLoss = loss / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const change = closes[i] - closes[i - 1];
+    avgGain = (avgGain * (period - 1) + Math.max(change, 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(-change, 0)) / period;
+  }
+  const rsi = avgLoss === 0 ? (avgGain === 0 ? 50 : 100) : 100 - 100 / (1 + avgGain / avgLoss);
+  return Number.isFinite(rsi) ? Math.round(rsi * 100) / 100 : null;
+}
+
+/**
+ * Classic pivot levels from the last COMPLETED daily bar: the bar of today's date is skipped until the US
+ * market has closed (4 pm ET), because it is still forming. Used when the company record has no key levels.
+ */
+export function dailyPivots(
+  bars: ReadonlyArray<{ t: number; h: number; l: number; c: number }>,
+  todayIso: string,
+  etHour: number,
+): { r1: number; r2: number; s1: number; s2: number } | null {
+  let i = bars.length - 1;
+  if (i >= 0 && new Date(bars[i].t).toISOString().slice(0, 10) === todayIso && etHour < 16) i--;
+  const bar = i >= 0 ? bars[i] : null;
+  if (!bar || !(bar.h > 0) || !(bar.l > 0) || !(bar.c > 0)) return null;
+  const pivot = (bar.h + bar.l + bar.c) / 3;
+  const range = bar.h - bar.l;
+  return { r1: 2 * pivot - bar.l, s1: 2 * pivot - bar.h, r2: pivot + range, s2: pivot - range };
+}
+
 const compactUsd = (v: number) => {
   const a = Math.abs(v);
   const s = a >= 1e9 ? `$${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `$${(a / 1e6).toFixed(1)}M` : `$${Math.round(a / 1e3)}K`;
@@ -239,43 +300,65 @@ export function forwardPe(f: SiFacts): number | null {
 
 type Driver = [cat: string, name: string, value: string, score: number, flags: string, dd: number];
 
+/** How far apart the stock and its peers' average must be (in percentage points) for a full or a zero score. */
+export const PEER_SPAN = { revGrowth: 25, epsGrowth: 25, opMargin: 15, grossMargin: 15 } as const;
+
+/** 50 at the peer average, 100 when `span` points ahead of it, 0 when `span` points behind. */
+export function vsPeers(own: number, peer: number, span: number): number {
+  return 50 + 50 * Math.max(-1, Math.min(1, (own - peer) / span));
+}
+
 /**
- * Thesis drivers, each scored 0–100 by a transparent rule from ONE real input.
+ * Thesis drivers, each scored 0\u2013100 by a transparent rule from ONE real input.
  * A driver whose input is missing is simply absent (its category then scores
  * on the drivers it does have, or neutral 50 with none).
+ *
+ * Growth and margins are four-quarter averages once the peers are known, and each has a row against the top
+ * peers' average.
  */
 export function buildDrivers(f: SiFacts): Driver[] {
   const d: Driver[] = [];
+  const vs = f.peerTickers?.length ? ` \u00B7 vs top ${f.peerTickers.length} peers` : "";
   // BUSINESS
-  if (has(f.revGrowthYoY)) d.push(["BUS", "Revenue growth", `${pct1(f.revGrowthYoY)} y/y (latest quarter)`, clamp(50 + f.revGrowthYoY * 1.5), "CK", 2]);
-  if (has(f.grossMargin)) d.push(["BUS", "Gross margin", `${f.grossMargin.toFixed(1)}%`, clamp(30 + f.grossMargin * 0.8), "C", 1]);
-  if (has(f.opMargin) && has(f.opMarginYearAgo)) {
-    const delta = f.opMargin - f.opMarginYearAgo;
-    d.push(["BUS", "Operating margin trend", `${f.opMargin.toFixed(1)}% (${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} pts y/y)`, clamp(50 + delta * 3), "", 1]);
+  if (has(f.revGrowth4q)) d.push(["BUS", "Revenue growth", `${pct1(f.revGrowth4q)} average y/y (last 4 quarters)`, clamp(50 + f.revGrowth4q * 1.5), "CK", 2]);
+  else if (has(f.revGrowthYoY)) d.push(["BUS", "Revenue growth", `${pct1(f.revGrowthYoY)} y/y (latest quarter)`, clamp(50 + f.revGrowthYoY * 1.5), "CK", 2]);
+  if (has(f.revGrowth4q) && has(f.peerRevGrowth4q)) {
+    d.push(["BUS", "Revenue growth vs peers", `${pct1(f.revGrowth4q)} vs ${pct1(f.peerRevGrowth4q)} peer average (last 4 quarters${vs})`, vsPeers(f.revGrowth4q, f.peerRevGrowth4q, PEER_SPAN.revGrowth), "CK", 2]);
+  }
+  if (has(f.grossMargin4q)) d.push(["BUS", "Gross margin", `${f.grossMargin4q.toFixed(1)}% (last 4 quarters)`, clamp(30 + f.grossMargin4q * 0.8), "C", 1]);
+  else if (has(f.grossMargin)) d.push(["BUS", "Gross margin", `${f.grossMargin.toFixed(1)}%`, clamp(30 + f.grossMargin * 0.8), "C", 1]);
+  if (has(f.grossMargin4q) && has(f.peerGrossMargin4q)) {
+    d.push(["BUS", "Gross margin vs peers", `${f.grossMargin4q.toFixed(1)}% vs ${f.peerGrossMargin4q.toFixed(1)}% peer average (last 4 quarters${vs})`, vsPeers(f.grossMargin4q, f.peerGrossMargin4q, PEER_SPAN.grossMargin), "C", 1]);
+  }
+  if (has(f.opMargin4q)) d.push(["BUS", "Operating margin", `${f.opMargin4q.toFixed(1)}% (last 4 quarters)`, clamp(30 + f.opMargin4q), "", 1]);
+  if (has(f.opMargin4q) && has(f.peerOpMargin4q)) {
+    d.push(["BUS", "Operating margin vs peers", `${f.opMargin4q.toFixed(1)}% vs ${f.peerOpMargin4q.toFixed(1)}% peer average (last 4 quarters${vs})`, vsPeers(f.opMargin4q, f.peerOpMargin4q, PEER_SPAN.opMargin), "", 1]);
   }
   // EARNINGS
   if (has(f.epsBeats) && has(f.epsReports) && f.epsReports > 0) {
-    d.push(["EARN", "Beat record", `${f.epsBeats} of last ${f.epsReports} reports beat EPS consensus`, clamp(30 + (f.epsBeats / f.epsReports) * 60), "C", 1]);
+    // A short record is pulled toward 50: the same beat rate over fewer than four reports counts for less.
+    const rate = f.epsBeats / f.epsReports;
+    const share = Math.min(f.epsReports, 4) / 4;
+    d.push(["EARN", "Beat record", `${f.epsBeats} of last ${f.epsReports} reports beat EPS consensus${f.epsReports < 4 ? ` (only ${f.epsReports} on file)` : ""}`, clamp(50 + (rate - 0.5) * 100 * share, 0, 100), "C", 1]);
   }
   if (has(f.fwdEps) && has(f.nextFyEps) && f.fwdEps > 0) {
     const g = (f.nextFyEps / f.fwdEps - 1) * 100;
     d.push(["EARN", "Forward EPS growth", `${pct1(g)} next FY vs this FY (consensus)`, clamp(50 + g * 1.2), "CK", 3]);
   }
-  if (has(f.upgrades90) && has(f.downgrades90) && f.upgrades90 + f.downgrades90 + (f.ptCuts90 ?? 0) > 0) {
-    const net = f.upgrades90 - f.downgrades90;
-    const ptCuts = has(f.ptCuts90) && f.ptCuts90 > 0 ? ` / ${f.ptCuts90} PT cut${f.ptCuts90 === 1 ? "" : "s"}` : "";
-    d.push(["EARN", "Analyst rating changes", `${f.upgrades90} upgrades / ${f.downgrades90} downgrades${ptCuts} (90 days)`, clamp(50 + net * 10), "", 1]);
+  if (has(f.epsGrowth4q)) d.push(["EARN", "EPS growth", `${pct1(f.epsGrowth4q)} average y/y (last 4 quarters)`, clamp(50 + f.epsGrowth4q * 1.5), "CK", 2]);
+  if (has(f.epsGrowth4q) && has(f.peerEpsGrowth4q)) {
+    d.push(["EARN", "EPS growth vs peers", `${pct1(f.epsGrowth4q)} vs ${pct1(f.peerEpsGrowth4q)} peer average (last 4 quarters${vs})`, vsPeers(f.epsGrowth4q, f.peerEpsGrowth4q, PEER_SPAN.epsGrowth), "CK", 2]);
   }
   // TECHNICALS
   if (has(f.price) && has(f.sma50) && has(f.sma200)) {
     const a50 = f.price > f.sma50, a200 = f.price > f.sma200;
     const score = a50 && a200 ? 80 : a200 ? 60 : a50 ? 45 : 25;
-    d.push(["TECH", "Trend vs 50/200 DMA", `${a50 ? "above" : "below"} 50 DMA ${usd(f.sma50)} · ${a200 ? "above" : "below"} 200 DMA ${usd(f.sma200)}`, score, "C", 1]);
+    d.push(["TECH", "Trend vs 50/200 DMA", `${a50 ? "above" : "below"} 50 DMA ${usd(f.sma50)} \u00B7 ${a200 ? "above" : "below"} 200 DMA ${usd(f.sma200)}`, score, "C", 1]);
   }
   if (has(f.rsRating)) d.push(["TECH", "Relative strength", `RS rating ${f.rsRating}/99`, clamp(f.rsRating), "C", 2]);
   if (has(f.rvol) && has(f.changePct)) {
     const dir = f.changePct >= 0 ? 1 : -1;
-    d.push(["TECH", "Volume confirmation", `${f.rvol.toFixed(1)}× 20-day average volume`, clamp(50 + (f.rvol - 1) * 30 * dir), "", 3]);
+    d.push(["TECH", "Volume confirmation", `${f.rvol.toFixed(1)}\u00D7 20-day average volume`, clamp(50 + (f.rvol - 1) * 30 * dir), "", 3]);
   }
   if (has(f.rsi14)) {
     const r = f.rsi14;
@@ -295,14 +378,22 @@ export function buildDrivers(f: SiFacts): Driver[] {
   }
   // VALUATION
   const fpe = forwardPe(f);
-  if (has(fpe)) d.push(["VAL", "Forward P/E", `${fpe}× next-FY consensus EPS`, clamp(100 - fpe * 1.5, 15, 90), "", 0]);
-  if (has(f.targetMean) && has(f.price) && f.price > 0) {
-    const up = (f.targetMean / f.price - 1) * 100;
-    d.push(["VAL", "Analyst target upside", `${pct1(up)} to consensus ${usd(f.targetMean)}`, clamp(50 + up * 1.5), "C", 1]);
+  if (has(fpe)) d.push(["VAL", "Forward P/E", `${fpe}\u00D7 next-FY consensus EPS`, clamp(100 - fpe * 1.5, 15, 90), "", 0]);
+  if (has(f.trailingPe) && f.trailingPe > 0) {
+    d.push(["VAL", "P/E", `${f.trailingPe.toFixed(1)}\u00D7 trailing earnings`, clamp(100 - f.trailingPe * 1.5, 15, 90), "", 1]);
+    if (has(f.peerPe) && f.peerPe > 0 && (f.peerPeCount ?? 0) >= 3) {
+      const cheaper = Math.max(-1, Math.min(1, (f.peerPe - f.trailingPe) / f.peerPe / 0.5));
+      d.push(["VAL", "P/E vs peers", `${f.trailingPe.toFixed(1)}\u00D7 vs ${f.peerPe.toFixed(1)}\u00D7 peer average (trailing${vs}, ${f.peerPeCount} with earnings)`, 50 + 50 * cheaper, "", 1]);
+    }
   }
-  // POSITIONING
+  // FLOWS
   if (has(f.instHoldersChange)) {
-    d.push(["POS", "13F holder count", `${f.instHoldersChange >= 0 ? "+" : "−"}${Math.abs(f.instHoldersChange).toLocaleString()} filers QoQ`, clamp(50 + f.instHoldersChange / 10, 20, 80), "", 1]);
+    d.push(["POS", "13F holder count", `${f.instHoldersChange >= 0 ? "+" : "\u2212"}${Math.abs(f.instHoldersChange).toLocaleString()} filers QoQ`, clamp(50 + f.instHoldersChange / 10, 20, 80), "", 1]);
+  }
+  if (has(f.upgrades90) && has(f.downgrades90) && f.upgrades90 + f.downgrades90 + (f.ptCuts90 ?? 0) > 0) {
+    const net = f.upgrades90 - f.downgrades90;
+    const ptCuts = has(f.ptCuts90) && f.ptCuts90 > 0 ? ` / ${f.ptCuts90} PT cut${f.ptCuts90 === 1 ? "" : "s"}` : "";
+    d.push(["POS", "Analyst rating changes", `${f.upgrades90} upgrades / ${f.downgrades90} downgrades${ptCuts} (90 days)`, clamp(50 + net * 10), "", 1]);
   }
   if (has(f.insiderNet90) && f.insiderNet90 !== 0) {
     d.push(["POS", "Insider open-market trades", `net ${compactUsd(f.insiderNet90)} (90 days)`, f.insiderNet90 > 0 ? 75 : 42, "", 1]);
@@ -439,7 +530,7 @@ export function thesisWeights(dir: "Bull" | "Bear", hz: string) {
         ? { BUS: 30, EARN: 20, TECH: 10, CAT: 5, VAL: 20, POS: 5, MAC: 10 }
         : hz === "3M"
           ? { BUS: 20, EARN: 20, TECH: 25, CAT: 15, VAL: 5, POS: 5, MAC: 10 }
-          : { BUS: 20, EARN: 20, TECH: 20, CAT: 10, VAL: 15, POS: 5, MAC: 10 };
+          : { BUS: 25, EARN: 20, TECH: 15, CAT: 10, VAL: 15, POS: 5, MAC: 10 };
   w = { ...w };
   if (dir === "Bear") {
     w.VAL += 5;
