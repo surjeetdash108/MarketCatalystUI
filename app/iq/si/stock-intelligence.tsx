@@ -41,7 +41,7 @@ import {
 } from "./data";
 import { summarizeNewsSentiment } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
-import { InfoTip, highlightSignedPercents } from "./read-cards";
+import { InfoTip, highlightNumbers, highlightSignedPercents } from "./read-cards";
 import { weekMove } from "./week-move";
 import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
 import { fundamentalRead, overallVerdict, sentenceCase, supportResistance, technicalRead, verdictStatus, type Read } from "./si-reads";
@@ -114,54 +114,32 @@ const CATALYST_EVENT_EDITS: Record<string, { hide?: boolean; title?: string }> =
 /** How each Fundamentals scorecard grade is worked out (shown by its "i" button). */
 const SCORECARD_INFO: Record<string, [string, string][]> = {
   GROWTH: [
-    ["Measure:", "Latest quarter's revenue against the same quarter a year earlier."],
-    ["Strong:", "20% or more."],
-    ["Solid:", "8% to 20%."],
-    ["Slow:", "0% to 8%."],
-    ["Shrinking:", "below 0%."],
+    ["Measure:", "Latest quarter's revenue vs the same quarter a year ago."],
+    ["Strong:", "+15% or more."],
+    ["Steady:", "+3% to +15%."],
+    ["Flat:", "-3% to +3%."],
+    ["Weak:", "below -3%."],
   ],
   PROFITABILITY: [
     ["Measure:", "Latest quarter's operating margin (operating income / revenue). The y/y change is shown beside it."],
-    ["Strong:", "25% or more."],
-    ["Solid:", "12% to 25%."],
-    ["Thin:", "0% to 12%."],
+    ["Strong:", "20% or more."],
+    ["Solid:", "10% to 20%."],
+    ["Thin:", "0% to 10%."],
     ["Losing money:", "below 0%."],
   ],
   "FINANCIAL HEALTH": [
-    ["Measure:", "The balance-sheet checks in the Financial Health card below: cash against debt, current ratio, debt / equity, debt / EBITDA."],
-    ["Strong:", "at least two checks are healthy and none is flagged."],
-    ["Mixed:", "a check carries a caution."],
-    ["Stretched:", "a check is flagged as a problem."],
+    ["Measure:", "Net debt = total debt minus cash, with the current ratio and debt / equity as checks."],
+    ["Strong:", "more cash than debt."],
+    ["Weak:", "net debt, and current ratio under 1\u00D7 or debt / equity over 2\u00D7."],
+    ["Mixed:", "net debt otherwise."],
   ],
   VALUATION: [
-    ["Measure:", "P/E (forward P/E when there is no trailing one) against a sector reference."],
-    ["Attractive:", "under 0.8× the reference."],
-    ["Fair:", "0.8× to 1.2×."],
-    ["Rich:", "1.2× to 1.8×."],
-    ["Expensive:", "above 1.8×."],
+    ["Measure:", "Live P/E against a sector reference (38\u00D7 for semiconductors, 22\u00D7 otherwise)."],
+    ["Attractive:", "at least 5% below the reference."],
+    ["Fair:", "up to 30% above it."],
+    ["Stretched:", "more than 30% above it."],
   ],
 };
-
-/** Colours the numbers in a scorecard note: signed changes green/red, the sector reference amber, the other figures in the grade's colour. */
-function highlightScoreNote(text: string, gradeCol: string): React.ReactNode[] {
-  const re = /([+−-]\d[\d.,]*(?:%| pts)?)|(\d[\d.,]*×(?= sector))|(\$?\d[\d.,]*(?:%|×|[BMKT])?)/g;
-  const out: React.ReactNode[] = [];
-  let last = 0;
-  let k = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const col = m[1] ? (m[1].startsWith("+") ? "var(--up, #4ade80)" : "var(--down, #f87171)") : m[2] ? "#f5b031" : gradeCol;
-    out.push(
-      <span key={k++} style={{ color: col, fontWeight: 700 }}>
-        {m[0]}
-      </span>,
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
-}
 
 export function StockIntelligenceScreen() {
   const { data: ent } = useEntitlements();
@@ -2063,8 +2041,8 @@ export function StockIntelligenceScreen() {
                     onInfo: () => setConfOpen(true),
                   },
                   panels: {
-                    fund: <ReadPanel text={fund.action} rows={rowsOf(fund.reads)} onOpen={() => setActiveTab("fund")} />,
-                    tech: <ReadPanel text={tech.action} rows={rowsOf(tech.reads)} onOpen={() => setActiveTab("tech")} />,
+                    fund: <ReadPanel text={fund.action} rows={rowsOf(fund.reads)} />,
+                    tech: <ReadPanel text={tech.action} rows={rowsOf(tech.reads)} />,
                     moved: <MovedPanel pct={movedWeek?.pct ?? null} text={movedWeek ? movedWeek.text : stockDetail.movedTxt} bullets={movedWeek ? movedWeek.ev : stockDetail.movedEv} />,
                     could: <CouldPanel next={nextEvent} up={upChecks} down={downChecks} />,
                   },
@@ -2141,12 +2119,12 @@ export function StockIntelligenceScreen() {
             return a >= 1 ? `${sign}$${a.toFixed(1)}B` : `${sign}$${(a * 1000).toFixed(0)}M`;
           };
           const FM: [string, (v: number) => string][] = [
-            ["REVENUE", usdB],
+            ["Revenue", usdB],
             ["EPS (GAAP)", (v) => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2)],
-            ["GROSS MARGIN", (v) => v.toFixed(1) + "%"],
-            ["FREE CASH FLOW", usdB],
-            [hasFmp ? "OPERATING INCOME" : "ROIC", (v) => (hasFmp ? usdB(v) : v.toFixed(0) + "%")],
-            ["TOTAL DEBT", usdB],
+            ["Gross Margin", (v) => v.toFixed(1) + "%"],
+            ["Free Cash Flow", usdB],
+            [hasFmp ? "Operating Income" : "ROIC", (v) => (hasFmp ? usdB(v) : v.toFixed(0) + "%")],
+            ["Total Debt", usdB],
           ];
           // What a click on one bar shows: that quarter's label, value, change
           // vs the prior quarter and the same quarter a year earlier, plus one
@@ -2252,10 +2230,12 @@ export function StockIntelligenceScreen() {
             : null;
 
           // ── Financial health (latest quarter) and earnings quality (trailing 12 months) ──
-          // From the quarterly statements already synced; a figure whose inputs are
-          // missing is left out, never filled with zero. Banks are skipped: debt,
-          // current ratio and free cash flow do not mean the same for them.
-          type HealthRow = { k: string; v: string; note: string; tone: "good" | "warn" | "bad" | "neutral" };
+          // Graded as in the design, from the quarterly statements already synced. A figure whose inputs are
+          // missing shows a dash, never a zero. Kept from the earlier Fundamentals fixes: banks are skipped (debt,
+          // current ratio and free cash flow do not mean the same for them), debt that is long-term only is
+          // labelled "LT debt", and a negative equity or a loss-making year reads "n/m" instead of a misleading ratio.
+          type HealthRow = { k: string; v: string; note: string; col: string };
+          const GOOD = "#2fb86a", MID = "#f0a23b", BAD = "#e5534b", SKY = "#4fb3ff";
           const ttm4 = !isBank && fmpQ && fmpQ.length >= 4 ? fmpQ.slice(-4) : null;
           const sum4 = (pick: (q: QuarterFinancials) => number | null | undefined): number | null => {
             if (!ttm4) return null;
@@ -2267,61 +2247,75 @@ export function StockIntelligenceScreen() {
             }
             return s;
           };
-          const healthRows: HealthRow[] = [];
-          if (!isBank && latestQ) {
-            const equity = latestQ.equity;
-            if (latestCash != null) healthRows.push({ k: "Cash", v: usdRaw(latestCash), note: "Cash and equivalents", tone: "neutral" });
-            if (latestDebt != null) healthRows.push({ k: hasTotalDebt ? "Total debt" : "LT debt", v: usdRaw(latestDebt), note: hasTotalDebt ? "Short and long term, incl. leases" : "Long-term debt only", tone: "neutral" });
-            if (latestCash != null && latestDebt != null) {
-              const net = latestCash - latestDebt;
-              const heavy = net < 0 && ttmEbitda != null && ttmEbitda > 0 && -net / ttmEbitda > 3;
-              healthRows.push({
-                k: net >= 0 ? "Net cash" : "Net debt",
-                v: usdRaw(Math.abs(net)),
-                note: net >= 0 ? "Cash is more than all its debt" : heavy ? "More than 3 years of EBITDA" : "Debt is more than its cash",
-                tone: net >= 0 ? "good" : heavy ? "bad" : "warn",
-              });
-            }
-            const cr = latestQ.currentRatio ?? (latestQ.currentAssets != null && latestQ.currentLiabilities ? latestQ.currentAssets / latestQ.currentLiabilities : null);
-            if (cr != null && Number.isFinite(cr)) {
-              healthRows.push({ k: "Current ratio", v: `${cr.toFixed(2)}×`, note: cr >= 1.5 ? "Covers short-term bills comfortably" : cr >= 1 ? "Covers short-term bills" : "Short-term bills exceed liquid assets", tone: cr >= 1.5 ? "good" : cr >= 1 ? "neutral" : "warn" });
-            }
-            if (latestDebt != null && equity != null) {
-              healthRows.push(equity > 0
-                ? { k: "Debt / equity", v: `${(latestDebt / equity).toFixed(2)}×`, note: latestDebt / equity < 0.5 ? "Lightly borrowed" : latestDebt / equity < 1.5 ? "Moderately borrowed" : "Heavily borrowed", tone: latestDebt / equity < 0.5 ? "good" : latestDebt / equity < 1.5 ? "neutral" : "warn" }
-                : { k: "Debt / equity", v: "n/m", note: "Shareholder equity is negative", tone: "warn" });
-            }
-            if (latestDebt != null && ttmEbitda != null && ttmEbitda > 0) {
-              const x = latestDebt / ttmEbitda;
-              healthRows.push({ k: "Debt / EBITDA", v: `${x.toFixed(1)}×`, note: x < 1 ? "Repaid in under a year of earnings" : x < 3 ? "Manageable" : "Slow to repay", tone: x < 1 ? "good" : x < 3 ? "neutral" : "bad" });
-            }
-          }
+          const dollars = (v: number | null) => (v == null ? "—" : usdRaw(v));
+          const fundNow = !isBank ? latestQ : null;
+          const netDebt = fundNow && latestDebt != null && latestCash != null ? latestDebt - latestCash : null;
+          const curRatio = fundNow
+            ? fundNow.currentRatio ?? (fundNow.currentAssets != null && fundNow.currentLiabilities ? fundNow.currentAssets / fundNow.currentLiabilities : null)
+            : null;
+          const curRatioOk = curRatio != null && Number.isFinite(curRatio) ? curRatio : null;
+          const equityNow = fundNow?.equity ?? null;
+          const debtEquity = fundNow && latestDebt != null && equityNow != null && equityNow > 0 ? latestDebt / equityNow : null;
+          const debtEbitda = fundNow && latestDebt != null && ttmEbitda != null && ttmEbitda > 0 ? latestDebt / ttmEbitda : null;
+          const healthRows: HealthRow[] = fundNow
+            ? [
+                { k: "Cash", v: dollars(latestCash), note: "Cash and equivalents", col: STEEL },
+                hasTotalDebt || latestDebt == null
+                  ? { k: "Total debt", v: dollars(latestDebt), note: "Short and long term, incl. leases", col: STEEL }
+                  : { k: "LT debt", v: dollars(latestDebt), note: "Long-term debt only", col: STEEL },
+                {
+                  k: netDebt != null && netDebt <= 0 ? "Net cash" : "Net debt",
+                  v: netDebt == null ? "—" : dollars(Math.abs(netDebt)),
+                  note: netDebt == null ? "" : netDebt <= 0 ? "More cash than debt" : "Debt is more than its cash",
+                  col: netDebt == null ? STEEL : netDebt <= 0 ? GOOD : MID,
+                },
+                {
+                  k: "Current ratio",
+                  v: curRatioOk != null ? `${curRatioOk.toFixed(2)}×` : "—",
+                  note: curRatioOk == null ? "" : curRatioOk >= 1.5 ? "Covers short-term bills comfortably" : curRatioOk >= 1 ? "Covers short-term bills, thinly" : "Short-term bills exceed liquid assets",
+                  col: curRatioOk == null ? STEEL : curRatioOk >= 1.5 ? GOOD : curRatioOk >= 1 ? MID : BAD,
+                },
+                equityNow != null && equityNow <= 0 && latestDebt != null
+                  ? { k: "Debt / equity", v: "n/m", note: "Shareholder equity is negative", col: MID }
+                  : {
+                      k: "Debt / equity",
+                      v: debtEquity != null ? `${debtEquity.toFixed(2)}×` : "—",
+                      note: debtEquity == null ? "" : debtEquity < 0.5 ? "Lightly borrowed" : debtEquity < 1.5 ? "Moderately borrowed" : "Heavily borrowed",
+                      col: debtEquity == null ? STEEL : debtEquity < 0.5 ? GOOD : debtEquity < 1.5 ? MID : BAD,
+                    },
+                {
+                  k: "Debt / EBITDA",
+                  v: debtEbitda != null ? `${debtEbitda.toFixed(1)}×` : "—",
+                  note: debtEbitda == null ? "" : debtEbitda < 1 ? "Repaid in under a year of earnings" : debtEbitda < 3 ? `Repaid in about ${Math.round(debtEbitda)} years of earnings` : "Many years of earnings to repay",
+                  col: debtEbitda == null ? STEEL : debtEbitda < 1 ? GOOD : debtEbitda < 3 ? MID : BAD,
+                },
+              ]
+            : [];
 
-          const qualityRows: HealthRow[] = [];
           const ttmRev = sum4((q) => q.revenue);
           const ttmNi = sum4((q) => q.netIncome);
           const ttmFcf4 = sum4((q) => computeQuarterFcf(q));
           const ttmCapex = sum4((q) => (q.capitalExpenditures != null ? Math.abs(q.capitalExpenditures) : null));
-          if (ttmRev != null && ttmRev > 0) {
-            if (ttmFcf4 != null) {
-              const m = (ttmFcf4 / ttmRev) * 100;
-              qualityRows.push({ k: "FCF margin", v: `${m.toFixed(1)}%`, note: "Free cash flow per $ of sales", tone: m >= 15 ? "good" : m >= 0 ? "neutral" : "bad" });
-            }
-            if (ttmNi != null) {
-              const m = (ttmNi / ttmRev) * 100;
-              qualityRows.push({ k: "Net margin", v: `${m.toFixed(1)}%`, note: "Profit per $ of sales", tone: m >= 15 ? "good" : m >= 0 ? "neutral" : "bad" });
-            }
-            if (ttmCapex != null) {
-              qualityRows.push({ k: "Capex / sales", v: `${((ttmCapex / ttmRev) * 100).toFixed(1)}%`, note: "Spent on equipment and buildings", tone: "neutral" });
-            }
-          }
-          if (ttmFcf4 != null && ttmNi != null) {
-            qualityRows.push(ttmNi > 0
-              ? { k: "Cash conversion", v: `${(ttmFcf4 / ttmNi).toFixed(2)}×`, note: `$${(ttmFcf4 / ttmNi).toFixed(2)} of free cash per $1 of profit`, tone: ttmFcf4 / ttmNi >= 1 ? "good" : ttmFcf4 / ttmNi >= 0.7 ? "neutral" : "warn" }
-              : { k: "Cash conversion", v: "n/m", note: "No profit over the last 12 months", tone: "warn" });
-          }
-          const healthSub = latestQ ? `${latestQ.fiscalPeriod || "Latest quarter"} '${(latestQ.fiscalYear || "").slice(-2)}` : "";
-          const toneCol = (t: HealthRow["tone"]) => (t === "good" ? UP : t === "bad" ? DN : t === "warn" ? "#f5b031" : "#93a1af");
+          const ofSales = (v: number | null) => (v != null && ttmRev != null && ttmRev > 0 ? (v / ttmRev) * 100 : null);
+          const fcfMargin = ofSales(ttmFcf4), netMargin = ofSales(ttmNi), capexSales = ofSales(ttmCapex);
+          const cashConv = ttmFcf4 != null && ttmNi != null && ttmNi > 0 ? ttmFcf4 / ttmNi : null;
+          const marginCol = (m: number | null) => (m == null ? STEEL : m >= 10 ? GOOD : m >= 0 ? MID : BAD);
+          const pctOrDash = (m: number | null) => (m == null ? "—" : `${m.toFixed(1)}%`);
+          const qualityRows: HealthRow[] = fundNow
+            ? [
+                { k: "FCF margin", v: pctOrDash(fcfMargin), note: "Free cash flow per $ of sales", col: marginCol(fcfMargin) },
+                { k: "Net margin", v: pctOrDash(netMargin), note: "Profit per $ of sales", col: marginCol(netMargin) },
+                { k: "Capex / sales", v: pctOrDash(capexSales), note: "Spent on equipment and buildings", col: STEEL },
+                ttmNi != null && ttmNi <= 0 && ttmFcf4 != null
+                  ? { k: "Cash conversion", v: "n/m", note: "No profit over the last 12 months", col: MID }
+                  : {
+                      k: "Cash conversion",
+                      v: cashConv != null ? `${cashConv.toFixed(2)}×` : "—",
+                      note: cashConv != null ? `$${cashConv.toFixed(2)} of free cash per $1 of profit` : "",
+                      col: cashConv == null ? STEEL : cashConv >= 0.9 ? GOOD : cashConv >= 0.5 ? MID : BAD,
+                    },
+              ]
+            : [];
 
           // PEG = trailing P/E ÷ expected EPS growth (next fiscal year's estimate
           // vs the year in progress) — not one quarter's volatile y/y change.
@@ -2364,60 +2358,87 @@ export function StockIntelligenceScreen() {
             stated != null && Number.isFinite(stated) ? stated : part != null && rev ? (part / rev) * 100 : null;
           const noGrossLine = isBank || (fmpQ ?? []).every((q) => q.grossProfit != null && q.operatingIncome != null && q.grossProfit === q.operatingIncome);
           const marginLines = isBank || !fmpQ || fmpQ.length < 3 ? [] : ([
-            { k: "Gross", col: STEEL, on: !noGrossLine, vals: fmpQ.map((q) => marginPct(q.grossMarginPct, q.grossProfit, q.revenue)) },
-            { k: "Operating", col: UP, on: true, vals: fmpQ.map((q) => marginPct(q.operatingMarginPct, q.operatingIncome, q.revenue)) },
-            { k: "Net", col: "#f5b031", on: true, vals: fmpQ.map((q) => marginPct(q.netMarginPct, q.netIncome, q.revenue)) },
+            { k: "Gross", col: "#c9d6e3", on: !noGrossLine, vals: fmpQ.map((q) => marginPct(q.grossMarginPct, q.grossProfit, q.revenue)) },
+            { k: "Operating", col: GOOD, on: true, vals: fmpQ.map((q) => marginPct(q.operatingMarginPct, q.operatingIncome, q.revenue)) },
+            { k: "Net", col: MID, on: true, vals: fmpQ.map((q) => marginPct(q.netMarginPct, q.netIncome, q.revenue)) },
           ] as Array<{ k: string; col: string; on: boolean; vals: Array<number | null> }>).filter((l) => l.on && l.vals.filter((v) => v != null).length >= 3);
           const marginAll = marginLines.flatMap((l) => l.vals.filter((v): v is number => v != null));
-          const mMax = Math.max(0, ...marginAll), mMin = Math.min(0, ...marginAll);
-          const mSpan = mMax - mMin || 1;
-          const MW = 440, MH = 150, MPAD = 10;
-          const mx = (i: number) => MPAD + (i / Math.max(1, (fmpQ?.length ?? 1) - 1)) * (MW - 2 * MPAD);
-          const my = (v: number) => MPAD + ((mMax - v) / mSpan) * (MH - 2 * MPAD);
+          const mLo = marginAll.length ? Math.min(...marginAll) : 0, mHi = marginAll.length ? Math.max(...marginAll) : 1;
+          const mPad = (mHi - mLo || 1) * 0.12;
+          const MW = 300, MH = 120, mCount = fmpQ?.length ?? 0;
+          const mx = (i: number) => (mCount > 1 ? (i / (mCount - 1)) * (MW - 8) + 4 : MW / 2);
+          const my = (v: number) => MH - 6 - ((v - (mLo - mPad)) / (mHi + mPad - (mLo - mPad) || 1)) * (MH - 12);
 
-          // ── Scorecard: four plain grades, each from one visible number ──
-          type Grade = { k: string; grade: string; tone: HealthRow["tone"]; note: string };
-          const growthV = siFacts.revGrowthYoY;
-          const opM = siFacts.opMargin, opM0 = siFacts.opMarginYearAgo;
-          const pe = livePe != null && livePe > 0 ? livePe : null;
-          const fpe = stock.fpe != null && stock.fpe > 0 ? stock.fpe : null;
-          const vRatios = [pe != null ? pe / basePe : null, fpe != null ? fpe / baseFpe : null].filter((v): v is number => v != null);
-          const vRatio = vRatios.length ? vRatios.reduce((a, b) => a + b, 0) / vRatios.length : null;
-          const hasBad = healthRows.some((r) => r.tone === "bad"), hasWarn = healthRows.some((r) => r.tone === "warn");
-          const netRow = healthRows.find((r) => r.k === "Net cash" || r.k === "Net debt");
-          const scoreCards: Grade[] = [
-            growthV != null && Number.isFinite(growthV)
-              ? { k: "GROWTH", grade: growthV >= 20 ? "Strong" : growthV >= 8 ? "Solid" : growthV >= 0 ? "Slow" : "Shrinking", tone: growthV >= 20 ? "good" : growthV >= 8 ? "neutral" : growthV >= 0 ? "warn" : "bad", note: `Revenue ${pct1(growthV)} y/y` }
-              : { k: "GROWTH", grade: "—", tone: "neutral", note: "No revenue history yet" },
-            !isBank && opM != null && Number.isFinite(opM)
-              ? { k: "PROFITABILITY", grade: opM >= 25 ? "Strong" : opM >= 12 ? "Solid" : opM >= 0 ? "Thin" : "Losing money", tone: opM >= 25 ? "good" : opM >= 12 ? "neutral" : opM >= 0 ? "warn" : "bad", note: `Operating margin ${opM.toFixed(1)}%${opM0 != null ? ` (${opM - opM0 >= 0 ? "+" : "−"}${Math.abs(opM - opM0).toFixed(1)} pts y/y)` : ""}` }
-              : { k: "PROFITABILITY", grade: "—", tone: "neutral", note: isBank ? "Not graded for banks" : "No margin data yet" },
-            healthRows.length
-              ? { k: "FINANCIAL HEALTH", grade: hasBad ? "Stretched" : hasWarn ? "Mixed" : healthRows.filter((r) => r.tone === "good").length >= 2 ? "Strong" : "Solid", tone: hasBad ? "bad" : hasWarn ? "warn" : healthRows.filter((r) => r.tone === "good").length >= 2 ? "good" : "neutral", note: netRow ? `${netRow.k} ${netRow.v}` : healthRows[0].note }
-              : { k: "FINANCIAL HEALTH", grade: "—", tone: "neutral", note: isBank ? "Not graded for banks" : "No balance-sheet data yet" },
-            vRatio != null
-              ? { k: "VALUATION", grade: vRatio < 0.8 ? "Attractive" : vRatio < 1.2 ? "Fair" : vRatio < 1.8 ? "Rich" : "Expensive", tone: vRatio < 0.8 ? "good" : vRatio < 1.2 ? "neutral" : vRatio < 1.8 ? "warn" : "bad", note: `${pe != null ? `P/E ${pe.toFixed(1)}×` : `Fwd P/E ${fpe!.toFixed(1)}×`} vs ${pe != null ? basePe : baseFpe}× sector reference` }
-              : { k: "VALUATION", grade: "—", tone: "neutral", note: "No earnings multiple (no profit)" },
+          // ── Scorecard: four plain grades, each from one visible number (the design's rules) ──
+          const quarters = fmpQ ?? [];
+          const qNow = quarters.length ? quarters[quarters.length - 1] : null;
+          const qYearAgo = quarters.length >= 5 ? quarters[quarters.length - 5] : null;
+          const opMarginOf = (q: QuarterFinancials | null) => (q ? marginPct(q.operatingMarginPct, q.operatingIncome, q.revenue) : null);
+          const growthYoY = qNow && qYearAgo && qYearAgo.revenue ? ((qNow.revenue ?? 0) / qYearAgo.revenue - 1) * 100 : null;
+          const opNow = isBank ? null : opMarginOf(qNow), opThen = isBank ? null : opMarginOf(qYearAgo);
+          const peNow = livePe != null && livePe > 0 ? livePe : null;
+          const peRel = peNow != null ? peNow / basePe : null;
+          type Verdict = { word: string; col: string };
+          const NO_DATA: Verdict = { word: "No data", col: STEEL };
+          const growthGrade: Verdict = growthYoY == null ? NO_DATA : growthYoY >= 15 ? { word: "Strong", col: GOOD } : growthYoY >= 3 ? { word: "Steady", col: STEEL } : growthYoY >= -3 ? { word: "Flat", col: MID } : { word: "Weak", col: BAD };
+          const profitGrade: Verdict = opNow == null ? NO_DATA : opNow >= 20 ? { word: "Strong", col: GOOD } : opNow >= 10 ? { word: "Solid", col: STEEL } : opNow >= 0 ? { word: "Thin", col: MID } : { word: "Losing money", col: BAD };
+          const healthGrade: Verdict = netDebt == null ? NO_DATA : netDebt <= 0 ? { word: "Strong", col: GOOD } : (curRatioOk != null && curRatioOk < 1) || (debtEquity != null && debtEquity > 2) ? { word: "Weak", col: BAD } : { word: "Mixed", col: MID };
+          const valGrade: Verdict = peRel == null ? NO_DATA : peRel <= 0.95 ? { word: "Attractive", col: GOOD } : peRel <= 1.3 ? { word: "Fair", col: STEEL } : { word: "Stretched", col: BAD };
+          const figure = (text: string, color: string) => <span style={{ color, fontWeight: 700 }}>{text}</span>;
+          const upDown = (v: number) => (v >= 0 ? GOOD : BAD);
+          const scoreCards: Array<{ k: string; label: string; g: Verdict; sub: React.ReactNode }> = [
+            { k: "GROWTH", label: "Growth", g: growthGrade, sub: growthYoY != null ? <>Revenue {figure(pct1(growthYoY), upDown(growthYoY))} y/y</> : "Revenue growth unavailable" },
+            {
+              k: "PROFITABILITY",
+              label: "Profitability",
+              g: profitGrade,
+              sub: isBank
+                ? "Not graded for banks"
+                : opNow != null
+                  ? <>Operating margin {figure(`${opNow.toFixed(1)}%`, opNow >= 10 ? GOOD : opNow >= 0 ? MID : BAD)}{opThen != null ? <> ({figure(`${opNow - opThen >= 0 ? "+" : "−"}${Math.abs(opNow - opThen).toFixed(1)} pts`, upDown(opNow - opThen))} y/y)</> : null}</>
+                  : "Operating margin unavailable",
+            },
+            {
+              k: "FINANCIAL HEALTH",
+              label: "Financial Health",
+              g: healthGrade,
+              sub: isBank ? "Not graded for banks" : netDebt != null ? (netDebt <= 0 ? <>Net cash {figure(dollars(-netDebt), GOOD)}</> : <>Net debt {figure(dollars(netDebt), BAD)}</>) : "Balance sheet unavailable",
+            },
+            {
+              k: "VALUATION",
+              label: "Valuation",
+              g: valGrade,
+              sub: peNow != null ? <>P/E {figure(`${peNow.toFixed(1)}×`, peNow <= basePe * 0.95 ? GOOD : peNow <= basePe * 1.3 ? SKY : BAD)} vs {figure(`${basePe}×`, SKY)} sector reference</> : "P/E unavailable",
+            },
           ];
+          // The card shell and heading shared by the balance-sheet, cash-quality and margin cards.
+          const fundCard: React.CSSProperties = { border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10, minWidth: 0 };
+          const fundCardHead = (title: string, sub: string) => (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>{title}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-white, #ffffff)", opacity: 0.6 }}>{sub}</span>
+            </div>
+          );
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Scorecard: one grade per question, each from the number shown under it */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-                {scoreCards.map((s) => {
-                  const gradeCol = s.grade === "—" ? "var(--si-text-sub, #5d6b79)" : toneCol(s.tone);
-                  return (
-                    <div key={s.k} style={{ border: `1px solid ${s.grade === "—" ? "var(--si-border, #1c2733)" : gradeCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
-                      <span style={{ display: "flex", alignItems: "center" }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 }}>{s.k}</span>
-                        <InfoTip lines={SCORECARD_INFO[s.k] ?? []} />
+              {qNow && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+                  {scoreCards.map((c) => (
+                    <div key={c.k} style={{ border: `1px solid ${c.g.col}`, background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <span style={{ display: "flex", alignItems: "center" }}>
+                          <span data-caps style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-white, #ffffff)", opacity: 0.7 }}>{c.label}</span>
+                          <InfoTip lines={SCORECARD_INFO[c.k] ?? []} />
+                        </span>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: c.g.col, textAlign: "right" }}>{c.g.word}</span>
                       </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: gradeCol }}>{s.grade}</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.5 }}>{highlightScoreNote(s.note, gradeCol)}</span>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-white, #ffffff)", lineHeight: 1.5 }}>{c.sub}</span>
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
 
               {/* 6 Financial Metric Cards with 8-Quarter Mini-Bars */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14 }}>
@@ -2430,7 +2451,7 @@ export function StockIntelligenceScreen() {
                   return (
                   <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 18px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", columnGap: 8 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
+                      <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
                         {fm.k}
                       </span>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: fm.col, whiteSpace: "nowrap" }}>
@@ -2507,61 +2528,48 @@ export function StockIntelligenceScreen() {
                 })}
               </div>
 
-              {/* Financial health (balance sheet) and earnings quality (cash vs profit) */}
-              {(healthRows.length > 0 || qualityRows.length > 0 || marginLines.length > 0) && (
+              {/* Financial health (balance sheet), earnings quality (cash vs profit) and margin trend */}
+              {(healthRows.length > 0 || marginLines.length > 0) && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 18, alignItems: "stretch" }}>
-                  {([
-                    { title: "FINANCIAL HEALTH", sub: healthSub ? `${healthSub} balance sheet` : "Latest balance sheet", rows: healthRows },
-                    { title: "EARNINGS QUALITY", sub: "Last 12 months", rows: qualityRows },
-                  ]).filter((p) => p.rows.length > 0).map((p) => (
-                    <div key={p.title} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                          {p.title}
-                        </span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{p.sub}</span>
-                      </div>
+                  {[
+                    { title: "Financial Health", sub: `${QL[1]} balance sheet`, rows: healthRows },
+                    { title: "Earnings Quality", sub: "Last 12 months", rows: qualityRows },
+                  ].filter((p) => p.rows.length > 0).map((p) => (
+                    <div key={p.title} style={fundCard}>
+                      {fundCardHead(p.title, p.sub)}
                       {p.rows.map((r) => (
-                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px 128px 92px 1fr", alignItems: "center", columnGap: 12, minHeight: 50, borderTop: "1px solid var(--si-border, #1c2733)" }}>
-                          <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: toneCol(r.tone) }} />
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 400, color: "var(--si-text-hi, #e8eef4)" }}>{r.k}</span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, textAlign: "right", color: r.tone === "neutral" ? "var(--si-text-hi, #e8eef4)" : toneCol(r.tone) }}>{r.v}</span>
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>{r.note}</span>
+                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px minmax(100px,128px) minmax(64px,86px) minmax(110px,1fr)", alignItems: "center", columnGap: 12, padding: "8px 0" }}>
+                          <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: r.col }} />
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-white, #ffffff)", opacity: 0.9 }}>{r.k}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color: r.col === STEEL ? SKY : r.col, textAlign: "right" }}>{r.v}</span>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.75, lineHeight: 1.4 }}>{r.note}</span>
                         </div>
                       ))}
                     </div>
                   ))}
                   {marginLines.length > 0 && fmpQ && (
-                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARGIN TREND</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{QL[0]} to {QL[1]}</span>
-                      </div>
-                      <svg viewBox={`0 0 ${MW} ${MH}`} width="100%" role="img" aria-label={`${stock.t} gross, operating and net margin by quarter`} style={{ display: "block" }}>
-                        <line x1={MPAD} x2={MW - MPAD} y1={my(0)} y2={my(0)} stroke="#2a3a4a" strokeWidth={1} strokeDasharray="3 3" />
+                    <div style={fundCard}>
+                      {fundCardHead("Margin Trend", `${QL[0]} to ${QL[1]}`)}
+                      <svg viewBox={`0 0 ${MW} ${MH}`} width="100%" height={130} preserveAspectRatio="none" role="img" aria-label="Gross, operating and net margin by quarter">
+                        {[0.25, 0.5, 0.75].map((f) => (
+                          <line key={f} x1={0} x2={MW} y1={MH * f} y2={MH * f} stroke="rgba(147,161,175,0.12)" strokeWidth={1} />
+                        ))}
                         {marginLines.map((l) => {
-                          const pts = l.vals.map((v, i) => (v == null ? null : [mx(i), my(v)] as const));
-                          const last = [...pts].reverse().find((p) => p != null);
-                          return (
-                            <g key={l.k}>
-                              <polyline fill="none" stroke={l.col} strokeWidth={2} strokeLinejoin="round" points={pts.filter((p) => p != null).map((p) => `${p![0]},${p![1]}`).join(" ")} />
-                              {last && <circle cx={last[0]} cy={last[1]} r={3.5} fill={l.col} />}
-                            </g>
-                          );
+                          const pts = l.vals.map((v, i) => (v == null ? null : `${mx(i).toFixed(1)},${my(v).toFixed(1)}`)).filter(Boolean).join(" ");
+                          return pts ? <polyline key={l.k} points={pts} fill="none" stroke={l.col} strokeWidth={2} vectorEffect="non-scaling-stroke" /> : null;
                         })}
                       </svg>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", fontFamily: "'JetBrains Mono', monospace", fontSize: 14 }}>
                         {marginLines.map((l) => {
-                          const lastIdx = l.vals.length - 1;
-                          const now = l.vals[lastIdx];
-                          const then = l.vals[lastIdx - 4] ?? null;
+                          const now = l.vals[l.vals.length - 1] ?? null;
+                          const then = l.vals.length >= 5 ? l.vals[l.vals.length - 5] ?? null : null;
+                          const diff = now != null && then != null ? now - then : null;
                           return (
-                            <span key={l.k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "var(--si-text-hi, #e8eef4)" }}>
-                              <i style={{ display: "inline-block", width: 10, height: 3, background: l.col, marginRight: 6, verticalAlign: "middle" }} />
-                              {l.k} {now != null ? `${now.toFixed(1)}%` : "—"}
-                              {now != null && then != null && (
-                                <span style={{ color: now - then >= 0 ? UP : DN }}> {now - then >= 0 ? "+" : "−"}{Math.abs(now - then).toFixed(1)} pts y/y</span>
-                              )}
+                            <span key={l.k} style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--si-text-mid, #93a1af)" }}>
+                              <span style={{ width: 12, height: 2, background: l.col }} />
+                              {l.k}{" "}
+                              <b style={{ color: "var(--si-text-hi, #e8eef4)" }}>{now != null ? `${now.toFixed(1)}%` : "—"}</b>
+                              <span style={{ color: diff != null && diff < 0 ? DN : UP }}>{diff != null ? `${diff >= 0 ? "+" : ""}${diff.toFixed(1)} pts y/y` : ""}</span>
                             </span>
                           );
                         })}
@@ -2574,31 +2582,31 @@ export function StockIntelligenceScreen() {
               {/* Valuation & Peer Comparison Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: 18, alignItems: "start" }}>
                 {/* Valuation Multiples vs Reference Benchmark */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                      VALUATION MULTIPLES
+                    <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                      Valuation Multiples
                     </span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.8 }}>
                       ▮ {stock.t} &nbsp; ┃ Reference Benchmark
                     </span>
                   </div>
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.4 }}>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.75, lineHeight: 1.5 }}>
                     Reference benchmarks (indicated by ┃ and right column) are static sector reference values, not live peer-company medians.
                   </div>
                   {valRows.map((vl, idx) => (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 42 }}>
-                      <span style={{ width: 110, fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 34 }}>
+                      <span style={{ width: 120, fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: "var(--si-text-white, #ffffff)" }}>
                         {vl.k}
                       </span>
-                      <div style={{ position: "relative", flex: 1, height: 10, background: "#1c2733" }}>
+                      <div style={{ position: "relative", flex: 1, height: 10, background: "#232830" }}>
                         <div style={{ height: 10, width: vl.w, background: "#5980a6" }} />
                         <div style={{ position: "absolute", top: -4, left: vl.m, width: 2, height: 18, background: "#e8eef4", boxShadow: "0 0 6px rgba(255,255,255,0.4)" }} />
                       </div>
-                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                      <span style={{ width: 76, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color: SKY }}>
                         {vl.v}
                       </span>
-                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: "var(--si-text-mid, #93a1af)" }}>
+                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: "var(--si-text-white, #ffffff)", opacity: 0.7 }}>
                         {vl.med}
                       </span>
                     </div>
@@ -2606,23 +2614,23 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 {/* Peer Comparison Table */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
+                <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                      PEER COMPARISON
+                    <span data-caps style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                      Peer Comparison
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.75 }}>
                       Click any peer to open in SI
                     </span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span>COMPANY</span>
-                    <span style={{ textAlign: "right" }}>PRICE</span>
-                    <span style={{ textAlign: "right" }}>CHANGE</span>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #232830)" }}>
+                    <span>Company</span>
+                    <span style={{ textAlign: "right" }}>Price</span>
+                    <span style={{ textAlign: "right" }}>Change</span>
                     <span style={{ textAlign: "right" }} title="Year to date: price vs the last close of the prior year. A * means it was listed this year, so it is measured from its first close.">YTD</span>
-                    <span style={{ textAlign: "right" }}>MKT CAP</span>
+                    <span style={{ textAlign: "right" }}>Mkt cap</span>
                     <span style={{ textAlign: "right" }}>P/E</span>
-                    <span style={{ textAlign: "right" }}>RS RANK</span>
+                    <span style={{ textAlign: "right" }}>RS rank</span>
                   </div>
                   {peersPending ? (
                     <div aria-busy="true" style={{ padding: "8px 0" }}>
@@ -2672,8 +2680,8 @@ export function StockIntelligenceScreen() {
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 15,
                             color: "var(--si-text-hi, #e8eef4)",
-                            padding: "11px 8px",
-                            borderBottom: "1px solid var(--si-border, #1c2733)",
+                            padding: "10px 8px",
+                            borderBottom: "1px solid var(--si-border, #232830)",
                             cursor: "pointer",
                             borderRadius: 4,
                             transition: "background 150ms ease",
@@ -2763,24 +2771,25 @@ export function StockIntelligenceScreen() {
               </div>
               <div style={{ flex: 1, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
                 {aiAnalysisDoc?.analysis && (
-                  <div style={{ border: "1px solid rgba(127,168,208,0.25)", background: "var(--si-card-tint, rgba(12, 17, 24, 0.6))", padding: "14px 16px", marginBottom: 8 }}>
+                  <div style={{ border: "1px solid rgba(127,168,208,0.25)", background: "var(--si-card-tint, rgba(20, 23, 28, 0.6))", padding: "14px 16px", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                       {aiAnalysisDoc.analysis.headline && (
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                           {aiAnalysisDoc.analysis.headline}
                         </span>
                       )}
                     </div>
-                    {aiAnalysisDoc.analysis.newsSummary && (
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, marginBottom: 6 }}>
-                        {aiAnalysisDoc.analysis.newsSummary}
-                      </div>
-                    )}
-                    {aiAnalysisDoc.analysis.technicalSummary && (
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-accent-soft, #7fa8d0)", lineHeight: 1.4 }}>
-                        {aiAnalysisDoc.analysis.technicalSummary}
-                      </div>
-                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+                      {[aiAnalysisDoc.analysis.newsSummary, aiAnalysisDoc.analysis.technicalSummary]
+                        .filter((t): t is string => !!t)
+                        .flatMap((t) => t.split(/(?<=\.) (?=[A-Z])/))
+                        .map((sentence, n) => (
+                          <div key={n} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 10, lineHeight: 1.5 }}>
+                            <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>{"▸"}</span>
+                            <span>{highlightNumbers(sentence)}</span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 )}
                 {aiChat.length === 0 && !aiAnalysisDoc?.analysis && (

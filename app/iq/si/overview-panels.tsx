@@ -5,7 +5,7 @@ import { highlightNumbers } from "./read-cards";
 
 /**
  * The panels that open beside the Overview's left menu (Fundamentals, Technicals, Why it moved,
- * Why it could move). Each is a short read with a link to the full tab where there is one.
+ * Why it could move). Each is a short read; none links away to a full tab, as in the design.
  */
 
 const MUTED = "var(--si-text-mid, #93a1af)";
@@ -13,7 +13,7 @@ const HI = "var(--si-text-hi, #e8eef4)";
 const UP = "var(--ov-up, #5ee08a)";
 const DN = "var(--ov-dn, #f07a7a)";
 
-export function PanelCard({ children, onOpen }: { children: ReactNode; onOpen?: () => void }) {
+export function PanelCard({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
@@ -28,24 +28,6 @@ export function PanelCard({ children, onOpen }: { children: ReactNode; onOpen?: 
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>{children}</div>
-      {onOpen && (
-        <button
-          type="button"
-          onClick={onOpen}
-          style={{
-            alignSelf: "flex-start",
-            border: "none",
-            background: "transparent",
-            padding: 0,
-            cursor: "pointer",
-            fontSize: 13.5,
-            fontWeight: 600,
-            color: "var(--si-accent-light, #a9c6e3)",
-          }}
-        >
-          <span data-caps>OPEN FULL VIEW {"→"}</span>
-        </button>
-      )}
     </div>
   );
 }
@@ -57,9 +39,9 @@ export type ReadRow = { title: string; value: string; tone: "good" | "bad" | "wa
 const rowColor = (tone: ReadRow["tone"]) => (tone === "good" ? UP : tone === "bad" ? DN : tone === "warn" ? "var(--ov-warn, #e6b94f)" : MUTED);
 
 /** A one-sentence read, then the facts behind it (title, value, and a note under them). */
-export function ReadPanel({ text, rows, onOpen }: { text: string; rows?: ReadRow[]; onOpen?: () => void }) {
+export function ReadPanel({ text, rows }: { text: string; rows?: ReadRow[] }) {
   return (
-    <PanelCard onOpen={onOpen}>
+    <PanelCard>
       {lead(text)}
       {rows && rows.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column" }}>

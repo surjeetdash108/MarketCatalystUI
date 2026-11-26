@@ -58,11 +58,9 @@ describe("Overview", () => {
       assert.ok(src.includes(`label: "${label}"`), label);
     }
   });
-  it("Fundamentals and Technicals link to their full tab; the other two panels have none", () => {
-    assert.match(src, /fund: <ReadPanel [^>]*onOpen=\{\(\) => setActiveTab\("fund"\)\}/);
-    assert.match(src, /onOpen=\{\(\) => setActiveTab\("tech"\)\}/);
-    assert.doesNotMatch(src, /<MovedPanel [^>]*onOpen/);
-    assert.doesNotMatch(src, /<CouldPanel [^>]*onOpen/);
+  it("no panel links away to a full tab, as in the design", () => {
+    assert.doesNotMatch(src, /<(Read|Moved|Could)Panel [^>]*onOpen/);
+    assert.doesNotMatch(read("overview-panels.tsx"), /OPEN FULL VIEW|onOpen/);
   });
   it("the ring and every score row open how MC Confidence is calculated", () => {
     assert.match(overview, /className="ovx-sr"[\s\S]*?onClick=\{data\.onScores\}/);
