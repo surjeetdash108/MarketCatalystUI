@@ -1290,7 +1290,7 @@ export function StockIntelligenceScreen() {
         }
       `}</style>
 
-        <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10, padding: "0 24px" }}>
+        <div className="si-switch-wrap" style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10, padding: "0 24px" }}>
           <ModuleSwitcher />
           <div style={{ position: "absolute", right: 24, display: "flex", alignItems: "center", gap: 8 }}>
           <button
@@ -1685,10 +1685,19 @@ export function StockIntelligenceScreen() {
         .iq-root[data-theme="light"] .si-screen input::placeholder {
           color: #94a3b8 !important;
         }
+        /* ── Top bar: the 660px module switcher stays beside the name, home and search until it would touch the search box (about 1400px), then takes its own row ── */
+        @media screen and (max-width: 1419px) {
+          .si-topbar .si-switch-wrap { order: 5; flex: 1 1 100% !important; min-width: 0 !important; padding-bottom: 4px; }
+          /* with the switcher on its own row the search has the room: full width */
+          .si-screen .si-nav-search { width: 320px !important; max-width: 100%; }
+          /* the switcher is pinned to the screen's top centre from 1024px up (module-switcher.tsx); in this bar it sits in its own row instead */
+          .si-topbar .si-switch-wrap .mod-switch-pin { position: static !important; transform: none !important; }
+        }
         /* ── Phone (≤760px): less page padding, and the tab rail scrolls away with the page instead of sticking ── */
         @media (max-width: 760px) {
           .si-main { padding: 14px 12px 100px !important; }
           .si-tabrail { position: static !important; }
+          .si-topbar .si-switch-wrap .mod-switch-pin [role="group"] { padding-left: 14px; box-sizing: border-box; }
         }
       `}</style>
 
@@ -1832,7 +1841,7 @@ export function StockIntelligenceScreen() {
           </div>
 
           {/* Issue 5 Fix: Centered SISwitcher inside the header bar */}
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290 }}>
+          <div className="si-switch-wrap" style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290 }}>
             <ModuleSwitcher />
           </div>
 
