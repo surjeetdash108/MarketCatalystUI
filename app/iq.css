@@ -1845,6 +1845,17 @@
   gap: 4px;
 }
 
+/* Fear & Greed card, laid out like CNN's: gauge on the left, past readings on the right. */
+.iq-root .fg-cnn { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 16px; width: 100%; }
+.iq-root .fg-cnn-gauge { flex: 1 1 210px; min-width: 0; }
+.iq-root .fg-cnn-gauge svg { display: block; width: 100%; height: auto; }
+.iq-root .fg-past { flex: 1 1 150px; min-width: 150px; display: flex; flex-direction: column; }
+.iq-root .fg-past-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dotted var(--border-strong); }
+.iq-root .fg-past-row:last-child { border-bottom: 0; }
+.iq-root .fg-past-k { font-size: .64rem; color: var(--text-dim-solid); }
+.iq-root .fg-past-v { font-size: .8rem; font-weight: 700; color: var(--text-hi); }
+.iq-root .fg-badge { flex: none; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px; border: 1.5px solid currentColor; display: inline-flex; align-items: center; justify-content: center; font: 700 .74rem var(--f-mono); }
+
 .gauge-label {
   font-size: 0.6562rem;
   color: var(--text-dim-solid);

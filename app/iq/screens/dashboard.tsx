@@ -6,7 +6,9 @@ import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
 import { useIQActions, ExpandBtn } from "../shell";
 import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem, maPostureLabel, isLeveragedProduct } from "../data";
-import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, cleanCatalystText } from "../utils";
+import { FearGreedPanel } from "../fear-greed-gauge";
+import { fgPastReadings } from "../fear-greed";
+import { fmt, sign, cls, arr, Spark, StockLogo, heatCol, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, cleanCatalystText } from "../utils";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
@@ -482,6 +484,8 @@ export function DashboardScreen() {
   const fgUpdated = fearGreed?.updatedAt ?? null;
   // Composite F&G history (market_sentiment_history) — backs the history drawer.
   const { data: fgHistory } = useApiList<MarketSentimentHistoryDoc>("/market-data/market-sentiment-history");
+  // Previous close / 1 week / 1 month / 1 year ago beside the gauge, from that history.
+  const fgPast = fgPastReadings(fgHistory, fgAsOf);
   // EDGAR 8-K earnings announcements (session + price reaction).
   const { data: earningsAnnouncements } = useApiList<EarningsAnnouncementDoc>("/market-data/earnings-announcements");
   const { data: consensusLive, loading: consensusLoading } = useApiList<AnalystConsensusDoc>(analystAllowed ? "/market-data/analyst-actions" : null);
@@ -1439,7 +1443,7 @@ export function DashboardScreen() {
               {fgVal != null && fgLabel != null && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <button className="link" onClick={() => setDrawer("fg-history")}>History →</button>
-                  <ExpandBtn title="Fear & Greed Index" node={<SemiGauge val={fgVal} label={fgLabel} id="fg-modal" />} />
+                  <ExpandBtn title="Fear & Greed Index" node={<FearGreedPanel value={fgVal} past={fgPast} id="fg-modal" maxWidth={440} />} />
                 </div>
               )}
             </div>
@@ -1447,7 +1451,7 @@ export function DashboardScreen() {
               {fgVal != null && fgLabel != null
                 ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: "100%" }}>
-                    <SemiGauge val={fgVal} label={fgLabel} id="fg" />
+                    <FearGreedPanel value={fgVal} past={fgPast} id="fg" />
                     {/* The index is computed from daily closes, once each evening. */}
                     {fgAsOf && (
                       <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
