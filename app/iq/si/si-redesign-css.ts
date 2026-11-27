@@ -235,10 +235,10 @@ export const OVX_MAST_CSS = `
 .ovx-rtrack i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--ov-grey)}
 .ovx-rtrack b{position:absolute;top:-5px;width:4px;height:16px;margin-left:-2px;border-radius:2px;background:var(--ov-hi)}
 .ovx-rends{display:flex;justify-content:space-between;font-size:13px;color:var(--ov-body)}
-.ovx-tabs{display:flex;flex-wrap:nowrap;gap:4px;padding:0 24px;overflow-x:auto}
-.ovx-tab{position:relative;padding:12px 14px;border:0;background:transparent;font-size:15px;color:var(--ov-mid);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
-.ovx-tab:hover{color:var(--ov-hi)}
-.ovx-tab[aria-selected="true"]{font-weight:700;color:var(--ov-hi);border-bottom-color:var(--ov-up)}
-.ovx-tab:focus-visible{outline:2px solid var(--ov-up);outline-offset:-2px}
-@media (max-width:760px){.ovx-mast{padding:14px 12px;gap:16px 24px}.ovx-price{font-size:28px}.ovx-tabs{padding:0 12px}}
+.ovx-tabs{display:flex;flex-wrap:nowrap;align-items:center;gap:6px;padding:7px 24px;overflow-x:auto}
+.ovx-tab{position:relative;padding:7px 16px;border:1px solid transparent;border-radius:10px;background:transparent;font-size:15px;color:var(--ov-mid);cursor:pointer;white-space:nowrap}
+.ovx-tab:hover{color:var(--ov-hi);background:color-mix(in srgb,var(--ov-mid) 10%,transparent)}
+.ovx-tab[aria-selected="true"]{font-weight:700;color:var(--ov-hi);background:var(--ov-on-bg);border-color:color-mix(in srgb,var(--ov-up) 60%,transparent)}
+.ovx-tab:focus-visible{outline:2px solid var(--ov-up);outline-offset:1px}
+@media (max-width:760px){.ovx-mast{padding:14px 12px;gap:16px 24px}.ovx-price{font-size:28px}.ovx-tabs{padding:7px 12px}}
 `;
