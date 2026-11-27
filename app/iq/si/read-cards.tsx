@@ -84,6 +84,10 @@ export function InfoTip({ lines, align = "left" }: { lines: [string, string][]; 
       {open && (
         <span
           role="tooltip"
+          /* The screen lowercases any element with an inline letter-spacing outside 0.00-0.05em (this one has 0),
+             which turned "Trend: Bullish if price is above both the 50 and 200 DMA" into "trend: bullish if ... dma".
+             data-tc keeps the text as written. */
+          data-tc
           style={{
             position: "absolute",
             top: 26,
