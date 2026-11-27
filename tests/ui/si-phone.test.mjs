@@ -12,7 +12,7 @@ const css = (src.match(/@media \(max-width: 760px\) \{([\s\S]*?)\n        \}/) |
 describe("Stock Intelligence phone layout", () => {
   it("one ≤760px block", () => assert.ok(css.length > 0));
   it("masthead: tighter padding, a smaller price, tabs with less side padding", () => {
-    assert.match(redesign, /@media \(max-width:760px\)\{\.ovx-mast\{padding:14px 12px;gap:16px 24px\}\.ovx-price\{font-size:28px\}\.ovx-tabs\{padding:0 12px\}\}/);
+    assert.match(redesign, /@media \(max-width:760px\)\{\.ovx-mast\{padding:14px 12px;gap:16px 24px\}\.ovx-price\{font-size:28px\}\.ovx-tabs\{padding:7px 12px\}\}/);
     assert.match(src, /<SiMasthead\b/);
   });
   it("page padding shrinks and the tab rail stops sticking", () => {
