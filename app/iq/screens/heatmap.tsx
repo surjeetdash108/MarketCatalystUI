@@ -365,15 +365,16 @@ function HeatmapInner() {
     const hc = heatTile(avg);
     const fs = Math.min(tileFontRem(r.w, r.h), 1);
     const hitMore = query !== "" && more.some(st => st.sym.includes(query));
-    // The longest wording that fits the tile (mono type: about 0.6em a character).
-    const labels = [`+${more.length} smaller stocks`, `+${more.length} more`, `+${more.length}`];
-    const label = labels.find(t => t.length * fs * 16 * 0.62 + 12 <= r.w) ?? labels[2];
+    // "128 more", or just the number when even that does not fit (mono type: about
+    // 0.6em a character). No "+" and no "smaller stocks": it read as a count to add.
+    const labels = [`${more.length} more`, `${more.length}`];
+    const label = labels.find(t => t.length * fs * 16 * 0.62 + 12 <= r.w) ?? labels[1];
     return (
       <div key={MORE_KEY} role="button" tabIndex={0}
         className={`hm2-tile more${query !== "" && !hitMore ? " dim" : ""}${hitMore ? " mark" : ""}`}
         onClick={e => { e.stopPropagation(); setMoreModal({ sector, stocks: more }); }}
         onKeyDown={e => { if (e.key === "Enter") setMoreModal({ sector, stocks: more }); }}
-        title={`+${more.length} smaller ${sector} stocks${avg == null ? "" : ` (${sign(avg)} on average)`} — click to see them`}
+        title={`${more.length} smaller ${sector} stocks${avg == null ? "" : ` (${sign(avg)} on average)`} — click to see them`}
         style={{ left: r.x, top: r.y, width: r.w, height: r.h, backgroundColor: hc.bg, color: hc.fg }}>
         <span className="sym" style={{ fontSize: `${fs}rem` }}>{label}</span>
         {r.w >= 34 && r.h >= 30 && avg != null && <span className="pct" style={{ fontSize: `${fs * 0.82}rem` }}>{sign(avg)}</span>}
@@ -419,10 +420,7 @@ function HeatmapInner() {
     <>
       <div className="hm2-page">
       <div className="hm2-head">
-        <div>
-          <h1 className="hm2-h1">Market Heatmap</h1>
-          <p className="hm2-sub">{subtitle}</p>
-        </div>
+        <p className="hm2-sub">{subtitle}</p>
         <div style={{ display: "flex", alignItems: "center", minHeight: 35 }}>
           <VendorTag v={["fmp", "polygon"]} />
         </div>
@@ -618,7 +616,7 @@ function HeatmapInner() {
                     color: "var(--text-hi)",
                   }}
                 >
-                  +{moreModal.stocks.length} More {moreModal.sector} Stocks
+                  {moreModal.stocks.length} More {moreModal.sector} Stocks
                 </div>
                 <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
                   Too small to label at this map size, largest first · Click to view stock details
