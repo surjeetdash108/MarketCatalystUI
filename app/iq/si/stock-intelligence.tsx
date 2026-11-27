@@ -50,8 +50,9 @@ import { TechnicalTiles, PriceLadder } from "./technical-tiles";
 import { SiOverview, type NavItem, type Tone } from "./si-overview";
 import { SiMasthead, SiTabRail } from "./si-masthead";
 import { PanelCard, MovedPanel, CouldPanel, type PanelRow } from "./overview-panels";
-import { chartSpec, type ChartInput } from "./overview-charts";
-import { ReadChart } from "./read-chart";
+import type { ChartInput } from "./overview-charts";
+import { fundamentalsPane } from "./fundamentals-model";
+import { FundamentalsPane } from "./fundamentals-pane";
 import { LeadLine, LevelsRuler, ReadTiles } from "./read-tiles";
 import { bigMovesIn10, couldMove, dropForming, titleWords, weekRows, yesterdayMove, yesterdayRows, type MoveNews, type MoveRow, type MoveTone } from "./si-moves";
 import { ConfidenceDialog } from "./confidence-dialog";
@@ -2014,6 +2015,8 @@ export function StockIntelligenceScreen() {
             eps: growth.find((g) => g.key === "eps")?.rows ?? [],
             quarters: latestFour,
           };
+          // The Fundamentals pane (pill, headline and the four tiles), or null when no quarter is synced yet.
+          const fundPane = fundamentalsPane({ ticker: stock.t, facts: siFacts, forwardPe: fpeVal, fund, revenue: chartInput.revenue, eps: chartInput.eps, quarters: chartInput.quarters });
           // The analysts' average target on the Technicals ruler: the top analysts' when known, else the mean target.
           const topAnalysts = topTargets(siFacts.analystTargets);
           const rulerTarget = topAnalysts
@@ -2068,23 +2071,11 @@ export function StockIntelligenceScreen() {
                     onInfo: () => setVerdictOpen(true),
                   },
                   panels: {
-                    fund: (
+                    fund: fundPane ? (
+                      <FundamentalsPane model={fundPane} />
+                    ) : (
                       <PanelCard>
-                        {fund.reads.length ? (
-                          <>
-                            <LeadLine text={fund.action} />
-                            <ReadTiles
-                              reads={fund.reads}
-                              glow
-                              chartFor={(r) => {
-                                const spec = chartSpec(r.k, chartInput);
-                                return spec ? <ReadChart spec={spec} /> : undefined;
-                              }}
-                            />
-                          </>
-                        ) : (
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>{fund.action}</span>
-                        )}
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>{fund.action}</span>
                       </PanelCard>
                     ),
                     tech: (

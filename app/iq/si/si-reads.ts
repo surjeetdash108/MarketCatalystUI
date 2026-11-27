@@ -284,7 +284,18 @@ function analystsRead(f: ReadFacts): Read | null {
   return { k: "Analysts", dir: dirOf(score), score, headline, detail };
 }
 
-export type FundamentalRead = { verdict: Verdict; reads: Read[]; action: string };
+/** Which of the five one-line calls the fundamentals earn; `action` and the Overview pane's lead line both come from it. */
+export type FundamentalOutlook = "none" | "strong-rich" | "strong" | "rich" | "weakening" | "mixed";
+export type FundamentalRead = { verdict: Verdict; reads: Read[]; action: string; outlook: FundamentalOutlook };
+
+const FUNDAMENTAL_ACTIONS: Record<FundamentalOutlook, string> = {
+  none: "Quarterly fundamentals aren't synced for this stock yet.",
+  "strong-rich": "The business is strong but the price already reflects it — the stock needs to keep beating to hold this multiple.",
+  strong: "Business momentum is solid and the price isn't stretched against it.",
+  rich: "Expensive without growth to back it — vulnerable to any miss.",
+  weakening: "Fundamentals are weakening — earnings need to turn before the story improves.",
+  mixed: "Mixed picture — no strong fundamental push either way.",
+};
 
 export function fundamentalRead(f: ReadFacts, forwardPe: number | null | undefined): FundamentalRead {
   const growth = growthRead(f);
@@ -300,24 +311,15 @@ export function fundamentalRead(f: ReadFacts, forwardPe: number | null | undefin
     { read: valuation, w: 0.15 },
     { read: analysts, w: 0.15 },
   ]);
-  let action: string;
+  let outlook: FundamentalOutlook;
   if (!verdict.n) {
-    action = "Quarterly fundamentals aren't synced for this stock yet.";
+    outlook = "none";
   } else {
     const strongBusiness = (growth?.score ?? 0) + (margins?.score ?? 0) + (earnings?.score ?? 0) > 0.6;
     const rich = (valuation?.score ?? 0) <= -0.5;
-    action =
-      strongBusiness && rich
-        ? "The business is strong but the price already reflects it — the stock needs to keep beating to hold this multiple."
-        : strongBusiness
-          ? "Business momentum is solid and the price isn't stretched against it."
-          : rich
-            ? "Expensive without growth to back it — vulnerable to any miss."
-            : verdict.dir === "down"
-              ? "Fundamentals are weakening — earnings need to turn before the story improves."
-              : "Mixed picture — no strong fundamental push either way.";
+    outlook = strongBusiness && rich ? "strong-rich" : strongBusiness ? "strong" : rich ? "rich" : verdict.dir === "down" ? "weakening" : "mixed";
   }
-  return { verdict, reads, action };
+  return { verdict, reads, action: FUNDAMENTAL_ACTIONS[outlook], outlook };
 }
 
 // ----------------------------------------------------------------------------------------------- overall
