@@ -2064,6 +2064,7 @@ export function StockIntelligenceScreen() {
                   read: {
                     headline: read ? read.headline : sentenceCase(overall.label),
                     body: read ? read.body : `${fund.action} ${tech.action}`,
+                    sections: read?.sections,
                     now: price ?? null,
                     nowText: usd(price),
                     low: read?.levels.find((l) => l.tone === "down") ?? null,

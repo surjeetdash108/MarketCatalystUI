@@ -2,6 +2,7 @@
 
 import { Fragment, useState, type ReactNode } from "react";
 import { OVX_OVERVIEW_CSS } from "./si-redesign-css";
+import { splitFigures, type ReadSection } from "./si-headline";
 
 /**
  * The Stock Intelligence Overview from the redesign: a growth chart and the MC Confidence ring with its
@@ -33,6 +34,8 @@ export type OverviewData = {
   read: {
     headline: string;
     body: string;
+    /** The body as labelled rows; without them the body is printed as one paragraph. */
+    sections?: ReadSection[];
     now: number | null;
     nowText: string;
     low: ReadLevel | null;
@@ -382,7 +385,27 @@ export function SiOverview({ data }: { data: OverviewData }) {
                 <InfoIcon />
               </button>
               <h2 className="ovx-h">{read.headline}</h2>
-              {read.body && <p className="ovx-p">{read.body}</p>}
+              {read.sections && read.sections.length > 0 ? (
+                <div className="ovx-secs">
+                  {read.sections.map((s) => (
+                    <div key={s.key} className="ovx-sec">
+                      <span className="ovx-sec-l" data-caps>
+                        <i style={{ background: toneVar(s.tone) }} aria-hidden="true" />
+                        {s.label}
+                      </span>
+                      <div className="ovx-sec-t">
+                        {s.lines.map((line) => (
+                          <p key={line}>
+                            {splitFigures(line).map((part, i) => (part.fig ? <strong key={i}>{part.t}</strong> : <Fragment key={i}>{part.t}</Fragment>))}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                read.body && <p className="ovx-p">{read.body}</p>
+              )}
               {(read.low || read.high) && (
                 <div className="ovx-lv">
                   <span className="ovx-lv-t" data-caps>

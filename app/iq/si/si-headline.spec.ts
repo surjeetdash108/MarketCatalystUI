@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EMPTY_FACTS } from "./data";
-import { headlineRead, moveSummary } from "./si-headline";
+import { headlineRead, moveSummary, splitFigures } from "./si-headline";
 import { fundamentalRead, overallVerdict, technicalRead, type ReadFacts } from "./si-reads";
 
 const day = (d: number) => Date.UTC(2026, 10, d); // November 2026: the 20th is a Friday, the 23rd a Monday
@@ -77,6 +77,48 @@ test("a strong, cheap business with unconfirmed technicals after a reversal", ()
     read!.body,
     "NVDA hit a 52-week low on Friday, then jumped 31.5% on Monday. Revenue is up 103.2% y/y, and the stock trades at half the peer P/E. Price is still below its 50 DMA and 200 DMA, and two prices decide what happens next.",
   );
+});
+
+test("the body is also given as three rows with one short sentence per line", () => {
+  const { read, tech, fund } = build(FACTS);
+  const rows = read!.sections;
+  assert.deepEqual(
+    rows.map((s) => [s.key, s.label]),
+    [
+      ["move", "RECENT MOVE"],
+      ["business", "THE BUSINESS"],
+      ["technicals", "THE TECHNICALS"],
+    ],
+  );
+  assert.deepEqual(rows[0].lines, ["NVDA hit a 52-week low on Friday, then jumped 31.5% on Monday."]);
+  assert.deepEqual(rows[1].lines, ["Revenue is up 103.2% y/y.", "The stock trades at half the peer P/E."]);
+  assert.deepEqual(rows[2].lines, ["Price is still below its 50 DMA and 200 DMA.", "Two prices decide what happens next."]);
+  assert.deepEqual(
+    rows.map((s) => s.tone),
+    ["up", fund.verdict.dir, tech.verdict.dir],
+    "each row leans the way its own read does",
+  );
+});
+
+test("the rows keep the peer comparison on the revenue line, and drop what has no figure", () => {
+  const { read } = build({ ...FACTS, peerRevGrowth4q: 57, peerPe: null, peerPeCount: null } as ReadFacts);
+  assert.deepEqual(read!.sections[1].lines, ["Revenue is up 103.2% y/y, about 1.8× the peer average."]);
+  // No revenue growth and no peer P/E: the business row has nothing to say, so it is not there (the bars still give a move).
+  const bare = build({ ...EMPTY_FACTS, price: 90, sma50: 100, sma200: 110 } as ReadFacts);
+  assert.deepEqual(
+    bare.read!.sections.map((s) => s.key),
+    ["move", "technicals"],
+  );
+});
+
+test("figures in a line are picked out; a number inside 52-week is not", () => {
+  const figs = (s: string) => splitFigures(s).filter((p) => p.fig).map((p) => p.t);
+  assert.deepEqual(figs("NVDA hit a 52-week low on Friday, then jumped 31.5% on Monday."), ["31.5%"]);
+  assert.deepEqual(figs("Revenue is up 103.2% y/y, about 1.8× the peer average."), ["103.2%", "1.8×"]);
+  assert.deepEqual(figs("Price is still below its 50 DMA and 200 DMA."), ["50 DMA", "200 DMA"]);
+  assert.deepEqual(figs("Next support $1,143.52 is 4.6% below."), ["$1,143.52", "4.6%"]);
+  assert.equal(splitFigures("Two prices decide what happens next.").length, 1);
+  assert.equal(splitFigures("Revenue is up 103.2% y/y.").map((p) => p.t).join(""), "Revenue is up 103.2% y/y.");
 });
 
 test("the body says DMA, never 50-day average", () => {
