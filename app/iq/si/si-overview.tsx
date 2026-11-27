@@ -17,7 +17,15 @@ export type Tone = "up" | "down" | "flat";
 export type PaneId = "read" | "fund" | "tech" | "moved" | "could";
 
 /** One quarter of growth, in percent against the year-ago quarter (yoy) and the quarter before (qoq). */
-export type GrowthRow = { label: string; yoy: number | null; qoq: number | null };
+export type GrowthRow = {
+  label: string;
+  yoy: number | null;
+  qoq: number | null;
+  /** The quarter the year-over-year figure is measured against (the same quarter a year earlier), as "Q3'26". */
+  yoyVs?: string | null;
+  /** The quarter the quarter-over-quarter figure is measured against (the quarter before), as "Q2'27". */
+  qoqVs?: string | null;
+};
 /** A growth series, oldest quarter first. */
 export type GrowthSeries = { key: "rev" | "eps"; name: string; rows: GrowthRow[] };
 export type ScoreRow = { k: string; v: number };
@@ -167,12 +175,17 @@ function GrowthChart({ series, mode }: { series: GrowthSeries[]; mode: "yoy" | "
         <div className="ovx-base" style={{ bottom: baseline }} />
       </div>
       <div className="ovx-xl">
-        {series[0].rows.map((r, i) => (
-          <span key={r.label} className={i === quarters - 1 ? "last" : undefined}>
-            {fyLabel(r.label)}
-            {i === quarters - 1 ? " · latest" : ""}
-          </span>
-        ))}
+        {series[0].rows.map((r, i) => {
+          // What this bar is measured against: it differs between the two modes, so the axis says so.
+          const vs = mode === "qoq" ? r.qoqVs : r.yoyVs;
+          return (
+            <span key={r.label} className={i === quarters - 1 ? "last" : undefined}>
+              {fyLabel(r.label)}
+              {i === quarters - 1 ? " · latest" : ""}
+              {vs && <small>vs {fyLabel(vs)}</small>}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

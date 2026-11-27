@@ -156,6 +156,8 @@ export const OVX_OVERVIEW_CSS = `
 .ovx-xl{display:flex;margin-top:12px}
 .ovx-xl span{flex:1;text-align:center;font-size:12.5px;color:var(--ov-sub)}
 .ovx-xl span.last{color:var(--ov-hi);font-weight:700}
+.ovx-xl small{display:block;margin-top:3px;font-size:11.5px;font-weight:500;color:var(--ov-sub)}
+.ovx-xl span.last small{color:var(--ov-mid)}
 .ovx-sigs{flex:1.45 1 600px;flex-direction:row;flex-wrap:wrap;gap:0}
 .ovx-mc{flex:0 0 260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:22px 20px;border-right:1px solid var(--ov-line)}
 .ovx-mch{display:flex;align-items:center;gap:6px}

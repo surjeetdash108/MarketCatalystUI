@@ -44,6 +44,29 @@ test("quarter over quarter compares with the quarter before", () => {
   assert.ok(Math.abs(rev.rows[3].qoq! - ((400 - 300) / 300) * 100) < 1e-9);
 });
 
+test("each bar names what it is measured against: the same quarter a year earlier, or the quarter before", () => {
+  const [rev, eps] = growthSeries(QUARTERS);
+  assert.deepEqual(
+    rev.rows.map((r) => r.yoyVs),
+    ["Q4'25", "Q1'26", "Q2'26", "Q3'26"],
+  );
+  assert.deepEqual(
+    rev.rows.map((r) => r.qoqVs),
+    ["Q3'26", "Q4'26", "Q1'27", "Q2'27"],
+  );
+  // Revenue and EPS share their quarters, so the axis can use either series' labels.
+  assert.deepEqual(eps.rows.map((r) => [r.yoyVs, r.qoqVs]), rev.rows.map((r) => [r.yoyVs, r.qoqVs]));
+});
+
+test("a quarter with no year-ago quarter has no year-over-year base, and a gap shows the quarter really used", () => {
+  const gappy = QUARTERS.filter((x) => !(x.fiscalPeriod === "Q3" && x.fiscalYear === 2026));
+  const [rev] = growthSeries(gappy);
+  const latest = rev.rows[rev.rows.length - 1];
+  assert.equal(latest.yoyVs, null);
+  // Q4 FY26 is now measured against Q2 FY26 (Q3 FY26 is missing), and the label says so rather than "Q3".
+  assert.equal(rev.rows[0].qoqVs, "Q2'26");
+});
+
 test("a year-ago quarter that is missing leaves that year over year gap empty, not shifted", () => {
   // Drop Q3 FY26, the year-ago quarter of the latest one.
   const gappy = QUARTERS.filter((x) => !(x.fiscalPeriod === "Q3" && x.fiscalYear === 2026));
