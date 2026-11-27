@@ -27,7 +27,39 @@ function apiErrorText(e: unknown): string {
  * logout / change-password requests (postMessage bridge).
  *
  * The admin is a single fixed account (email never changes; password can).
+ * Content editors (backend ADMIN_EDITOR_EMAILS, confirmed via /api/admin/whoami)
+ * get the same console with only Blogs and Content pipeline.
  */
+
+/** True when the backend admits the signed-in account as a content editor. */
+async function editorRole(): Promise<boolean> {
+  try {
+    const me = await apiGet<{ role?: string | null }>("/api/admin/whoami");
+    return me?.role === "editor";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The editor console's dataset: no users, plans or analytics, only the flag
+ * that makes console.html show its Blogs and Content pipeline sections alone.
+ */
+export function editorDataset() {
+  return {
+    role: "editor" as const,
+    users: [],
+    plans: [],
+    blogs: [],
+    entitlementCatalog: [],
+    backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? null,
+    apiHealth: null,
+    featureAdoption: [],
+    price: {},
+    generatedAt: new Date().toISOString(),
+    counts: { users: 0, payments: 0, plans: 0, excludedStaff: 0 },
+  };
+}
 
 export function AdminConsole() {
   const [state, setState] = useState<"checking" | "denied" | "ok">("checking");
@@ -81,6 +113,15 @@ export function AdminConsole() {
           setDataError((err as Error).message);
         }
         if (cancelled) return;
+        setState("ok");
+      } else if (user && (await editorRole())) {
+        // A content editor: Blogs and Content pipeline only. Nothing else is
+        // fetched, and the backend refuses an editor on every other admin
+        // route, so the trimmed console is not the only thing in the way.
+        if (cancelled) return;
+        const dataset = editorDataset();
+        (window as unknown as { __ADMIN_DATA__?: typeof dataset }).__ADMIN_DATA__ = dataset;
+        try { sessionStorage.setItem(ADMIN_DATA_KEY, JSON.stringify(dataset)); } catch { /* in-memory hand-off is enough */ }
         setState("ok");
       } else {
         setState("denied");

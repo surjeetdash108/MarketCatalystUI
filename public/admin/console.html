@@ -1808,6 +1808,13 @@ if (!REAL) {
 
 if (REAL && REAL.price) { for (const k in REAL.price) PRICE[k] = REAL.price[k]; }
 
+/* A content editor (backend ADMIN_EDITOR_EMAILS) gets Blogs and Content
+   pipeline only: every other section is taken out of the sidebar and cannot be
+   switched to. The backend refuses an editor on every other admin route too,
+   so this is the view of the access, not the access itself. */
+const EDITOR = !IS_DEMO && REAL && REAL.role === 'editor';
+const EDITOR_VIEWS = ['blogs','content'];
+
 /* Sample/demo users removed: the admin screens show ONLY real backend data.
    When not connected (no staged dataset) the tables render empty, never a
    fabricated customer base. */
@@ -5511,17 +5518,19 @@ window.addEventListener('message', function(e){
    console is a same-origin iframe, so it drives the PARENT's URL/history so each
    screen deep-links (/admin/users, /admin/subs, …). All parent access is wrapped
    in try/catch — standalone review of console.html has no parent. */
-const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','jobs','apidocs','studio','blogs','content','mcpkeys','feedback'];
+const KNOWN_VIEWS = EDITOR ? EDITOR_VIEWS : ['overview','users','subs','revenue','usage','monitor','jobs','apidocs','studio','blogs','content','mcpkeys','feedback'];
+const HOME_VIEW = EDITOR ? 'blogs' : 'overview';
 
 function viewFromParentPath(){
   try{
-    const seg = (window.parent.location.pathname.replace(/^\/admin\/?/, '').split('/')[0] || 'overview');
-    return KNOWN_VIEWS.includes(seg) ? seg : 'overview';
-  }catch(e){ return 'overview'; }
+    const seg = (window.parent.location.pathname.replace(/^\/admin\/?/, '').split('/')[0] || HOME_VIEW);
+    return KNOWN_VIEWS.includes(seg) ? seg : HOME_VIEW;
+  }catch(e){ return HOME_VIEW; }
 }
 
 function switchView(name, opts){
   opts = opts || {};
+  if (!KNOWN_VIEWS.includes(name)) name = HOME_VIEW;
   document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.view===name));
   if(typeof paintSecs==='function') paintSecs();
 
@@ -5552,6 +5561,12 @@ function switchView(name, opts){
     } catch(e){}
   }
 }
+if (EDITOR){
+  document.querySelectorAll('.nav').forEach(n=>{ if(!EDITOR_VIEWS.includes(n.dataset.view)) n.remove(); });
+  document.querySelectorAll('.nav-sec').forEach(sec=>{ if(!sec.querySelector('.nav')) sec.remove(); });
+  document.querySelectorAll('.view').forEach(v=>{ if(!EDITOR_VIEWS.includes(v.id)) v.hidden=true; });
+  const gs=document.getElementById('globalSearch'); if(gs && gs.closest('.search')) gs.closest('.search').hidden=true;
+}
 document.querySelectorAll('.nav').forEach(n=>n.onclick=()=>switchView(n.dataset.view));
 
 /* ---- sidebar accordion --------------------------------------------------
@@ -5561,6 +5576,7 @@ document.querySelectorAll('.nav').forEach(n=>n.onclick=()=>switchView(n.dataset.
    the user's explicit collapse — it gets a brand dot instead, so the active
    location is still discoverable. */
 function readOpenSecs(){
+  if (EDITOR) return ['Grow'];   // the editor's only section stays open
   try{ const r=localStorage.getItem('mc-admin-open-sections'); return r?JSON.parse(r):[]; }
   catch{ return []; }              // private mode / corrupt value
 }
@@ -5659,7 +5675,7 @@ if (IS_DEMO) {
 window.addEventListener('message', function(e){
   var d=e.data||{};
   if(d.type==='admin:identity'){
-    var email=d.email||'admin'; document.getElementById('admEmail').textContent=email;
+    var email=d.email||'admin'; document.getElementById('admEmail').textContent=EDITOR?email+' · Editor':email;
     document.getElementById('admName').textContent=email.split('@')[0]||'admin';
     document.getElementById('admAv').textContent=(email[0]||'A').toUpperCase();
   }

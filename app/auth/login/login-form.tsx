@@ -8,7 +8,7 @@ import {
   signInWithRedirect,
 } from "firebase/auth";
 import { firebaseAuth, googleAuthProvider } from "../../firebase";
-import { isAdminEmail, postLoginPath } from "../../admin/admin-email";
+import { isConsoleEmail, postLoginPath } from "../../admin/admin-email";
 import { routeAfterLogin, useCaptureIntent, withSearch } from "../../iq/billing/auth-routing";
 import {
   completeGoogleLogin,
@@ -87,7 +87,7 @@ export function LoginForm({ initialError = "" }: Readonly<{ initialError?: strin
     setError(""); setIsSubmitting(true);
     try {
       await signInWithEmailAndPassword(firebaseAuth, email, password);
-      if (isAdminEmail(email)) {
+      if (isConsoleEmail(email)) {
         clearOnboardingSession();
         window.location.href = "/admin";
         return;
