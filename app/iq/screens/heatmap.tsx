@@ -39,7 +39,7 @@ const FRAME_TITLES: Record<HmFrame, string> = {
   "1D": "Change today",
   "1W": "5-session change",
   "1M": "21-session change (about a month)",
-  "YTD": "Year-to-date isn't synced yet",
+  "YTD": "Year-to-date change (since the last close of last year)",
 };
 type SizeBy = "cap" | "volume";
 
@@ -253,7 +253,10 @@ function HeatmapInner() {
         // 1W / 1M are measured to the live price (the regular close outside the session),
         // not read from the technicals job's move, which ends at the last stored bar.
         const sessionOpen = lq?.marketStatus === "open" || (lq?.marketStatus == null && mkt.phase === "open");
-        const frameLive = frame === "1D" || !lq ? null : { price: sessionOpen ? lq.price : (lq.regularClose ?? null), dateIso: sessionIso };
+        // YTD is always given the session date (it checks the base is this year's)
+        // and falls back to the doc's own price when there is no live one.
+        const livePrice = lq ? (sessionOpen ? lq.price : (lq.regularClose ?? null)) : null;
+        const frameLive = frame === "1D" || (!lq && frame !== "YTD") ? null : { price: livePrice, dateIso: sessionIso };
         const stock: HmStock = { sym, mcap, chg: framePct(frame, day, c, frameLive), vol, weight };
         stocks.push(stock);
         lookup.set(sym, { stock, sector: g.name });
@@ -434,7 +437,7 @@ function HeatmapInner() {
         <div className="hm2-seg" role="group" aria-label="Time frame">
           {FRAMES.map(f => (
             <button key={f} type="button" className={f === frame ? "on" : ""} aria-pressed={f === frame}
-              disabled={f === "YTD"} title={FRAME_TITLES[f]} onClick={() => setFrame(f)}>{f}</button>
+              title={FRAME_TITLES[f]} onClick={() => setFrame(f)}>{f}</button>
           ))}
         </div>
         <div className="hm2-seg" role="group" aria-label="Size tiles by">
