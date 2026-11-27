@@ -1274,6 +1274,39 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
             <div class="zlist" id="plList"><div class="zempty">No posts here yet</div></div>
           </div>
         </div>
+        <!-- Stock in Focus: the desk's one editorial note a day. It is the last
+             What Matters Now slide and every user can browse the archive.
+             Writes go through the parent page (admin:sif*). -->
+        <div class="bl-head pl-head">
+          <h2>Stock in Focus</h2>
+          <span class="pl-sub">One note a day. Shown as the last What Matters Now slide, and kept in an archive every user can open. Editorial, not a recommendation.</span>
+        </div>
+        <div class="pulseboard" id="sifboard">
+          <div class="bzone pl-zone">
+            <div class="zh"><span class="zdot" style="background:#f2b33d"></span><h4 id="sifFormTitle">New entry</h4><span class="zpos">last slide</span></div>
+            <div class="pl-form">
+              <label class="fl" for="sifTicker">Ticker</label>
+              <input id="sifTicker" class="inp" autocomplete="off" spellcheck="false" maxlength="10" placeholder="NVDA">
+              <label class="fl" for="sifHeadline">Headline <span class="pl-opt">up to 140 characters</span></label>
+              <input id="sifHeadline" class="inp" maxlength="140" placeholder="Why this company is worth a look today">
+              <div class="pl-count"><span id="sifHlCount">0</span> / 140</div>
+              <label class="fl" for="sifNote">Note <span class="pl-opt">optional, up to 1200 characters</span></label>
+              <textarea id="sifNote" class="inp" rows="5" maxlength="1200" placeholder="A few sentences for readers."></textarea>
+              <div class="pl-count"><span id="sifNoteCount">0</span> / 1200</div>
+              <label class="fl" for="sifDay">Day <span class="pl-opt">New York date, today by default. One entry per day</span></label>
+              <input id="sifDay" class="inp" type="date">
+              <div id="sifErr" class="pl-count" style="text-align:left;color:var(--down)" role="alert"></div>
+              <div class="pl-actions">
+                <button class="btn-add ghost" id="sifCancel" type="button" hidden onclick="sifReset()">Cancel edit</button>
+                <button class="btn-add" id="sifSubmit" type="button" onclick="sifSave()">Post</button>
+              </div>
+            </div>
+          </div>
+          <div class="bzone pl-zone">
+            <div class="zh"><span class="zdot" style="background:#8b7cf6"></span><h4>Posted</h4><span class="zpos">newest day first</span><span class="zn" id="sifN">0</span></div>
+            <div class="zlist" id="sifList"><div class="zempty">Nothing posted yet</div></div>
+          </div>
+        </div>
         <input type="file" id="blogFile" accept=".docx,.pdf" hidden>
         <!-- An html post is usually designed elsewhere and arrives as a file;
              its <style> blocks are split into the CSS field on import. -->
@@ -5867,6 +5900,90 @@ window.addEventListener('message',function(e){
     if(d.action==='save'){ toast(PL.editId?'Post updated':'Posted to Market Catalyst Pulse'); plReset(); }
     if(d.action==='delete') toast('Post deleted');
   }
+});
+
+/* ── Stock in Focus ───────────────────────────────────────────────────────
+   One editorial note per New York day: the last What Matters Now slide and a
+   user-facing archive. Same delegation as Pulse: the console has no backend
+   token, so list / save / delete go to the parent page (admin:sif*), which
+   calls the AdminGuard API and replies with the fresh list. The day is the
+   entry's id and cannot be changed, so editing locks the date field. */
+const SIF={entries:[],editDay:null};
+const sifEl=id=>document.getElementById(id);
+function sifPost(m){ try{ parent.postMessage(m, location.origin); }catch(e){} }
+function sifToday(){ return new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'}); }
+function sifDayLabel(day){
+  const d=new Date(day+'T12:00:00Z'); if(isNaN(d.getTime())) return day;
+  return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+}
+function sifRender(){
+  const list=sifEl('sifList'); if(!list) return;
+  sifEl('sifN').textContent=SIF.entries.length;
+  list.innerHTML=SIF.entries.length?SIF.entries.map(e=>'<div class="zcard pl-card" data-id="'+plAttr(e.day)+'">'
+    +'<div class="pl-main">'
+    +'<div class="pl-foot" style="margin:0 0 4px"><span class="tk">$'+xesc(e.ticker)+'</span><span>'+xesc(sifDayLabel(e.day))+'</span></div>'
+    +'<div class="pl-text" style="font-weight:600">'+xesc(e.headline)+'</div>'
+    +(e.note?'<div class="pl-text" style="margin-top:4px;white-space:pre-wrap">'+xesc(e.note)+'</div>':'')
+    +'</div>'
+    +'<button class="pl-edit" title="Edit" onclick="sifEdit(\''+plAttr(e.day)+'\')">Edit</button>'
+    +'<button class="zx" title="Delete" onclick="sifDelete(\''+plAttr(e.day)+'\')">\u00d7</button></div>').join('')
+    :'<div class="zempty">Nothing posted yet</div>';
+}
+function sifCounts(){
+  sifEl('sifHlCount').textContent=String(sifEl('sifHeadline').value.length);
+  sifEl('sifNoteCount').textContent=String(sifEl('sifNote').value.length);
+}
+function sifReset(){
+  SIF.editDay=null;
+  sifEl('sifTicker').value=''; sifEl('sifHeadline').value=''; sifEl('sifNote').value='';
+  sifEl('sifDay').value=sifToday(); sifEl('sifDay').disabled=false; sifEl('sifDay').max=sifToday();
+  sifEl('sifErr').textContent=''; sifCounts();
+  sifEl('sifFormTitle').textContent='New entry';
+  sifEl('sifSubmit').textContent='Post'; sifEl('sifCancel').hidden=true;
+}
+function sifEdit(day){
+  const e=SIF.entries.find(x=>x.day===day); if(!e) return;
+  SIF.editDay=day;
+  sifEl('sifTicker').value=e.ticker; sifEl('sifHeadline').value=e.headline; sifEl('sifNote').value=e.note||'';
+  sifEl('sifDay').value=day; sifEl('sifDay').disabled=true; // an entry cannot move to another day
+  sifEl('sifErr').textContent=''; sifCounts();
+  sifEl('sifFormTitle').textContent='Edit '+sifDayLabel(day);
+  sifEl('sifSubmit').textContent='Save changes'; sifEl('sifCancel').hidden=false;
+  sifEl('sifHeadline').focus();
+}
+function sifSave(){
+  const ticker=sifEl('sifTicker').value.trim().replace(/^[$]/,'').toUpperCase();
+  const headline=sifEl('sifHeadline').value.trim();
+  const note=sifEl('sifNote').value.trim();
+  const day=SIF.editDay||sifEl('sifDay').value||'';
+  const err=sifEl('sifErr'); err.textContent='';
+  if(!ticker){ err.textContent='Enter the ticker this note is about.'; return; }
+  if(!/^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker)){ err.textContent="That ticker isn't valid."; return; }
+  if(!headline){ err.textContent='Write a headline.'; return; }
+  if(!BLOG_BRIDGE){ toast('Posting works in the live console only'); return; }
+  sifEl('sifSubmit').disabled=true;
+  sifPost({type:'admin:sifSave', editing:!!SIF.editDay, day, ticker, headline, note});
+}
+function sifDelete(day){
+  if(!confirm('Delete the Stock in Focus for '+sifDayLabel(day)+'? It disappears from the slide and the archive.')) return;
+  sifPost({type:'admin:sifDelete', day});
+}
+(function sifInit(){
+  if(!sifEl('sifTicker')) return;
+  sifEl('sifHeadline').addEventListener('input',sifCounts);
+  sifEl('sifNote').addEventListener('input',sifCounts);
+  sifReset();
+  if(BLOG_BRIDGE) sifPost({type:'admin:sifList'});
+})();
+window.addEventListener('message',function(e){
+  if(e.origin!==location.origin) return;
+  const d=e.data||{};
+  if(d.type!=='admin:sifResult') return;
+  sifEl('sifSubmit').disabled=false;
+  if(Array.isArray(d.entries)){ SIF.entries=d.entries; sifRender(); }
+  if(d.ok===false){ sifEl('sifErr').textContent=d.error||'Could not save the entry.'; return; }
+  if(d.action==='save'){ toast(SIF.editDay?'Entry updated':'Stock in Focus posted'); sifReset(); }
+  if(d.action==='delete'){ toast('Entry deleted'); if(SIF.editDay && !SIF.entries.some(x=>x.day===SIF.editDay)) sifReset(); }
 });
 /* ── Content pipeline ─────────────────────────────────────────────────────────
    Submit once to Blog / Market Catalyst Pulse / Live Feed, then track every item.
