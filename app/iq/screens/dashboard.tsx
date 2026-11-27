@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
@@ -13,7 +13,11 @@ import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
 import { EntitlementGate, LockedFeature } from "../entitlement-gate";
 import { LaunchingSoonBanner } from "../billing/launching-soon-banner";
 import { useApiResource } from "../hooks/useApiResource";
-import { WmnCarousel, type WmnSlide } from "../wmn-carousel";
+import { WmnCarousel } from "../wmn-carousel";
+import { buildWmnSlides, type WmnIndexRow } from "../wmn-slides";
+import { StockInFocusArchive } from "../stock-in-focus-archive";
+import type { WmnResponse } from "../types/wmn";
+import { getMarketStatus } from "../market-status";
 import { CommunityPulse } from "../community-pulse";
 import { lowestForwardPe } from "../lowest-forward-pe";
 import { useTapeStream } from "../hooks/useTapeStream";
@@ -414,16 +418,26 @@ const FG_PARTS = [
   ["junkBond", "Junk bonds", "hygMinusLqd20dPct", "Junk minus investment-grade bonds, 20-day return"],
 ] as const;
 
+/**
+ * Re-read What Matters Now this often, so a release that prints or a report that
+ * lands shows up on a dashboard left open (the countdown ticks, but only a fresh
+ * response flips "upcoming" to "released"). Matches the endpoint's own
+ * `max-age=300`, and the body is ETag'd, so an unchanged stretch is a 304.
+ */
+const WMN_REFETCH_MS = 5 * 60 * 1000;
+const EMPTY_TICKERS: string[] = [];
+const EMPTY_WEIGHTS: Array<{ ticker: string }> = [];
+
 export function DashboardScreen() {
   const { openStock, openStockDetail, openMoverModal, openEarnings, openSector, openIndex } = useIQActions();
   /* Market-wide AI digest for the What Matters Now card. Read-only from the
      app's side: the endpoint regenerates at most once an hour and shares one
      call across concurrent viewers. */
-  const { data: wmn } = useApiResource<{
-    summary?: string; overallAssessment?: string; keyDevelopments?: string[];
-    generatedAt?: string; sourceCounts?: { news: number; analyses: number };
-  }>("/live/what-matters-now");
-
+  const { data: wmn } = useApiResource<WmnResponse>("/live/what-matters-now", WMN_REFETCH_MS);
+  // The Stock in Focus archive dialog. Rendered at the bottom of this screen, not
+  // inside the carousel (see stock-in-focus-archive.tsx).
+  const [sifOpen, setSifOpen] = useState(false);
+  const closeSif = useCallback(() => setSifOpen(false), []);
   // Same shared upstream tape SSE broadcast the shell's ticker strip uses
   // (Phase 1) — not a direct market_indices Firestore listener.
   const { frame: tapeFrame } = useTapeStream();
@@ -512,49 +526,39 @@ export function DashboardScreen() {
   // when the base `companies` doc has a null price (the deep profile sweep hasn't
   // reached that ticker yet) — same overlay every other screen uses.
   const searchedLive = useLiveQuotes(searchedDeduped.map((s) => s.ticker));
+  // Live quotes for the What Matters Now slides: the S&P 500's heaviest names
+  // (their moves, times their weights, draw the "what moved the index" chart) and
+  // the names on the earnings slide (an after-hours / pre-market reaction). Empty,
+  // so no subscription, until the response says which names.
+  const wmnQuotes = useLiveQuotes(
+    wmn?.slides
+      ? [
+          ...(wmn.slides.weights ?? EMPTY_WEIGHTS).map((w) => w.ticker),
+          ...(wmn.slides.earnings?.items ?? []).map((x) => x.ticker),
+          ...(wmn.slides.stockInFocus ? [wmn.slides.stockInFocus.ticker] : []),
+        ]
+      : EMPTY_TICKERS,
+  );
 
   const pulse = pulseFromLive(liveIndices).filter(x => x.label !== "Dollar (DXY)");
   const movers = mergeMoversData(liveMovers, companies);
 
-  // What Matters Now slides: the AI digest first, then its key developments,
-  // then a few live reads (volatility, sentiment, top gainer). Every slide is
-  // built from data we already hold; a slide with no data behind it is skipped.
-  const wmnWhen = wmn?.generatedAt
-    ? new Date(wmn.generatedAt).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(/, (\d{1,2}:\d{2})/, " · $1") + " ET"
-    : undefined;
-  const wmnSlides: WmnSlide[] = [];
-  if (wmn?.summary) {
-    wmnSlides.push({
-      tag: "AI DIGEST", tone: "brand", name: "MarketCatalyst AI", when: wmnWhen,
-      lead: wmn.summary, body: wmn.overallAssessment, point: wmn.keyDevelopments?.[0],
-    });
-    (wmn.keyDevelopments ?? []).slice(1, 5).forEach((k, idx) => {
-      wmnSlides.push({ tag: "KEY DEVELOPMENT", tone: "info", name: `#${idx + 2}`, when: wmnWhen, lead: k });
-    });
-  }
-  const vixP = pulse.find(x => x.label === "VIX");
-  if (vixP) {
-    wmnSlides.push({
-      tag: "VOLATILITY", tone: "warn", name: "VIX",
-      lead: `The VIX is at ${fmt(vixP.value, 2)}, ${vixP.change >= 0 ? "up" : "down"} ${Math.abs(vixP.change).toFixed(2)}%.`,
-      point: `VIX ${fmt(vixP.value, 2)} · ${sign(vixP.change)}`,
-    });
-  }
-  if (fgVal != null) {
-    wmnSlides.push({
-      tag: "SENTIMENT", tone: fgVal < 45 ? "down" : fgVal > 55 ? "up" : "warn", name: "Fear & Greed",
-      lead: `The Fear & Greed index sits at ${Math.round(fgVal)}${fgLabel ? ` — ${fgLabel}` : ""}.`,
-      point: fgAsOf ? `As of ${fgAsOf}` : undefined,
-    });
-  }
-  const topGainer = [...movers].sort((a, b) => b.pctChange - a.pctChange)[0];
-  if (topGainer) {
-    wmnSlides.push({
-      tag: "MOVER", tone: "up", name: topGainer.ticker,
-      lead: `${topGainer.name && topGainer.name !== topGainer.ticker ? `${topGainer.name} (${topGainer.ticker})` : topGainer.ticker} is the day’s top gainer, up ${topGainer.pctChange.toFixed(2)}%.`,
-      point: `${topGainer.ticker} ${sign(topGainer.pctChange)} · top gainer`,
-    });
-  }
+  // What Matters Now slides (see wmn-slides.tsx for the slide list and the rules
+  // for when each one shows). Built from the backend response and the live tape
+  // we already hold; nothing here fetches.
+  const wmnIndices = new Map<string, WmnIndexRow>(
+    liveIndices.map((l) => [l.id, { value: l.value, pct: l.pctChange, prevClose: l.prevClose ?? null, isProxy: !!l.isProxy }]),
+  );
+  const wmnSlides = buildWmnSlides({
+    wmn,
+    indices: wmnIndices,
+    fearGreed: fgVal != null ? { value: fgVal, label: fgLabel } : null,
+    phase: getMarketStatus().phase,
+    now: new Date(),
+    quotes: wmnQuotes,
+    onTicker: openStock,
+    onOpenArchive: () => setSifOpen(true),
+  });
   const earnings = mergeEarningsData(liveEarnings);
   // "Earnings Today" is exactly today's reported companies — no fallback to the
   // most recent prior day, so when nothing has reported today the widget is
@@ -1543,6 +1547,7 @@ export function DashboardScreen() {
       )}
 
       {/* ── Heatmap hover popup ── */}
+      {sifOpen && <StockInFocusArchive onClose={closeSif} onTicker={openStock} />}
       {heatPop && (
         <div
           className="heat-pop"

@@ -351,6 +351,43 @@ export function AdminConsole() {
         reply({ type: "admin:pulseResult", action, ok, ...(error ? { error } : {}), ...(posts ? { posts } : {}) });
         return;
       }
+      /* ── Stock in Focus ─────────────────────────────────────────────────
+         The desk's one editorial note a day (last What Matters Now slide + the
+         user archive). Same delegation as Pulse: only the console iframe may
+         ask, every write re-fetches the list so the console shows the true
+         state, and a failure carries the backend's own sentence (for example
+         the one-per-day conflict) rather than a raw JSON body. */
+      if (d.type === "admin:sifList" || d.type === "admin:sifSave" || d.type === "admin:sifDelete") {
+        if (e.source !== iframeRef.current?.contentWindow || e.origin !== window.location.origin) return;
+        const reply = (m: Record<string, unknown>) =>
+          iframeRef.current?.contentWindow?.postMessage(m, window.location.origin);
+        let ok = true;
+        let error: string | undefined;
+        try {
+          if (d.type === "admin:sifSave") {
+            const fields = { ticker: d.ticker, headline: d.headline, note: d.note };
+            if (d.editing) {
+              await apiPatch(`/api/admin/stock-in-focus/${encodeURIComponent(String(d.day))}`, fields);
+            } else {
+              await apiPost("/api/admin/stock-in-focus", { ...fields, ...(d.day ? { day: d.day } : {}) });
+            }
+          } else if (d.type === "admin:sifDelete") {
+            await apiDelete(`/api/admin/stock-in-focus/${encodeURIComponent(String(d.day))}`);
+          }
+        } catch (err) {
+          ok = false;
+          error = apiErrorText(err);
+        }
+        let entries: unknown[] | undefined;
+        try {
+          entries = (await apiGet<{ entries: unknown[] }>("/api/admin/stock-in-focus")).entries ?? [];
+        } catch (err) {
+          if (ok && d.type === "admin:sifList") { ok = false; error = apiErrorText(err); }
+        }
+        const action = d.type === "admin:sifSave" ? "save" : d.type === "admin:sifDelete" ? "delete" : "list";
+        reply({ type: "admin:sifResult", action, ok, ...(error ? { error } : {}), ...(entries ? { entries } : {}) });
+        return;
+      }
       /* ── Content pipeline (Blog / Pulse / Live Feed) ───────────────────────
          Submit, list, preview, approve, send back, retry — all through the
          AdminGuard'd /api/admin/content API. Only the console iframe may ask. */
