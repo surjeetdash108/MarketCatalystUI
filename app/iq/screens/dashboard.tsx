@@ -671,6 +671,8 @@ export function DashboardScreen() {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [moversTab, setMoversTab] = useState<0 | 1 | 2>(0);
   const [scrTab, setScrTab] = useState<"leaders" | "laggards">("leaders");
+  // Analyst Actions shows one list at a time, like Leaders & Laggards.
+  const [analystTab, setAnalystTab] = useState<"buy" | "sell">("buy");
   const [searchedOpen, setSearchedOpen] = useState(true);
 
   // ---- Dash pop hover ----
@@ -748,7 +750,7 @@ export function DashboardScreen() {
 
   // Tickers each widget shows, in row order. Passed to openStockDetail so the
   // popover's ◀ ▶ arrows page through that widget's list (as Movers/Earnings do).
-  const analystIds  = [...analystTopBuy, ...analystTopSell].map(a => a.ticker);
+  const analystIds  = (analystTab === "buy" ? analystTopBuy : analystTopSell).map(a => a.ticker);
   const screenerIds = (scrTab === "leaders" ? leaders : laggards).map(s => s.ticker);
   const watchIds    = watchMini.map(w => w.ticker);
   const insiderIds  = INSIDER_MINI.map(x => x.s);
@@ -806,9 +808,6 @@ export function DashboardScreen() {
                 </div>
                 <h2>What Matters Now <span className="wmnc-sub">(MarketCatalyst Curated)</span></h2>
               </div>
-              {wmnSlides.length > 0 && (
-                <span className="wmn-live"><span className="dot" />Live</span>
-              )}
             </div>
             <div className="wmnc-wrap">
               {wmnSlides.length > 0
@@ -901,19 +900,23 @@ export function DashboardScreen() {
               <Link className="link" href="/menu/heatmap">Full map →</Link>
             </div>
             {(() => {
-              // Top 30 stocks by market cap across all sectors (deduplicated)
-              // — was 16, which left the card looking half-empty next to its
-              // taller siblings (Earnings Today / Movers).
+              // The 10 largest stocks by market cap in EACH sector, in sector
+              // order. A row holds about 10 tiles at the card's usual width, so
+              // every sector fills its line. This was a single top 30 across all
+              // sectors, which gave the big-cap sectors (Electronic Technology)
+              // a full row and left the rest with one or two tiles and a wide
+              // empty gap to their right.
+              const PER_SECTOR = 10;
               const seen = new Set<string>();
-              const top30 = mergedSectorList
-                .flatMap(sd => sd.items.map(([sym, mcap, chg]) => ({ sym, mcap, chg, sd })))
-                .sort((a, b) => b.mcap - a.mcap)
-                .filter(s => { if (seen.has(s.sym)) return false; seen.add(s.sym); return true; })
-                .slice(0, 30);
-
-              // Group back by sector, preserving sector order
               const groups = mergedSectorList
-                .map(sd => ({ sd, stocks: top30.filter(s => s.sd === sd) }))
+                .map(sd => ({
+                  sd,
+                  stocks: sd.items
+                    .map(([sym, mcap, chg]) => ({ sym, mcap, chg }))
+                    .sort((a, b) => b.mcap - a.mcap)
+                    .filter(s => { if (seen.has(s.sym)) return false; seen.add(s.sym); return true; })
+                    .slice(0, PER_SECTOR),
+                }))
                 .filter(g => g.stocks.length > 0);
 
               const tile = (sym: string, label: string, chg: number, title: string) => {
@@ -1131,22 +1134,19 @@ export function DashboardScreen() {
                 <DataState loading={consensusLoading} label="No analyst consensus synced yet." height={80} />
               ) : (
                 <>
-                  <div style={{ fontSize: ".62rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--up)", margin: "2px 0 4px" }}>Most buy-rated</div>
-                  {analystTopBuy.map(a => (
-                    <div key={a.ticker} className="minirow" style={{ cursor: "pointer" }}
-                      onClick={() => openStockDetail(a.ticker, analystIds)}
-                      {...mr(a.ticker, "analyst")}
-                    >
-                      <StockLogo sym={a.ticker} size={26} />
-                      <span className="tkr">{a.ticker}</span>
-                      <span className="mid">{a.strongBuy + a.buy}B / {a.hold}H / {a.sell + a.strongSell}S</span>
-                      <span className="r"><b style={{ color: "var(--text-hi)" }}>{a.consensus}</b></span>
-                    </div>
-                  ))}
-                  {analystTopSell.length > 0 && (
-                    <div style={{ fontSize: ".62rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--down)", margin: "8px 0 4px" }}>Most sell-rated</div>
-                  )}
-                  {analystTopSell.map(a => (
+                  {/* Two tabs, same chips as Leaders & Laggards: one list at a time. */}
+                  <div style={{ display: "flex", gap: 4, padding: "2px 0 6px" }}>
+                    {(["▲ Most buy-rated", "▼ Most sell-rated"] as const).map((label, i) => (
+                      <button key={label}
+                        className={`chip${analystTab === (i === 0 ? "buy" : "sell") ? " on" : ""}`}
+                        style={{ fontSize: ".65rem", padding: "3px 9px" }}
+                        onClick={() => setAnalystTab(i === 0 ? "buy" : "sell")}
+                      >{label}</button>
+                    ))}
+                  </div>
+                  {(analystTab === "buy" ? analystTopBuy : analystTopSell).length === 0 ? (
+                    <DataState loading={false} label="No sell-leaning names in the synced consensus." height={80} />
+                  ) : (analystTab === "buy" ? analystTopBuy : analystTopSell).map(a => (
                     <div key={a.ticker} className="minirow" style={{ cursor: "pointer" }}
                       onClick={() => openStockDetail(a.ticker, analystIds)}
                       {...mr(a.ticker, "analyst")}
