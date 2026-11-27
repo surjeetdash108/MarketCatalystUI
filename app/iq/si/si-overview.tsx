@@ -260,11 +260,11 @@ export function SiOverview({ data }: { data: OverviewData }) {
   const technicals = data.scores.find((s) => s.k === "Technicals");
   const caption =
     company && technicals
-      ? `${scoreWord(avg(company.rows))} company, ${scoreWord(technicals.v).toLowerCase()} chart`
+      ? `${scoreWord(avg(company.rows))} company, ${scoreWord(technicals.v).toLowerCase()} technicals`
       : company
         ? `${scoreWord(avg(company.rows))} company`
         : technicals
-          ? `${scoreWord(technicals.v)} chart`
+          ? `${scoreWord(technicals.v)} technicals`
           : "";
 
   return (

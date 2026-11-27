@@ -75,14 +75,14 @@ export function headlineRead(
     businessClause = `The business is ${business}${price}`;
   }
 
-  // "...and the chart agrees" / "but the chart hasn't confirmed the rebound"
+  // "...and the technicals agree" / "but the technicals haven't confirmed the rebound"
   const bounced = move != null && (move.lastPct >= 3 || ((opts.bars ?? []).length >= 6 && ((opts.bars![opts.bars!.length - 1].c / opts.bars![opts.bars!.length - 6].c - 1) * 100) >= 3));
   let chartClause = "";
   if (tech.verdict.n > 0) {
-    if (chartAgrees) chartClause = direction === "flat" ? "" : "and the chart agrees";
-    else if (direction === "up") chartClause = `but the chart hasn't confirmed the ${bounced ? "rebound" : "move"}`;
-    else if (direction === "down") chartClause = "though the chart hasn't broken down yet";
-    else chartClause = tech.verdict.dir === "up" ? "and the chart is leaning up" : "and the chart is leaning down";
+    if (chartAgrees) chartClause = direction === "flat" ? "" : "and the technicals agree";
+    else if (direction === "up") chartClause = `but the technicals haven't confirmed the ${bounced ? "rebound" : "move"}`;
+    else if (direction === "down") chartClause = "though the technicals haven't broken down yet";
+    else chartClause = tech.verdict.dir === "up" ? "and the technicals are leaning up" : "and the technicals are leaning down";
   }
 
   const reversal =
