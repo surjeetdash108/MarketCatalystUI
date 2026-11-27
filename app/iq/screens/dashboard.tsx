@@ -806,7 +806,7 @@ export function DashboardScreen() {
                     <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
                   </svg>
                 </div>
-                <h2>What Matters Now <span className="wmnc-sub">(MarketCatalyst Curated)</span></h2>
+                <h2>What Matters Now</h2>
               </div>
             </div>
             <div className="wmnc-wrap">
