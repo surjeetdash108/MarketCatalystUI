@@ -5,7 +5,7 @@ import { apiGet, apiPatch, apiPost } from "../iq/backend";
 import { claimStoredReferral } from "../iq/billing/referral";
 import { emptyInvestorProfile, toProfilePatch } from "../profile/profile-fields";
 import { routeAfterLogin, routeAfterSignup } from "../iq/billing/auth-routing";
-import { isAdminEmail, postLoginPath } from "../admin/admin-email";
+import { isConsoleEmail, postLoginPath } from "../admin/admin-email";
 import { clearOnboardingSession } from "../iq/billing/plan-intent";
 import { EMAIL_IN_USE_MESSAGE } from "./email-error";
 export { errorAfterEmailEdit } from "./email-error";
@@ -53,7 +53,7 @@ export function shouldUseGoogleRedirect(): boolean {
 }
 
 export async function completeGoogleLogin(userCredential: UserCredential) {
-  if (isAdminEmail(userCredential.user.email)) {
+  if (isConsoleEmail(userCredential.user.email)) {
     clearOnboardingSession();
     window.location.href = "/admin";
     return;
