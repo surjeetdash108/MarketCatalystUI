@@ -103,7 +103,6 @@ function GrowthChart({ series, mode }: { series: GrowthSeries[]; mode: "yoy" | "
   const below = maxDown > 0 ? PLOT_PAD : 0;
   const unit = (PLOT_H - PLOT_PAD - below) / Math.max(1, maxUp + maxDown);
   const baseline = below + maxDown * unit;
-  const showDoubling = mode === "yoy" && maxUp >= 100;
   const colWidth = 100 / quarters;
   const barColor = (key: GrowthSeries["key"], latest: boolean) =>
     key === "rev" ? (latest ? "var(--ov-up)" : "var(--ov-up-dk)") : latest ? "var(--ov-eps)" : "var(--ov-eps-dk)";
@@ -163,7 +162,6 @@ function GrowthChart({ series, mode }: { series: GrowthSeries[]; mode: "yoy" | "
           );
         })}
         <div className="ovx-base" style={{ bottom: baseline }} />
-        {showDoubling && <div className="ovx-h100" style={{ bottom: baseline + 100 * unit }} />}
       </div>
       <div className="ovx-xl">
         {series[0].rows.map((r, i) => (
@@ -306,12 +304,6 @@ export function SiOverview({ data }: { data: OverviewData }) {
                   {s.key === "rev" ? "Revenue" : "EPS"}
                 </span>
               ))}
-              {mode === "yoy" && growth.some((s) => s.rows.some((r) => (r.yoy ?? 0) >= 100)) && (
-                <span>
-                  <i className="d" />
-                  100% growth
-                </span>
-              )}
             </div>
             <GrowthChart series={growth} mode={mode} />
           </div>

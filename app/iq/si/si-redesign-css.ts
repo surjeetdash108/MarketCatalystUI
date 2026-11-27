@@ -146,7 +146,6 @@ export const OVX_OVERVIEW_CSS = `
 .ovx-lg{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--ov-mid)}
 .ovx-lg span{display:inline-flex;align-items:center;gap:7px}
 .ovx-lg i{display:inline-block;width:12px;height:12px;border-radius:3px}
-.ovx-lg i.d{height:0;width:20px;border-radius:0;border-top:1px dashed var(--ov-sub)}
 .ovx-plot{position:relative;margin-top:4px}
 .ovx-grp{position:absolute;top:0;bottom:0}
 .ovx-grp.last{background:var(--ov-hl);border-radius:8px;box-shadow:inset 0 0 0 1px var(--ov-hl-edge)}
@@ -154,7 +153,6 @@ export const OVX_OVERVIEW_CSS = `
 .ovx-bar.n{border-radius:0 0 3px 3px}
 .ovx-bv{position:absolute;text-align:center;font-size:12.5px;font-weight:700;line-height:14px;white-space:nowrap}
 .ovx-base{position:absolute;left:0;right:0;height:1px;background:var(--ov-line)}
-.ovx-h100{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--ov-sub);opacity:.75;pointer-events:none}
 .ovx-xl{display:flex;margin-top:12px}
 .ovx-xl span{flex:1;text-align:center;font-size:12.5px;color:var(--ov-sub)}
 .ovx-xl span.last{color:var(--ov-hi);font-weight:700}
