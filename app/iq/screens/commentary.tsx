@@ -670,7 +670,9 @@ function FeedItemBody({ item, i, total, isOpen, onToggle, onTicker, onStockOpen,
    (`fresh`) flashes green for a few seconds and carries a NEW chip — the same
    cue as the Live Feed preview. `data-fid` / `data-fresh` are what
    useArrivalMotion reads to drop the row in and slide the others down. */
-function FeedItem({ fresh, intro = -1, introPhase = false, ...rest }: ComponentProps<typeof FeedItemBody> & { fresh: boolean; intro?: number; introPhase?: boolean }) {
+function FeedItem({ fresh, latest = false, intro = -1, introPhase = false, ...rest }: ComponentProps<typeof FeedItemBody> & { fresh: boolean; latest?: boolean; intro?: number; introPhase?: boolean }) {
+  // `latest`: the newest story of the whole feed. It stays green (`lfb-latest`)
+  // until a newer story arrives, then the class moves on and this row fades back.
   // `intro` ≥ 0: one of the top three when the page opens — drops in with the
   // green flash, one after another (ARRIVAL_STAGGER_MS apart), like Pulse.
   // While that plays, the other rows fade in just after it, so the top three lead
@@ -679,7 +681,7 @@ function FeedItem({ fresh, intro = -1, introPhase = false, ...rest }: ComponentP
   const after = introPhase && intro < 0 && !fresh;
   return (
     <div
-      className={`lfb-row${fresh ? " lfb-fresh" : ""}${introOn ? " lfb-intro" : ""}${after ? " lfb-after" : ""}`}
+      className={`lfb-row${latest ? " lfb-latest" : ""}${fresh ? " lfb-fresh" : ""}${introOn ? " lfb-intro" : ""}${after ? " lfb-after" : ""}`}
       style={introOn ? { animationDelay: `${intro * ARRIVAL_STAGGER_MS}ms` } : undefined}
       data-fid={rest.item.id}
       data-fresh={fresh ? "1" : undefined}
@@ -976,6 +978,10 @@ export function CommentaryScreen() {
     ...(earningsRows ?? []),
   ];
   const sorted = sortNewsDesc(liveNews);
+  // The newest story of the whole feed (before any tab / filter / page) stays
+  // green until a newer one comes in. Worked out at render, so it moves the
+  // moment a newer story is in the list.
+  const latestId = sorted[0]?.id ?? null;
 
   /* Stories that arrive while the page is open get the green flash + NEW chip.
      The baseline waits for the first full load (synced list, first wire poll,
@@ -1316,6 +1322,7 @@ export function CommentaryScreen() {
                   key={item.id}
                   item={item}
                   fresh={freshKeys.has(freshStoryKey(item))}
+                  latest={item.id === latestId}
                   intro={pw.page === 0 && introIds && introPhase ? introIds.indexOf(item.id) : -1}
                   introPhase={pw.page === 0 && introPhase && !!introAll?.has(item.id)}
                   i={pw.from + i}

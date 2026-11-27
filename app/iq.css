@@ -13872,6 +13872,13 @@ h6.sd-sec {
 .iq-root .cpulse-tw.lfb-row { border-bottom: 1px solid var(--border-soft, var(--border)); margin: 0 0 8px; flex: none; }
 .iq-root .cpulse-tw.lfb-row:hover { background: var(--lfb-bg); }
 .iq-root .cpulse-tw .lfb-new { top: 10px; right: 12px; }
+/* Pulse's green flash lasts 4 s (the Live Feed keeps 2.6 s), faded evenly so the
+   green is still visible for most of it; ease-out would be mostly gone by ~2.5 s.
+   Longhands only, so the reduced-motion `animation: none` above still wins. The
+   intro runs two animations (drop, then flash), hence the two values. If you
+   change 4s here, change the intro timer in community-pulse.tsx to match. */
+.iq-root .cpulse-tw.lfb-fresh { animation-duration: 4s; animation-timing-function: linear; }
+.iq-root .cpulse-tw.lfb-intro { animation-duration: .62s, 4s; animation-timing-function: cubic-bezier(.22,1,.36,1), linear; }
 /* Opening the dashboard: the top three drop in one by one with the green flash. */
 /* Opening intro, Live Feed and Pulse alike (same motion as a live arrival,
    useArrivalMotion): the top three drop 14px and fade in, 160ms apart, with a
@@ -14603,11 +14610,20 @@ h6.sd-sec {
   border-radius: 12px;
   background: var(--lfb-bg);
   overflow: hidden;
-  transition: border-color .18s ease;
+  transition: border-color .18s ease, background-color .6s ease;
 }
 
 .lfb-row:hover {
   border-color: var(--border-strong, var(--border));
+}
+
+/* Live Feed: the newest story stays green until a newer one arrives (FeedItem's
+   `latest`). Pointing --lfb-bg at the green makes both its resting colour and the
+   end of the arrival flash green, so the flash settles on green instead of fading
+   to black. When the class moves to the next story, the old one fades back to the
+   normal colour over the .6s background-color transition above. */
+.lfb-row.lfb-latest {
+  --lfb-bg: color-mix(in srgb, var(--brand) 18%, transparent);
 }
 
 /* The row's own divider and padding give way to the box. */
