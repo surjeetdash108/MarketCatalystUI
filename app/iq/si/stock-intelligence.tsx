@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSI } from "./si-context";
 import { barsForHorizon } from "./horizon-bars";
 import { TrackedTradesList, type TrackedTrade } from "./tracked-trades-list";
 import { addTrade, formatSavedAt, listAllTrades, readTrades, removeTrade, writeTrades, type SavedTrade } from "./saved-trades";
-import { SITab, StockItem, DetailStock, UpcomingEvent } from "./types";
+import { StockItem, DetailStock, UpcomingEvent } from "./types";
 import {
   POPULAR,
   EMPTY_FACTS,
@@ -34,21 +34,31 @@ import {
   getTP,
   normW,
   smaOf,
-  MajorSixMonthEvent,
+  rsiOf,
+  dailyPivots,
   getSixMonthMajorEvents,
   aboutTicker,
-  trendRead,
-  trendRows,
-  type TrendRow,
 } from "./data";
-import { applyAiCards, moveCardPath, type AiMoveCard } from "./move-card-ai";
 import { summarizeNewsSentiment } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
-import { BullBearChecks } from "./could-checks";
-import { ReadCard, InfoTip, highlightNumbers, highlightSignedPercents } from "./read-cards";
+import { InfoTip, highlightNumbers, highlightSignedPercents } from "./read-cards";
 import { weekMove } from "./week-move";
 import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
-import { fundamentalReadText, technicalReadText } from "./read-text";
+import { fundamentalRead, overallVerdict, sentenceCase, supportResistance, technicalRead, topTargets, verdictBreakdown, verdictStatus } from "./si-reads";
+import { headlineRead } from "./si-headline";
+import { TechnicalTiles, PriceLadder } from "./technical-tiles";
+import { SiOverview, type NavItem, type Tone } from "./si-overview";
+import { SiMasthead, SiTabRail } from "./si-masthead";
+import { PanelCard, MovedPanel, CouldPanel, type PanelRow } from "./overview-panels";
+import { chartSpec, type ChartInput } from "./overview-charts";
+import { ReadChart } from "./read-chart";
+import { LeadLine, LevelsRuler, ReadTiles } from "./read-tiles";
+import { bigMovesIn10, couldMove, dropForming, titleWords, weekRows, yesterdayMove, yesterdayRows, type MoveNews, type MoveRow, type MoveTone } from "./si-moves";
+import { ConfidenceDialog } from "./confidence-dialog";
+import { VerdictDialog } from "./verdict-dialog";
+import { growthSeries, scoreRows, statusForTone } from "./overview-model";
+import { SI_TOKENS_CSS, SI_TYPE_CSS } from "./si-redesign-css";
+import { analystTargetList, epsGrowths, grossMargins, mean, operatingMargins, peerAverage, peerStats, revenueGrowths, type FactQuarter } from "./facts-4q";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
 import { StockChart } from "../stock-panel";
@@ -79,7 +89,7 @@ import type {
   LiveEarningsDoc,
   AiAnalysisDoc,
 } from "../types";
-import { computeTtmFcf, computeQuarterFcf, computeOperatingIncomeSeries, gaapQuarterEps, quarterYoY, surprisePct, quarterEpsSurprisePct } from "../types";
+import { computeTtmFcf, computeQuarterFcf, computeOperatingIncomeSeries, gaapQuarterEps, surprisePct, quarterEpsSurprisePct } from "../types";
 import { useIQActions } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import type { Stock13FResponse } from "../stock-13f-view";
@@ -87,54 +97,6 @@ import { useEntitlements } from "../hooks/useEntitlements";
 import { LockedFeature } from "../entitlement-gate";
 import { ProfileMenu } from "../profile-menu";
 import { MarketClockBadge } from "../market-clock-badge";
-
-const toneColor = (tone?: "up" | "dn") =>
-  tone === "up" ? "var(--up, #16a34a)" : tone === "dn" ? "var(--down, #dc2626)" : "var(--si-text-hi, #e8eef4)";
-
-/**
- * The context behind a major move, shown in full (nothing cut off): the
- * earnings figures (growth, surprise, margins), what the press said about the
- * print, and notable headlines such as a CEO leaving, a deal or a probe.
- * `compact` is the hover tooltip's tighter spacing.
- */
-function EventContextBlocks({ ev, compact, metricsOnly }: { ev: MajorSixMonthEvent; compact?: boolean; metricsOnly?: boolean }) {
-  const label: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-accent-light, #93a1af)", marginBottom: 3 };
-  const body: React.CSSProperties = { fontFamily: "'Manrope', sans-serif", fontSize: compact ? 11 : 11.5, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.4 };
-  const block: React.CSSProperties = { marginTop: compact ? 6 : 8, paddingTop: compact ? 6 : 8, borderTop: "1px solid var(--si-border, #1c2733)" };
-  return (
-    <>
-      {ev.metrics && ev.metrics.length > 0 && (
-        <div style={{ ...block, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
-          {ev.metrics.map((m) => (
-            <div key={m.k}>
-              <div style={label}>{m.k.toUpperCase()}</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 700, color: toneColor(m.tone) }}>{m.v}</div>
-            </div>
-          ))}
-        </div>
-      )}
-      {!metricsOnly && ev.commentary && (
-        <div style={block}>
-          <div style={label}>EARNINGS COMMENTARY</div>
-          <div style={body}>{ev.commentary}</div>
-        </div>
-      )}
-      {!metricsOnly && ev.context && ev.context.length > 0 && (
-        <div style={block}>
-          <div style={label}>NOTABLE EVENTS</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {ev.context.map((c, i) => (
-              <div key={i} style={body}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, color: toneColor(c.tone), marginRight: 6 }}>{c.kind.toUpperCase()}</span>
-                {c.text}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
 
 /** Upcoming Catalysts timeline: how many days ahead an event may be and still show. */
 const CATALYST_WINDOW_DAYS = 45;
@@ -154,485 +116,35 @@ const CATALYST_EVENT_EDITS: Record<string, { hide?: boolean; title?: string }> =
   "NVDA|2026-11-10": { title: "CEO Scandal" }, // "Nvidia Stock Plunges 5.5% as CEO Scandal Overshadows Its Up…"
 };
 
-const clampLines = (n: number): React.CSSProperties => ({ display: "-webkit-box", WebkitLineClamp: n, WebkitBoxOrient: "vertical", overflow: "hidden" });
-
-function SixMonthAreaChart({
-  ticker,
-  stock,
-  bars,
-  events: baseEvents,
-}: {
-  ticker: string;
-  stock: StockItem;
-  bars?: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }>;
-  events: MajorSixMonthEvent[];
-}) {
-  // AI-written heading and summary per card (GET /live/move-explanation). The rule-based text shows first and is
-  // swapped for this when it arrives; no answer (none for the day, model busy, route missing) leaves the old text.
-  const [aiCards, setAiCards] = useState<{ ticker: string; byIso: Record<string, AiMoveCard> }>({ ticker: "", byIso: {} });
-  const aiRequests = useMemo(
-    () =>
-      baseEvents
-        .map((ev) => ({ iso: ev.iso, path: moveCardPath(ticker, stock.name, ev) }))
-        .filter((r): r is { iso: string; path: string } => !!r.iso && !!r.path),
-    [baseEvents, ticker, stock.name],
-  );
-  const aiRequestKey = aiRequests.map((r) => r.path).join("|");
-  useEffect(() => {
-    if (!aiRequests.length) return;
-    const ctl = new AbortController();
-    (async () => {
-      // One at a time: each is a model call, and the model has a per-minute token limit.
-      for (const r of aiRequests) {
-        if (ctl.signal.aborted) return;
-        try {
-          const doc = await apiGet<AiMoveCard>(r.path, { signal: ctl.signal });
-          if (ctl.signal.aborted) return;
-          setAiCards((cur) => ({ ticker, byIso: { ...(cur.ticker === ticker ? cur.byIso : {}), [r.iso]: doc } }));
-        } catch {
-          // keep the rule-based text for this card
-        }
-      }
-    })();
-    return () => ctl.abort();
-    // aiRequestKey stands for aiRequests: same requests, same effect.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiRequestKey, ticker]);
-  const events = useMemo(() => applyAiCards(baseEvents, aiCards.ticker === ticker ? aiCards.byIso : {}), [baseEvents, aiCards, ticker]);
-
-  // A pin opens its dialog on hover (a short grace period lets the pointer reach the dialog) and stays open,
-  // larger, once clicked; Escape or a click on the chart closes it. The chart fills whatever height its
-  // card is given (it sits beside the taller read), so its drawing area is measured.
-  const [hover, setHover] = useState<number | null>(null);
-  const [pinned, setPinned] = useState<number | null>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
-    measure();
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
-    ro?.observe(el);
-    return () => ro?.disconnect();
-  }, []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPinned(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      if (leaveTimer.current) clearTimeout(leaveTimer.current);
-    };
-  }, []);
-  const enterPin = (num: number) => {
-    if (leaveTimer.current) clearTimeout(leaveTimer.current);
-    setHover(num);
-  };
-  const leavePin = () => {
-    if (leaveTimer.current) clearTimeout(leaveTimer.current);
-    leaveTimer.current = setTimeout(() => setHover(null), 220);
-  };
-
-  // Real 6-month daily bars
-  const chartBars = useMemo(() => {
-    if (bars && bars.length >= 5) return bars;
-    const fallback: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }> = [];
-    const now = Date.now();
-    const dayMs = 86_400_000;
-    const hi = stock.hi || (stock.p > 0 ? stock.p * 1.15 : 100);
-    const lo = stock.lo || (stock.p > 0 ? stock.p * 0.85 : 50);
-    const count = 126;
-    for (let i = 0; i < count; i++) {
-      const frac = i / (count - 1);
-      const t = now - (count - 1 - i) * dayMs;
-      const base = lo + (hi - lo) * (0.35 + 0.3 * Math.sin(frac * Math.PI));
-      const c = +(base + (stock.p - base) * frac).toFixed(2);
-      fallback.push({ t, o: c, h: +(c * 1.01).toFixed(2), l: +(c * 0.99).toFixed(2), c, v: 1_200_000 });
-    }
-    return fallback;
-  }, [bars, stock]);
-
-  const n = chartBars.length;
-  const pValues = useMemo(() => (chartBars.length > 0 ? chartBars.map((b) => b.c) : [stock.p]), [chartBars, stock.p]);
-  const minP = Math.min(...pValues);
-  const maxP = Math.max(...pValues);
-  const pad = Math.max((maxP - minP) * 0.08, 1);
-  const pLo = Math.max(0.1, minP - pad);
-  const pHi = maxP + pad;
-
-  const plotLeft = 14;
-  const plotRight = 920;
-  const plotTop = 24;
-  const H = Math.max(340, size.h || 340);
-  const plotBottom = H - 44;
-  const plotW = plotRight - plotLeft;
-  const plotH = plotBottom - plotTop;
-
-  const xOf = (i: number) => plotLeft + (i / Math.max(1, n - 1)) * plotW;
-  const yOf = (price: number) => plotTop + ((pHi - price) / (pHi - pLo || 1)) * plotH;
-
-  // Build SVG path
-  let pathD = "";
-  chartBars.forEach((b, i) => {
-    const x = xOf(i);
-    const y = yOf(b.c);
-    if (i === 0) pathD += `M ${x.toFixed(1)},${y.toFixed(1)}`;
-    else pathD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const areaD = chartBars.length > 0 ? `${pathD} L ${xOf(n - 1).toFixed(1)},${plotBottom} L ${plotLeft},${plotBottom} Z` : "";
-
-  // 4 Horizontal Gridlines & Price Labels
-  const gridSteps = 4;
-  const gridTicks = useMemo(() => {
-    const ticks: number[] = [];
-    const step = (pHi - pLo) / (gridSteps + 1);
-    for (let i = 1; i <= gridSteps; i++) {
-      ticks.push(pLo + i * step);
-    }
-    return ticks;
-  }, [pLo, pHi]);
-
-  // Current Price line and badge
-  const curY = yOf(stock.p);
-
-  // 8-10 Dates on X Axis
-  const dateTicks = useMemo(() => {
-    if (n < 2) return [];
-    const count = 9;
-    const ticks: Array<{ x: number; label: string }> = [];
-    for (let k = 0; k < count; k++) {
-      const idx = Math.min(n - 1, Math.round((k / (count - 1)) * (n - 1)));
-      const b = chartBars[idx];
-      const d = new Date(b.t);
-      const label = fmtMarketDate(d);
-      ticks.push({ x: xOf(idx), label });
-    }
-    return ticks;
-  }, [chartBars, n]);
-
-  // Map 5 Major Events to coordinates on the chart
-  const mappedEvents = useMemo(() => {
-    if (chartBars.length === 0) return [];
-    // The five most extreme moves get a numbered pin.
-    return events.filter((ev) => ev.card !== false).map((ev, idx) => {
-      const targetIdx = Math.min(n - 1, Math.max(0, Math.round(ev.fr * (n - 1))));
-      const bar = chartBars[targetIdx];
-      const x = xOf(targetIdx);
-      const y = yOf(bar.c);
-      return {
-        ...ev,
-        num: idx + 1,
-        targetIdx,
-        x,
-        y,
-        priceAtEvent: bar.c,
-      };
-    });
-  }, [events, chartBars, n, H]);
-
-  const active = hover ?? pinned;
-  const activeHover = mappedEvents.find((e) => e.num === active);
-
-
-
-  // The dialog sits beside its pin, on the side and height where it covers the fewest other pins;
-  // when there is no clear spot it drops below the chart.
-  const dialogPos = (() => {
-    if (!activeHover) return null;
-    const dw = 260;
-    const dh = 148;
-    const W = size.w || 840;
-    const px = (e: { x: number }) => (e.x / 1000) * W;
-    const others = mappedEvents.filter((e) => e.num !== activeHover.num);
-    const hits = (left: number, top: number) => others.filter((o) => px(o) > left - 14 && px(o) < left + dw + 14 && o.y > top - 14 && o.y < top + dh + 14).length;
-    const options: Array<{ left: number; top: number; hits: number; score: number }> = [];
-    for (const side of ["right", "left"] as const) {
-      const left = side === "right" ? px(activeHover) + 18 : px(activeHover) - 18 - dw;
-      if (left < 4 || left + dw > W - 4) continue;
-      for (let top = 6; top <= H - dh - 6; top += 6) {
-        const h = hits(left, top);
-        options.push({ left, top, hits: h, score: h * 1000 + Math.abs(top + dh / 2 - activeHover.y) + (side === "left" ? 40 : 0) });
-      }
-    }
-    const best = options.sort((a, b) => a.score - b.score)[0];
-    const below = { left: Math.max(4, Math.min(W - dw - 4, px(activeHover) - dw / 2)), top: H + 4 };
-    return best && best.hits === 0 ? { left: best.left, top: best.top } : below;
-  })();
-
-  return (
-    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", boxSizing: "border-box", height: "100%" }}>
-      {/* Header bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-          LAST 6-MONTH TRAJECTORY &amp; MAJOR CATALYSTS
-        </span>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
-            {usd(stock.p)}
-          </span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
-            {pct(stock.c)} Today
-          </span>
-        </div>
-      </div>
-
-      {/* Area chart: fills the card's height */}
-      <div
-        ref={wrapRef}
-        onClick={() => setPinned(null)}
-        style={{ position: "relative", width: "100%", flex: 1, minHeight: 340, background: "var(--si-card-sec, #06080c)", border: "1px solid var(--si-border, #1c2733)", borderRadius: 4, overflow: "visible" }}
-      >
-        <svg width="100%" height="100%" viewBox={`0 0 1000 ${H}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0, display: "block" }}>
-          <defs>
-            <linearGradient id="siSixMonthAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--up, #22c55e)" stopOpacity="0.25" />
-              <stop offset="50%" stopColor="var(--up, #22c55e)" stopOpacity="0.08" />
-              <stop offset="90%" stopColor="var(--up, #22c55e)" stopOpacity="0.02" />
-              <stop offset="100%" stopColor="var(--up, #22c55e)" stopOpacity="0.0" />
-            </linearGradient>
-            <filter id="siPinGlow" x="-200%" y="-200%" width="500%" height="500%">
-              <feGaussianBlur stdDeviation="6" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* Horizontal gridlines & price readouts on the right axis */}
-          {gridTicks.map((pVal, idx) => {
-            const y = yOf(pVal);
-            return (
-              <g key={idx}>
-                <line x1={plotLeft} y1={y} x2={plotRight} y2={y} stroke="var(--si-border, rgba(255,255,255,0.06))" strokeWidth="1" />
-                <text x={plotRight + 8} y={y + 4} fill="var(--si-text-dim, #64748b)" fontSize="11" fontFamily="'JetBrains Mono', monospace">
-                  ${pVal.toFixed(2)}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Area under the curve, price line */}
-          <path d={areaD} fill="url(#siSixMonthAreaGrad)" />
-          <path d={pathD} fill="none" stroke="var(--up, #22c55e)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-
-          {/* Current price: dashed line and the tag on the right axis */}
-          <line x1={plotLeft} y1={curY} x2={plotRight} y2={curY} stroke="#818cf8" strokeDasharray="4 4" strokeWidth="1.5" opacity="0.85" />
-          <g>
-            <rect x={plotRight + 4} y={curY - 10} width={68} height={20} rx={4} fill="#6366f1" />
-            <text x={plotRight + 38} y={curY + 4} textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
-              ${stock.p.toFixed(2)}
-            </text>
-          </g>
-
-          {/* Bottom axis dates */}
-          {dateTicks.map((dt, idx) => (
-            <text key={idx} x={dt.x} y={H - 12} textAnchor="middle" fill="var(--si-text-dim, #64748b)" fontSize="10.5" fontFamily="'JetBrains Mono', monospace">
-              {dt.label}
-            </text>
-          ))}
-
-          {/* Numbered pins on the five biggest moves */}
-          {mappedEvents.map((ev) => {
-            const on = active === ev.num;
-            return (
-              <g
-                key={ev.num}
-                style={{ cursor: "pointer" }}
-                onMouseEnter={() => enterPin(ev.num)}
-                onMouseLeave={leavePin}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPinned((cur) => (cur === ev.num ? null : ev.num));
-                }}
-              >
-                <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={on ? "#ffffff" : "var(--si-border-sec, rgba(127,168,208,0.22))"} strokeDasharray="3 3" strokeWidth={on ? 1.5 : 1} />
-                <circle cx={ev.x} cy={ev.y} r={on ? 17 : 11} fill={on ? "rgba(169,198,227,0.55)" : "rgba(34,197,94,0.18)"} stroke={on ? "#ffffff" : "var(--up, #22c55e)"} strokeWidth="1" filter={on ? "url(#siPinGlow)" : undefined} />
-                <circle cx={ev.x} cy={ev.y} r="9" fill={on ? "var(--si-accent, #5980a6)" : "var(--si-card-solid, #080b10)"} stroke={on ? "#ffffff" : "var(--si-accent-soft, #7fa8d0)"} strokeWidth="2" filter={on ? "url(#siPinGlow)" : undefined} />
-                <text x={ev.x} y={ev.y + 3.5} textAnchor="middle" fill={on ? "#ffffff" : "var(--si-accent-soft, #a9c6e3)"} fontSize="10" fontWeight="800" fontFamily="'JetBrains Mono', monospace" style={{ pointerEvents: "none" }}>
-                  {ev.category === "Earnings" ? "E" : ev.num}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-
-        {/* The pin's dialog: a short read on hover, the full one (with the earnings detail) once pinned */}
-        {activeHover && dialogPos && (
-          <div
-            role="dialog"
-            aria-label={activeHover.category === "Earnings" ? "Earnings catalyst" : `Catalyst #${activeHover.num}`}
-            onMouseEnter={() => enterPin(activeHover.num)}
-            onMouseLeave={leavePin}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: "absolute",
-              top: dialogPos.top,
-              left: dialogPos.left,
-              width: 260,
-              height: pinned === activeHover.num ? 290 : 148,
-              transition: "height 180ms ease",
-              maxWidth: "calc(100% - 24px)",
-              boxSizing: "border-box",
-              zIndex: 20,
-              overflowY: "auto",
-              borderStyle: "solid",
-              borderTopWidth: 2,
-              borderRightWidth: 1,
-              borderBottomWidth: 1,
-              borderLeftWidth: 1,
-              borderTopColor: "var(--si-accent-soft, #7fa8d0)",
-              borderRightColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
-              borderBottomColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
-              borderLeftColor: pinned === activeHover.num ? "var(--si-text-hi, #ffffff)" : "var(--si-border-sec, #2a3a4a)",
-              background: "var(--si-card, #0c1118)",
-              boxShadow: "0 18px 44px rgba(0,0,0,0.6), 0 0 18px rgba(169,198,227,0.18)",
-              padding: "10px 12px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 5,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", whiteSpace: "nowrap" }}>
-                  {activeHover.category === "Earnings" ? "E" : `#${activeHover.num}`} · {activeHover.date}
-                </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 5px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "var(--si-text-hi, #ffffff)", borderRadius: 2 }}>
-                  {activeHover.category.toUpperCase()}
-                </span>
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: activeHover.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
-                  {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
-                </span>
-                {pinned === activeHover.num && (
-                  <button type="button" aria-label="Close" onClick={() => setPinned(null)} style={{ width: 22, height: 22, border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-hi, #ffffff)", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 0 }}>
-                    ×
-                  </button>
-                )}
-              </span>
-            </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.3, ...(pinned === activeHover.num ? {} : clampLines(1)) }}>
-              {activeHover.label}
-            </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.35, ...(pinned === activeHover.num ? {} : clampLines(2)) }}>
-              {activeHover.details}
-            </div>
-            {pinned === activeHover.num && <EventContextBlocks ev={activeHover} compact />}
-            {pinned !== activeHover.num && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPinned(activeHover.num);
-                }}
-                style={{ marginTop: "auto", alignSelf: "flex-start", border: "1px solid var(--si-accent, #5980a6)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", padding: "4px 10px", cursor: "pointer" }}
-              >
-                READ MORE ▸
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const rangesDef: Record<string, [number, number, number]> = {
-  "1D": [78, 0.003, 0.005],
-  "5D": [39, 0.008, 0.015],
-  "1M": [30, 0.012, 0.04],
-  "3M": [60, 0.016, 0.10],
-  "6M": [120, 0.018, 0.20],
-  "1Y": [250, 0.020, 0.35],
-  "5Y": [350, 0.024, 0.80],
-};
-
-
-/** How the estimated factor attribution on Why It Moved is split (shown by its "i" button). */
-const FACTOR_INFO: [string, string][] = [
-  ["What it is:", "A model of how the move splits across four drivers, not a measured cause."],
-  ["Sector Momentum:", "Scales with the stock's beta (beta × 28%), kept between 20% and 55%."],
-  ["Company News:", "What the sector share leaves of 65%, kept between 20% and 45%."],
-  ["Market Regime:", "The remainder after sector and news, less 12%, with a floor of 12%."],
-  ["Technical Factors:", "Whatever is left, with a floor of 5%. The four always add up to 100%."],
-];
-
 /** How each Fundamentals scorecard grade is worked out (shown by its "i" button). */
 const SCORECARD_INFO: Record<string, [string, string][]> = {
   GROWTH: [
-    ["Measure:", "Latest quarter's revenue against the same quarter a year earlier."],
-    ["Strong:", "20% or more."],
-    ["Solid:", "8% to 20%."],
-    ["Slow:", "0% to 8%."],
-    ["Shrinking:", "below 0%."],
+    ["Measure:", "Latest quarter's revenue vs the same quarter a year ago."],
+    ["Strong:", "+15% or more."],
+    ["Steady:", "+3% to +15%."],
+    ["Flat:", "-3% to +3%."],
+    ["Weak:", "below -3%."],
   ],
   PROFITABILITY: [
     ["Measure:", "Latest quarter's operating margin (operating income / revenue). The y/y change is shown beside it."],
-    ["Strong:", "25% or more."],
-    ["Solid:", "12% to 25%."],
-    ["Thin:", "0% to 12%."],
+    ["Strong:", "20% or more."],
+    ["Solid:", "10% to 20%."],
+    ["Thin:", "0% to 10%."],
     ["Losing money:", "below 0%."],
   ],
   "FINANCIAL HEALTH": [
-    ["Measure:", "The balance-sheet checks in the Financial Health card below: cash against debt, current ratio, debt / equity, debt / EBITDA."],
-    ["Strong:", "at least two checks are healthy and none is flagged."],
-    ["Mixed:", "a check carries a caution."],
-    ["Stretched:", "a check is flagged as a problem."],
+    ["Measure:", "Net debt = total debt minus cash, with the current ratio and debt / equity as checks."],
+    ["Strong:", "more cash than debt."],
+    ["Weak:", "net debt, and current ratio under 1\u00D7 or debt / equity over 2\u00D7."],
+    ["Mixed:", "net debt otherwise."],
   ],
   VALUATION: [
-    ["Measure:", "P/E (forward P/E when there is no trailing one) against a sector reference."],
-    ["Attractive:", "under 0.8× the reference."],
-    ["Fair:", "0.8× to 1.2×."],
-    ["Rich:", "1.2× to 1.8×."],
-    ["Expensive:", "above 1.8×."],
+    ["Measure:", "Live P/E against a sector reference (38\u00D7 for semiconductors, 22\u00D7 otherwise)."],
+    ["Attractive:", "at least 5% below the reference."],
+    ["Fair:", "up to 30% above it."],
+    ["Stretched:", "more than 30% above it."],
   ],
 };
-
-/** Colours the numbers in a scorecard note: signed changes green/red, the sector reference amber, the other figures in the grade's colour. */
-function highlightScoreNote(text: string, gradeCol: string): React.ReactNode[] {
-  const re = /([+−-]\d[\d.,]*(?:%| pts)?)|(\d[\d.,]*×(?= sector))|(\$?\d[\d.,]*(?:%|×|[BMKT])?)/g;
-  const out: React.ReactNode[] = [];
-  let last = 0;
-  let k = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const col = m[1] ? (m[1].startsWith("+") ? "var(--up, #4ade80)" : "var(--down, #f87171)") : m[2] ? "#f5b031" : gradeCol;
-    out.push(
-      <span key={k++} style={{ color: col, fontWeight: 700 }}>
-        {m[0]}
-      </span>,
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
-}
-
-/** How the Technical Read card on Overview is worked out (shown by its "i" button). */
-const TECHNICAL_READ_INFO: [string, string][] = [
-  ["TREND", "compares the price to the 50 DMA and the 200 DMA."],
-  ["Bullish (green):", "price is above both."],
-  ["Bearish (red):", "price is below both."],
-  ["Mixed (steel blue):", "price is between them."],
-  ["MOMENTUM", "uses 14-day RSI."],
-  ["Overbought (amber):", "RSI 70 or above."],
-  ["Strong (green):", "RSI 55 to under 70."],
-  ["Neutral (amber):", "RSI above 45 and under 55."],
-  ["Weak (red):", "RSI above 30 and up to 45."],
-  ["Oversold (red):", "RSI 30 or below."],
-  ["52W HIGH", "is how far price sits below its 52-week high. Within 3% reads as at / near the high."],
-  ["RISK", "uses 30-day realized volatility, which is annualized price volatility and not beta or drawdown."],
-  ["High (red):", "50% or more."],
-  ["Elevated (amber):", "30% to under 50%."],
-  ["Moderate (green):", "under 30%."],
-];
 
 export function StockIntelligenceScreen() {
   const { data: ent } = useEntitlements();
@@ -648,10 +160,6 @@ export function StockIntelligenceScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const searchResults = useTickerSearch(searchQuery);
-
-  // Timeframe and chart range for SI overview price chart (default 3M per MC standard)
-  const [range, setRange] = useState<"1D" | "5D" | "1M" | "3M" | "6M" | "1Y" | "5Y">("3M");
-  const [hoverFrac, setHoverFrac] = useState<number | null>(null);
 
   // Technicals chart candle interval (matches MC Overview & StockChart)
   const [barInterval, setBarInterval] = useState<BarInterval>("1D");
@@ -707,6 +215,9 @@ export function StockIntelligenceScreen() {
   );
 
   const [pendingPeerOpen, setPendingPeerOpen] = useState<{ ticker: string; name?: string } | null>(null);
+  // The "how MC Confidence is calculated" dialog, opened from the Overview ring and score rows.
+  const [confOpen, setConfOpen] = useState(false);
+  const [verdictOpen, setVerdictOpen] = useState(false);
 
   // Form 13F Institutional Holdings (FMP)
   const [inst13FData, setInst13FData] = useState<Stock13FResponse | null>(null);
@@ -735,12 +246,6 @@ export function StockIntelligenceScreen() {
     "6M"
   );
 
-  // Real bars for Overview Price History chart across selected timeframe (1D, 5D, 1M, 3M, 6M, 1Y, 5Y)
-  const { bars: overviewBars, loading: overviewBarsLoading } = useBackendBars(
-    currentTicker || "", // no stock picked (SI home) → no request
-    range
-  );
-
   // 1-Year daily bars for chart key moments & context (matching MC stock function)
   const { bars: yearBars } = useBackendBars(
     currentTicker || "", // no stock picked (SI home) → no request
@@ -766,6 +271,63 @@ export function StockIntelligenceScreen() {
   });
   const currentPrice = (headline.regPrice > 0 ? headline.regPrice : null) ?? live.tick?.price ?? sharedQuote?.price ?? liveCompany?.price ?? undefined;
   const currentChange = (headline.regPrice > 0 ? headline.regPct : null) ?? live.pct ?? sharedQuote?.pctChange ?? liveCompany?.pctChange ?? undefined;
+
+  // The top five company peers the scores are measured against: their reported quarters (one financials request
+  // each) and their P/E (one summary request for all five). With fewer than three peers that have data there
+  // is no peer average, and the "vs peers" rows and the four-quarter averages are left out.
+  const scoringPeers = useMemo(
+    () =>
+      (liveCompany?.peers ?? [])
+        .map((t) => (t ?? "").toUpperCase().trim())
+        .filter((t) => t && t !== (currentTicker ?? "").toUpperCase())
+        .slice(0, 5),
+    [liveCompany?.peers, currentTicker],
+  );
+  const scoringPeersKey = scoringPeers.join(",");
+  // The daily bars without the one still forming today, and how the peers and the two market indexes move today:
+  // the Overview's "Why it moved" and "Why it could move" panels read them.
+  const moveBars = useMemo(() => dropForming(sixMonthBars, etTodayIso()), [sixMonthBars]);
+  const moveTickers = useMemo(() => [...scoringPeers, "QQQ", "SPY"], [scoringPeers]);
+  const moveQuotes = useLiveQuotes(moveTickers);
+  const [peerQuarters, setPeerQuarters] = useState<Record<string, FactQuarter[]>>({});
+  const [peerPes, setPeerPes] = useState<Record<string, number | null>>({});
+  const [peerFwdPes, setPeerFwdPes] = useState<Record<string, number | null>>({});
+  useEffect(() => {
+    setPeerQuarters({});
+    if (!scoringPeersKey) return;
+    let live = true;
+    for (const t of scoringPeersKey.split(",")) {
+      apiGet<{ quarters?: FactQuarter[] }>(`/live/financials?ticker=${encodeURIComponent(t)}`)
+        .then((b) => {
+          if (live && Array.isArray(b?.quarters)) setPeerQuarters((prev) => ({ ...prev, [t]: b.quarters as FactQuarter[] }));
+        })
+        .catch(() => {});
+    }
+    return () => {
+      live = false;
+    };
+  }, [scoringPeersKey]);
+  useEffect(() => {
+    setPeerPes({});
+    setPeerFwdPes({});
+    if (!scoringPeersKey) return;
+    let live = true;
+    apiGet<Array<{ ticker: string; peRatio?: number | null; forwardPe?: number | null }>>(`/live/peers-summary?tickers=${encodeURIComponent(scoringPeersKey)}`)
+      .then((rows) => {
+        if (!live || !Array.isArray(rows)) return;
+        const pick = (field: "peRatio" | "forwardPe") =>
+          Object.fromEntries(rows.map((r) => [String(r.ticker).toUpperCase(), typeof r[field] === "number" && (r[field] as number) > 0 ? (r[field] as number) : null]));
+        setPeerPes(pick("peRatio"));
+        setPeerFwdPes(pick("forwardPe"));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [scoringPeersKey]);
+  const peerGrowth = useMemo(() => peerStats(peerQuarters), [peerQuarters]);
+  const peerPeAvg = useMemo(() => peerAverage(peerPes), [peerPes]);
+  const peerFwdPeAvg = useMemo(() => peerAverage(peerFwdPes), [peerFwdPes]);
 
   // Every input the Stock Intelligence engine reasons from — all real data
   // loaded above. Missing inputs stay null; the engine drops what needs them.
@@ -814,7 +376,9 @@ export function StockIntelligenceScreen() {
       todayIso,
     );
     const erDays = erDate ? Math.round((Date.parse(erDate + "T00:00:00Z") - todayMs) / 86_400_000) : null;
-    const pivots = liveCompany?.keyLevels?.daily ?? null;
+    // Key levels from the company record, else from the last completed daily bar.
+    const etHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", hour12: false }).format(new Date())) % 24;
+    const pivots = liveCompany?.keyLevels?.daily ?? dailyPivots(yearBars ?? [], todayIso, etHour);
     const isBank = /bank|savings|thrift|financial/i.test(liveCompany?.industry ?? "") || /financial/i.test(liveCompany?.sector ?? "");
     const isUtilityOrSame = latest?.grossProfit != null && latest?.operatingIncome != null && latest.grossProfit === latest.operatingIncome;
     const suppressGross = isBank || isUtilityOrSame;
@@ -849,7 +413,7 @@ export function StockIntelligenceScreen() {
       sma21: smaOf(dailyCloses, 21),
       sma50: num(liveCompany?.sma50),
       sma200: num(liveCompany?.sma200),
-      rsi14: num(liveCompany?.rsi14),
+      rsi14: num(liveCompany?.rsi14) ?? rsiOf(dailyCloses, 14),
       rvol: num(liveCompany?.rvol),
       rsRating: num(liveCompany?.rsRating),
       pctFromHigh52: num(liveCompany?.pctFromHigh52),
@@ -873,8 +437,23 @@ export function StockIntelligenceScreen() {
       newsHighNeg: newsSent.total ? newsSent.highNeg : null,
       newsWPos: newsSent.total ? newsSent.wPos : null,
       newsWNeg: newsSent.total ? newsSent.wNeg : null,
+      analystTargets: cons ? analystTargetList(cons.recentGrades) : null,
+      // Four-quarter averages, and the same over the peers, only once the peers are known.
+      revGrowth4q: peerGrowth ? mean(revenueGrowths(qs)) : null,
+      epsGrowth4q: peerGrowth ? mean(epsGrowths(qs)) : null,
+      opMargin4q: peerGrowth ? mean(operatingMargins(qs)) : null,
+      grossMargin4q: peerGrowth && !suppressGross ? mean(grossMargins(qs)) : null,
+      peerRevGrowth4q: peerGrowth?.revGrowth ?? null,
+      peerEpsGrowth4q: peerGrowth?.epsGrowth ?? null,
+      peerOpMargin4q: peerGrowth?.opMargin ?? null,
+      peerGrossMargin4q: peerGrowth && !suppressGross ? peerGrowth.grossMargin : null,
+      peerTickers: peerGrowth?.tickers ?? null,
+      peerPe: peerPeAvg?.avg ?? null,
+      peerPeCount: peerPeAvg?.n ?? null,
+      peerFwdPe: peerFwdPeAvg?.avg ?? null,
+      peerFwdPeCount: peerFwdPeAvg?.n ?? null,
     };
-  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews, liveEarningsList, yearBars, sixMonthBars]);
+  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews, liveEarningsList, yearBars, sixMonthBars, peerGrowth, peerPeAvg, peerFwdPeAvg]);
 
   const stock: StockItem | null = useMemo(() => {
     if (!currentTicker) return null;
@@ -1319,10 +898,6 @@ export function StockIntelligenceScreen() {
   }, [peerTickersKey]);
 
   // Expandable sections state
-  const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
-  const [showSigHow, setShowSigHow] = useState(false);
-  const [showAssessEv, setShowAssessEv] = useState(false);
-  const [showAttHow, setShowAttHow] = useState(false);
   const [showReadme, setShowReadme] = useState(false);
 
   // Thesis Lab interactive state
@@ -1653,13 +1228,6 @@ export function StockIntelligenceScreen() {
   // stock changed the hook count and React threw "Rendered more hooks than
   // during the previous render".
 
-  // Check if we have real revenue and EPS growth from financialsDoc (FMP)
-  const realFundGrowth = useMemo(() => {
-    if (!financialsDoc?.quarters || financialsDoc.quarters.length < 5) return null;
-    // Revenue and GAAP diluted EPS growth vs the same fiscal period a year earlier.
-    return quarterYoY(financialsDoc.quarters);
-  }, [financialsDoc]);
-
   // Real market cap format
   const stockMcap = stock?.mcap ?? "";
   const realMcap = useMemo(() => {
@@ -1671,19 +1239,6 @@ export function StockIntelligenceScreen() {
     }
     return stockMcap;
   }, [liveCompany, stockMcap]);
-
-  // Overview Price History chart calculations. Kept above the early return
-  // below so the hook order is the same with or without a loaded stock.
-  const priceSeries = useMemo(() => {
-    if (overviewBars && overviewBars.length >= 2) {
-      const closes = overviewBars.map((b) => b.c);
-      if (stock?.p != null && stock.p > 0 && closes.length > 0) {
-        closes[closes.length - 1] = stock.p;
-      }
-      return closes;
-    }
-    return [];
-  }, [overviewBars, stock?.p]);
 
   // ----------------------------------------------------
   // EMPTY STATE (NO STOCK SELECTED YET)
@@ -1707,18 +1262,19 @@ export function StockIntelligenceScreen() {
         }}
       >
 
-        <style>{`
+      <style>{SI_TOKENS_CSS}</style>
+      <style>{`
         .si-screen {
           --si-bg: #080b10;
           --si-topbar: rgba(8,11,16,0.96);
-          --si-card: rgba(12, 17, 24, 0.9);
-          --si-card-solid: #0c1118;
-          --si-card-sec: #0e151d;
-          --si-card-tert: #111822;
-          --si-card-tint: rgba(12, 17, 24, 0.8);
-          --si-border: #1c2733;
-          --si-border-sec: #2a3a4a;
-          --si-border-dashed: #2a3a4a;
+          --si-card: #14171c;
+          --si-card-solid: #14171c;
+          --si-card-sec: #0f1216;
+          --si-card-tert: #1a1e24;
+          --si-card-tint: rgba(20, 23, 28, 0.8);
+          --si-border: #232830;
+          --si-border-sec: #2e343d;
+          --si-border-dashed: #2e343d;
           --si-text-hi: #e8eef4;
           --si-text-mid: #93a1af;
           --si-text-dim: #7d8b99;
@@ -1728,20 +1284,20 @@ export function StockIntelligenceScreen() {
           --si-accent-light: #a9c6e3;
           --si-accent-bg: rgba(89, 128, 166, 0.18);
           --si-accent-btn: #5980a6;
-          --si-input-bg: #0c1118;
+          --si-input-bg: #14171c;
           --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
         }
         .si-screen {
           --si-bg: #080b10;
           --si-topbar: rgba(8,11,16,0.96);
-          --si-card: rgba(12, 17, 24, 0.9);
-          --si-card-solid: #0c1118;
-          --si-card-sec: #0e151d;
-          --si-card-tert: #111822;
-          --si-card-tint: rgba(12, 17, 24, 0.8);
-          --si-border: #1c2733;
-          --si-border-sec: #2a3a4a;
-          --si-border-dashed: #2a3a4a;
+          --si-card: #14171c;
+          --si-card-solid: #14171c;
+          --si-card-sec: #0f1216;
+          --si-card-tert: #1a1e24;
+          --si-card-tint: rgba(20, 23, 28, 0.8);
+          --si-border: #232830;
+          --si-border-sec: #2e343d;
+          --si-border-dashed: #2e343d;
           --si-text-hi: #e8eef4;
           --si-text-body: #d5dfe9;
           --si-text-mid: #93a1af;
@@ -1754,7 +1310,7 @@ export function StockIntelligenceScreen() {
           --si-accent-btn: #5980a6;
           --si-evidence-bg: rgba(89, 128, 166, 0.08);
           --si-evidence-title: #a9c6e3;
-          --si-input-bg: #0c1118;
+          --si-input-bg: #14171c;
           --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
         }
         .si-screen[data-theme="light"],
@@ -1794,7 +1350,7 @@ export function StockIntelligenceScreen() {
         }
       `}</style>
 
-        <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10, padding: "0 24px" }}>
+        <div className="si-switch-wrap" style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10, padding: "0 24px" }}>
           <ModuleSwitcher />
           <div style={{ position: "absolute", right: 24, display: "flex", alignItems: "center", gap: 8 }}>
           <button
@@ -2037,89 +1593,6 @@ export function StockIntelligenceScreen() {
   // ----------------------------------------------------
   // LOADED STOCK INTELLIGENCE DASHBOARD
   // ----------------------------------------------------
-  const color = stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
-
-  const hasRealBars = priceSeries.length >= 2;
-  const curFallbackPrice = stock.p || 1;
-  const minP = hasRealBars ? Math.min(...priceSeries) : curFallbackPrice * 0.98;
-  const maxP = hasRealBars ? Math.max(...priceSeries) : curFallbackPrice * 1.02;
-  const rangeDiff = maxP - minP || 1;
-  const pStart = hasRealBars ? priceSeries[0] : curFallbackPrice;
-  const pEnd = hasRealBars ? priceSeries[priceSeries.length - 1] : curFallbackPrice;
-  const chartCol = pEnd >= pStart ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
-
-  // SVG path coordinates
-  const svgW = 1000;
-  const svgH = 320;
-  // Width reserved at the right of the Price History plot for the price scale.
-  const PH_GUTTER = 84;
-  const pathD = hasRealBars
-    ? priceSeries
-      .map((val, idx) => {
-        const x = (idx / (priceSeries.length - 1)) * svgW;
-        const y = svgH - ((val - minP) / rangeDiff) * (svgH - 28) - 14;
-        return `${idx === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ")
-    : "";
-  const areaD = pathD ? `${pathD} L ${svgW} ${svgH} L 0 ${svgH} Z` : "";
-
-  // Y-axis price ticks (matching Technicals CandleChart price scale).
-  // Plain computation, NOT a hook: this runs after the empty-state early
-  // return above, so a hook here would crash the SI home <-> stock switch
-  // (React error #310). Five ticks — nothing worth memoizing.
-  const yTicks = !hasRealBars || rangeDiff <= 0
-    ? []
-    : [1.0, 0.75, 0.50, 0.25, 0.0].map((frac) => {
-      const val = minP + frac * rangeDiff;
-      const y = svgH - ((val - minP) / rangeDiff) * (svgH - 28) - 14;
-      return { y, val };
-    });
-
-  // Dynamic X-axis & Tooltip generation based exclusively on authentic bar timestamps
-  const getLabelAtFrac = (f: number, isHover = false) => {
-    if (overviewBars && overviewBars.length >= 2) {
-      const idx = Math.max(0, Math.min(overviewBars.length - 1, Math.round(f * (overviewBars.length - 1))));
-      const bar = overviewBars[idx];
-      const d = new Date(bar.t);
-      if (range === "1D") {
-        return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
-      }
-      if (range === "5D") {
-        if (isHover) {
-          return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
-        }
-        return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" });
-      }
-      if (range === "1M" || range === "3M" || range === "6M") {
-        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
-      }
-      if (range === "1Y") {
-        return d.toLocaleDateString("en-US", { month: "short", year: isHover ? "numeric" : "2-digit", timeZone: "America/New_York" });
-      }
-      return d.toLocaleDateString("en-US", { month: isHover ? "short" : undefined, year: "numeric", timeZone: "America/New_York" });
-    }
-    return "";
-  };
-
-  const axisLabels = hasRealBars ? [0, 0.25, 0.5, 0.75, 1].map((f) => getLabelAtFrac(f, false)) : [];
-
-  // Crosshair calculations
-  let hoverInfo: { leftPct: number; topPct: number; priceVal: number; label: string } | null = null;
-  if (hoverFrac !== null && hasRealBars) {
-    const idx = Math.max(0, Math.min(priceSeries.length - 1, Math.round(hoverFrac * (priceSeries.length - 1))));
-    const pVal = priceSeries[idx];
-    const leftPct = (idx / (priceSeries.length - 1)) * 100;
-    const yPx = svgH - ((pVal - minP) / rangeDiff) * (svgH - 28) - 14;
-    const topPct = (yPx / svgH) * 100;
-    hoverInfo = {
-      leftPct,
-      topPct,
-      priceVal: pVal,
-      label: getLabelAtFrac(hoverFrac, true),
-    };
-  }
-
   // Stats definition for Overview header
   const peVal = liveCompany?.peRatio ?? stock.pe;
   const fpeVal = liveCompany?.forwardPe ?? stock.fpe;
@@ -2129,141 +1602,12 @@ export function StockIntelligenceScreen() {
   );
   const hi52 = r52.high;
   const lo52 = r52.low;
-  const MCAP_BLUE = "#4fb3ff";
-  const growthColor = (v: number | null | undefined) => (v == null ? undefined : v >= 0 ? UP : DN);
 
-  // Overview signal scores, confidence and confluence come from the same
-  // 6-month bullish forward run as the "Why it could move" tab, so the two
-  // never disagree (the old fallback showed fixed 88/87/80/… for every stock).
+  // Overview signal scores and confidence come from one 6-month bullish forward run, the same
+  // engine the Trade Builder uses (the old fallback showed fixed 88/87/80/… for every stock).
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
-  const movedWeek = weekMove(stock.t, sixMonthBars, tickerNews as unknown as Parameters<typeof weekMove>[2]);
+  const movedWeek = weekMove(stock.t, moveBars, tickerNews as unknown as Parameters<typeof weekMove>[2]);
   const mcConfidence = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
-  const mcConfidenceColor = overviewRun.conf == null ? STEEL : sc(Math.round(overviewRun.conf));
-  /** How many of the 7 signal categories score 75 or more. */
-  const confluenceCount = overviewRun.cats.filter((c) => Math.round(c.score) >= 75).length;
-  const confluenceColor = confluenceCount >= 5 ? UP : confluenceCount >= 3 ? STEEL : confluenceCount === 2 ? "#f5b031" : DN;
-  /** The MC Confidence band, on the same scale the score colours use. */
-  const mcConfidenceBand =
-    mcConfidence == null ? null : mcConfidence >= 75 ? "High conviction" : mcConfidence >= 60 ? "Constructive" : mcConfidence >= 45 ? "Mixed" : "Weak";
-
-  // How the number is worked out, with this stock's own scores and the weights actually applied.
-  const fmtNum = (n: number) => String(Math.round(n * 10) / 10);
-  const mcConfidenceInfo: [string, string][] = [
-    ["What it is:", "The seven signal scores combined into one 0–100 number (6-month, bullish view). Each score counts by its weight."],
-    ...overviewRun.cats.map((c): [string, string] => {
-      const name = String(SHORT[c.k] || c.label);
-      const label = name.charAt(0) + name.slice(1).toLowerCase();
-      return c.w > 0
-        ? [`${label} ${fmtNum(c.w)}%:`, `${Math.round(c.score)} × ${fmtNum(c.w)}% = ${fmtNum(c.pts)} pts`]
-        : [`${label}:`, "no data, left out"];
-    }),
-    ["Total:", `${overviewRun.conf != null ? fmtNum(overviewRun.conf) : "—"} pts, shown rounded.`],
-    ["Missing data:", "A signal with no data is left out and the other weights are scaled up to add to 100%."],
-    ["Bands:", "75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak."],
-  ];
-
-  type HeroStat = { k: string; v: string; col?: string; node?: React.ReactNode; info?: [string, string][] };
-  const statsRow: HeroStat[] = [
-    { k: "MARKET CAP", v: realMcap || "—", col: MCAP_BLUE },
-    { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", col: MCAP_BLUE },
-    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), col: growthColor(realFundGrowth?.revYoy ?? stock.rev) },
-    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), col: growthColor(realFundGrowth?.epsYoy ?? stock.eps) },
-    {
-      k: "52W LOW / HIGH",
-      v: `${lo52 != null ? usd(lo52) : "—"} / ${hi52 != null ? usd(hi52) : "—"}`,
-      node: (
-        <>
-          <span style={{ color: DN }}>{lo52 != null ? usd(lo52) : "—"}</span>
-          {" / "}
-          <span style={{ color: UP }}>{hi52 != null ? usd(hi52) : "—"}</span>
-        </>
-      ),
-    },
-    {
-      k: "MC CONFIDENCE",
-      v: mcConfidence == null ? "—" : `${mcConfidence} / 100`,
-      col: mcConfidenceColor,
-      info: mcConfidenceInfo,
-      node: (
-        <span>
-          {mcConfidence ?? "—"}
-          <span style={{ fontSize: 14, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
-          {mcConfidenceBand && <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 700, marginLeft: 10 }}>{mcConfidenceBand}</span>}
-        </span>
-      ),
-    },
-  ];
-
-  // Technical Read card: shown on Overview and on the Technicals tab.
-  const technicalReadCard = (
-    <div
-      style={{
-        position: "relative",
-        border: "1px solid var(--si-border, #1c2733)",
-        background: "var(--si-card, #0c1118)",
-        boxShadow: "var(--si-shadow, none)",
-        padding: "20px 22px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-      }}
-    >
-
-      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-        ✦ TECHNICAL READ
-        <InfoTip lines={TECHNICAL_READ_INFO} />
-      </span>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-        {stockDetail.read.map((rd, i) => (
-          <div key={i} style={{ border: `1px solid ${rd.col}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 }}>
-              {rd.k}
-            </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: rd.col }}>
-              {rd.v}
-            </div>
-          </div>
-        ))}
-      </div>
-      {(() => {
-        const rows = trendRows(siFacts.price, siFacts.sma50, siFacts.sma200, siFacts.rsi14);
-        // No moving-average data at all: keep the plain sentence ("not available yet").
-        if (rows.length === 0) {
-          return (
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-              {trendRead(siFacts.price, siFacts.sma50, siFacts.sma200)}
-            </div>
-          );
-        }
-        const col = (t: TrendRow["tone"]) => (t === "good" ? "var(--up, #16a34a)" : t === "bad" ? "var(--down, #dc2626)" : t === "warn" ? "#f5b031" : "var(--si-text-mid, #93a1af)");
-        return (
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {rows.map((r) => (
-              <div key={r.title} style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 10, alignItems: "baseline", padding: "9px 0", borderTop: "1px solid var(--si-border, #1c2733)" }}>
-                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.title}</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: col(r.tone), whiteSpace: "pre" }}>{r.value}</span>
-                {r.note && (
-                  <span style={{ gridColumn: "1 / 3", fontFamily: "'Manrope', sans-serif", fontSize: 14, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-    </div>
-  );
-
-  type SignalScoreItem = { name: string; val: number; color: string; widthPct: string };
-  const signalScores: SignalScoreItem[] = overviewRun.cats.map((cat) => {
-    const val = Math.round(cat.score);
-    return {
-      name: String(SHORT[cat.k] || cat.label).toUpperCase(),
-      val,
-      color: sc(val),
-      widthPct: `${val}%`,
-    };
-  });
-
   if (isUnsubscribed) {
     return (
       <div
@@ -2295,19 +1639,20 @@ export function StockIntelligenceScreen() {
         paddingBottom: 120, // Issue 8 fix: generous padding at bottom
       }}
     >
-
+      <style>{SI_TYPE_CSS}</style>
+      <style>{SI_TOKENS_CSS}</style>
       <style>{`
         .si-screen {
           --si-bg: #080b10;
           --si-topbar: rgba(8,11,16,0.96);
-          --si-card: rgba(12, 17, 24, 0.9);
-          --si-card-solid: #0c1118;
-          --si-card-sec: #0e151d;
-          --si-card-tert: #111822;
-          --si-card-tint: rgba(12, 17, 24, 0.8);
-          --si-border: #1c2733;
-          --si-border-sec: #2a3a4a;
-          --si-border-dashed: #2a3a4a;
+          --si-card: #14171c;
+          --si-card-solid: #14171c;
+          --si-card-sec: #0f1216;
+          --si-card-tert: #1a1e24;
+          --si-card-tint: rgba(20, 23, 28, 0.8);
+          --si-border: #232830;
+          --si-border-sec: #2e343d;
+          --si-border-dashed: #2e343d;
           --si-text-hi: #e8eef4;
           --si-text-mid: #93a1af;
           --si-text-dim: #7d8b99;
@@ -2317,20 +1662,20 @@ export function StockIntelligenceScreen() {
           --si-accent-light: #a9c6e3;
           --si-accent-bg: rgba(89, 128, 166, 0.18);
           --si-accent-btn: #5980a6;
-          --si-input-bg: #0c1118;
+          --si-input-bg: #14171c;
           --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
         }
         .si-screen {
           --si-bg: #080b10;
           --si-topbar: rgba(8,11,16,0.96);
-          --si-card: rgba(12, 17, 24, 0.9);
-          --si-card-solid: #0c1118;
-          --si-card-sec: #0e151d;
-          --si-card-tert: #111822;
-          --si-card-tint: rgba(12, 17, 24, 0.8);
-          --si-border: #1c2733;
-          --si-border-sec: #2a3a4a;
-          --si-border-dashed: #2a3a4a;
+          --si-card: #14171c;
+          --si-card-solid: #14171c;
+          --si-card-sec: #0f1216;
+          --si-card-tert: #1a1e24;
+          --si-card-tint: rgba(20, 23, 28, 0.8);
+          --si-border: #232830;
+          --si-border-sec: #2e343d;
+          --si-border-dashed: #2e343d;
           --si-text-hi: #e8eef4;
           --si-text-body: #d5dfe9;
           --si-text-mid: #93a1af;
@@ -2343,7 +1688,7 @@ export function StockIntelligenceScreen() {
           --si-accent-btn: #5980a6;
           --si-evidence-bg: rgba(89, 128, 166, 0.08);
           --si-evidence-title: #a9c6e3;
-          --si-input-bg: #0c1118;
+          --si-input-bg: #14171c;
           --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
         }
         .si-screen[data-theme="light"],
@@ -2381,39 +1726,30 @@ export function StockIntelligenceScreen() {
         .iq-root[data-theme="light"] .si-screen input::placeholder {
           color: #94a3b8 !important;
         }
-        /* ── Phone (≤760px): the stat columns stack under the name instead of crushing to one character a line ── */
-        @media (max-width: 1300px) { .si-hero-stat > div:last-child { white-space: normal !important; overflow-wrap: anywhere; } }
-        /* Six columns share the hero row (market cap and P/E joined the stats), so on laptop widths the labels get a tighter setting and may wrap instead of running into the next column. */
-        @media (min-width: 761px) and (max-width: 1700px) {
-          .si-hero-stat { padding: 14px 10px !important; }
-          .si-hero-stat > div:first-child { white-space: normal !important; font-size: 12px !important; letter-spacing: 0.08em !important; line-height: 1.25; }
+        /* ── Top bar: the 660px module switcher stays beside the name, home and search until it would touch the search box (about 1400px), then takes its own row ── */
+        @media screen and (max-width: 1419px) {
+          .si-topbar .si-switch-wrap { order: 5; flex: 1 1 100% !important; min-width: 0 !important; padding-bottom: 4px; }
+          /* with the switcher on its own row the search has the room: full width */
+          .si-screen .si-nav-search { width: 320px !important; max-width: 100%; }
+          /* the switcher is pinned to the screen's top centre from 1024px up (module-switcher.tsx); in this bar it sits in its own row instead */
+          .si-topbar .si-switch-wrap .mod-switch-pin { position: static !important; transform: none !important; }
         }
+        /* ── Phone (≤760px): less page padding, and the tab rail scrolls away with the page instead of sticking ── */
         @media (max-width: 760px) {
           .si-main { padding: 14px 12px 100px !important; }
-          .si-hero { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-          .si-hero-id { grid-column: 1 / -1; min-width: 0 !important; border-right: none !important; border-bottom: 1px solid var(--si-border, #1c2733); }
-          .si-hero-stat { border-right: none !important; border-bottom: 1px solid var(--si-border, #1c2733); padding: 12px 14px !important; }
-          .si-hero-stat:nth-last-child(-n+2) { border-bottom: none; }
-          .si-ph-head { height: auto !important; flex-wrap: wrap; padding: 10px 12px !important; row-gap: 8px; }
-          .si-ph-head > div { margin-left: 0 !important; flex-wrap: wrap; }
+          .si-tabrail { position: static !important; }
+          .si-topbar .si-switch-wrap .mod-switch-pin [role="group"] { padding-left: 14px; box-sizing: border-box; }
         }
       `}</style>
 
       {/* ====================================================
-          STICKY TOP NAVIGATION BAR (Integrated SISwitcher)
+          TOP BAR, MASTHEAD AND TAB RAIL (redesign): the top bar scrolls away; the tab rail stays on screen
           ==================================================== */}
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 40,
-          background: "var(--si-topbar, rgba(8,11,16,0.96))",
-          backdropFilter: "blur(12px)",
-          borderBottom: "1px solid var(--si-border, #1c2733)",
-        }}
-      >
+      <div className="si-topbar" style={{ display: "contents" }}>
         <div
           style={{
+            background: "var(--si-topbar, rgba(8,11,16,0.96))",
+            borderBottom: "1px solid var(--si-border, #232830)",
             minHeight: 56,
             display: "flex",
             alignItems: "center",
@@ -2443,28 +1779,16 @@ export function StockIntelligenceScreen() {
             }}
           >
             <span
-              style={{
-                fontFamily: "'Barlow Condensed', sans-serif",
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: "0.16em",
-                color: "var(--si-text-hi, #e8eef4)",
-                lineHeight: 1,
-              }}
+              data-caps
+              style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", lineHeight: 1, whiteSpace: "nowrap" }}
             >
-              STOCK INTELLIGENCE
+              <span style={{ color: "var(--si-text-hi, #ffffff)" }}>Stock</span> <span style={{ color: "var(--si-accent-light, #8eaedb)" }}>Intelligence</span>
             </span>
             <span
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 10,
-                fontWeight: 500,
-                letterSpacing: "0.2em",
-                color: "var(--si-accent, #5980a6)",
-                marginTop: 3,
-              }}
+              data-caps
+              style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 500, letterSpacing: "0.2em", color: "var(--si-accent, #5980a6)", marginTop: 3 }}
             >
-              BY MARKETCATALYST
+              By MarketCatalyst
             </span>
           </button>
 
@@ -2558,7 +1882,7 @@ export function StockIntelligenceScreen() {
           </div>
 
           {/* Issue 5 Fix: Centered SISwitcher inside the header bar */}
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290 }}>
+          <div className="si-switch-wrap" style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290 }}>
             <ModuleSwitcher />
           </div>
 
@@ -2603,36 +1927,57 @@ export function StockIntelligenceScreen() {
           </div>
         </div>
 
-        {/* 9 Tab Navigation Rail */}
-        <div style={{ display: "flex", gap: 0, padding: "0 24px", overflowX: "auto", borderTop: "1px solid var(--si-border, #1c2733)" }}>
-          {TABS.map(([k, label]) => {
-            const isActive = activeTab === k;
-            return (
-              <button
-                key={k}
-                onClick={() => setActiveTab(k as SITab)}
-                style={{
-                  position: "relative",
-                  height: 44,
-                  padding: "0 16px",
-                  border: "none",
-                  background: "transparent",
-                  color: isActive ? "#6db3ff" : "var(--si-text-hi, #e8eef4)",
-                  textShadow: isActive ? "0 0 10px rgba(79,163,255,0.75), 0 0 22px rgba(79,163,255,0.35)" : "none",
-                  fontFamily: "'Barlow Condensed', sans-serif",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  letterSpacing: "0.12em",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  boxShadow: isActive ? "inset 0 -2px 0 #4fa3ff, 0 6px 14px -6px rgba(79,163,255,0.6)" : "none",
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <SiMasthead
+          logo={<StockLogo sym={stock.t} size={56} />}
+          ticker={stock.t}
+          name={stock.name || liveCompany?.name || ""}
+          /* Watchlist star, as on the Market Catalyst stock page: filled when the ticker is in a Market Catalyst watchlist. */
+          afterTicker={
+            <button
+              type="button"
+              onClick={toggleWatch}
+              disabled={watchBusy}
+              aria-pressed={isWatched}
+              aria-label={isWatched ? `Remove ${stock.t} from your watchlist` : `Add ${stock.t} to your watchlist`}
+              title={watchMsg ?? (isWatched ? "In your Market Catalyst watchlist \u2014 click to remove" : "Add to your Market Catalyst watchlist")}
+              style={{
+                background: "none",
+                border: "none",
+                padding: "0 2px 0 6px",
+                fontSize: 18,
+                lineHeight: 1,
+                cursor: watchBusy ? "default" : "pointer",
+                color: isWatched ? "var(--warn, #f5b544)" : "var(--si-text-mid, #93a1af)",
+              }}
+            >
+              {isWatched ? "\u2605" : "\u2606"}
+            </button>
+          }
+          note={
+            watchMsg ? (
+              <div role="status" style={{ fontSize: 12, color: "var(--down, #dc2626)", maxWidth: 260 }}>
+                {watchMsg}
+              </div>
+            ) : null
+          }
+          price={usd(stock.p)}
+          change={pct(stock.c)}
+          up={stock.c >= 0}
+          ext={
+            headline.showAfterHours && headline.ahPrice != null && headline.ahPct != null
+              ? { label: headline.extLabel, price: usd(headline.ahPrice), pct: pct(headline.ahPct), up: headline.ahPct >= 0 }
+              : null
+          }
+          marketCap={realMcap || "\u2014"}
+          pe={peVal != null ? `${peVal.toFixed(1)}\u00D7` : "\u2014"}
+          fpe={fpeVal != null ? `${fpeVal.toFixed(1)}\u00D7` : "\u2014"}
+          range={
+            hi52 != null && lo52 != null && (siFacts.price ?? stock.p) != null
+              ? { low: lo52, high: hi52, price: (siFacts.price ?? stock.p) as number, lowText: usd(lo52), highText: usd(hi52) }
+              : null
+          }
+        />
+        <SiTabRail tabs={TABS} active={activeTab} onSelect={setActiveTab} />
       </div>
 
       {/* Main Container */}
@@ -2641,729 +1986,166 @@ export function StockIntelligenceScreen() {
           get too long to read. */}
       <div className="si-main" style={{ maxWidth: 2200, margin: "0 auto", padding: "24px 24px 120px 24px" }}>
         {/* ====================================================
-            TAB 1: OVERVIEW (Issue 1 & 7 Complete Implementation)
+            TAB 1: OVERVIEW (redesign): growth chart, MC Confidence with its signal scores, and the read menu.
+            Why it moved and Why it could move are panels in that menu, not tabs.
             ==================================================== */}
-        {activeTab === "overview" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Header identity and key stats */}
-            <div
-              className="si-hero"
-              style={{
-                position: "relative",
-                border: "1px solid var(--si-border, #1c2733)",
-                background: "var(--si-card, rgba(12, 17, 24, 0.9))",
-                display: "grid",
-                gridTemplateColumns: "auto repeat(4, minmax(0, 1fr)) minmax(max-content, 1.3fr) minmax(max-content, 1.5fr)",
-              }}
-            >
-              {/* Identity: logo, ticker, name and price */}
-              <div
-                className="si-hero-id"
-                style={{ padding: "14px 20px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260, display: "flex", flexDirection: "column", justifyContent: "center", gap: 12 }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <StockLogo sym={stock.t} size={52} />
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                          {stock.t}
-                        </div>
-                        {/* Watchlist star, as on the Market Catalyst stock page: filled when the
-                            ticker is in a Market Catalyst watchlist. */}
-                        <button
-                          type="button"
-                          onClick={toggleWatch}
-                          disabled={watchBusy}
-                          aria-pressed={isWatched}
-                          aria-label={isWatched ? `Remove ${stock.t} from your watchlist` : `Add ${stock.t} to your watchlist`}
-                          title={watchMsg ?? (isWatched ? "In your Market Catalyst watchlist — click to remove" : "Add to your Market Catalyst watchlist")}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            padding: "0 2px",
-                            fontSize: 22,
-                            lineHeight: 1,
-                            cursor: watchBusy ? "default" : "pointer",
-                            color: isWatched ? "var(--warn, #f5b544)" : "var(--si-text-mid, #93a1af)",
-                          }}
-                        >
-                          {isWatched ? "★" : "☆"}
-                        </button>
-                      </div>
-                      {watchMsg && (
-                        <div role="status" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--down, #dc2626)", marginTop: 4, maxWidth: 260 }}>{watchMsg}</div>
-                      )}
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4, whiteSpace: "nowrap" }}>
-                        {stock.name}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, whiteSpace: "nowrap" }}>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 24, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                      {usd(stock.p)}
-                    </span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color }}>
-                      {pct(stock.c)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stats, one row: market cap, P/E, revenue growth, EPS growth, 52-week range, MC Confidence */}
-              {statsRow.map((st, i, arr) => (
-                <div
-                  key={st.k}
-                  className="si-hero-stat"
-                  style={{
-                    padding: "14px 20px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    textAlign: "center",
-                    borderRight: i !== arr.length - 1 ? "1px solid var(--si-border, #1c2733)" : "none",
-                    minWidth: 0,
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
-                    {st.k}
-                    {st.info && <InfoTip lines={st.info} align="right" />}
-                  </div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: st.col ?? "var(--si-text-hi, #e8eef4)", marginTop: 8, whiteSpace: "nowrap", lineHeight: 1.4 }}>
-                    {st.node ?? st.v}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
-            <div className="si-ov">
-              <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-            {/* Price History Chart Card with Interactive Crosshair & Detailed X-Axis */}
-            <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
-              <div className="si-ph-head" style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                  PRICE HISTORY
-                </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                  {range} ·
-                </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: chartCol }}>
-                  {hasRealBars && pStart > 0 ? pct(((pEnd / pStart) - 1) * 100) : "—"}
-                </span>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-                  {(["1D", "5D", "1M", "3M", "6M", "1Y", "5Y"] as const).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setRange(r)}
-                      style={{
-                        height: 28,
-                        padding: "0 10px",
-                        border: `1px solid ${range === r ? STEEL : "#1c2733"}`,
-                        background: range === r ? "rgba(89,128,166,0.2)" : "transparent",
-                        color: "var(--si-text-hi, #e8eef4)",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Chart Canvas Area */}
-              <div
-                style={{ position: "relative", height: 320, margin: "14px 16px 10px" }}
-              >
-                {overviewBarsLoading && (
-                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(12, 17, 24, 0.7)", zIndex: 10, backdropFilter: "blur(2px)" }}>
-                    <div style={{ width: 24, height: 24, border: "2px solid #5980a6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)", marginTop: 10 }}>
-                      Loading {range} price bars…
-                    </div>
-                  </div>
-                )}
-
-                {!overviewBarsLoading && !hasRealBars && (
-                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
-                      Historical price bars unavailable for {range}
-                    </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-sub, #5d6b79)", marginTop: 4 }}>
-                      Exchange vendor returned no bars for {stock.t} ({range})
-                    </div>
-                  </div>
-                )}
-
-                {/* The plot stops short of the right edge: the price scale sits in that gutter, not over the line. */}
-                <div
-                  className="si-ph-plot"
-                  onMouseMove={(e) => {
-                    if (!hasRealBars) return;
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const f = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                    setHoverFrac(f);
-                  }}
-                  onMouseLeave={() => setHoverFrac(null)}
-                  style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: PH_GUTTER, cursor: hasRealBars ? "crosshair" : "default" }}
-                >
-                <svg width="100%" height="320" viewBox="0 0 1000 320" preserveAspectRatio="none" style={{ display: "block" }}>
-                  {hasRealBars && yTicks.map((t, idx) => (
-                    <line
-                      key={idx}
-                      x1="0"
-                      x2="1000"
-                      y1={t.y}
-                      y2={t.y}
-                      stroke="var(--si-border-soft, #152029)"
-                      strokeDasharray="4 4"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  ))}
-                  {!hasRealBars && (
-                    <>
-                      <line x1="0" x2="1000" y1="80" y2="80" stroke="#152029" vectorEffect="non-scaling-stroke" />
-                      <line x1="0" x2="1000" y1="160" y2="160" stroke="#152029" vectorEffect="non-scaling-stroke" />
-                      <line x1="0" x2="1000" y1="240" y2="240" stroke="#152029" vectorEffect="non-scaling-stroke" />
-                    </>
-                  )}
-                  {hasRealBars && (
-                    <>
-                      <path d={areaD} fill={chartCol} opacity="0.1" />
-                      <path d={pathD} fill="none" stroke={chartCol} strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
-                    </>
-                  )}
-                </svg>
-                </div>
-
-                {/* Right Y-Axis Price Scale Labels (Matches Technicals Y-axis display) */}
-                {hasRealBars && yTicks.length > 0 && (
-                  <div style={{ position: "absolute", right: 8, top: 0, bottom: 0, width: 70, pointerEvents: "none", zIndex: 6 }}>
-                    {yTicks.map((t, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          position: "absolute",
-                          right: 0,
-                          top: t.y,
-                          transform: "translateY(-50%)",
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 11,
-                          fontWeight: 500,
-                          color: "var(--si-text-sub, #5d6b79)",
-                          letterSpacing: "0.02em",
-                          background: "var(--si-card, #0c1118)",
-                          padding: "1px 6px",
-                          borderRadius: 2,
-                          border: "1px solid var(--si-border, #1c2733)",
-                          lineHeight: 1.2,
+        {activeTab === "overview" && (() => {
+          const price = siFacts.price ?? stock.p;
+          const scores = scoreRows(overviewRun.cats, SHORT);
+          const tech = technicalRead(siFacts);
+          const fund = fundamentalRead(siFacts, fpeVal);
+          const overall = overallVerdict(tech.verdict, fund.verdict, mcConfidence);
+          const weekTone: Tone = movedWeek ? (movedWeek.pct >= 0.05 ? "up" : movedWeek.pct <= -0.05 ? "down" : "flat") : "flat";
+          // The MarketCatalyst read: a headline, a short body and the two prices to watch. Without enough
+          // data for one, the verdict and the two reads' own lines stand in.
+          const read = headlineRead(stock.t, siFacts, tech, fund, overall, { bars: sixMonthBars, low52: lo52 });
+          const nextEvent = upcomingCatalysts.find((u) => !u.past && u.iso) ?? null;
+          // The Fundamentals charts: revenue and EPS growth over the last four quarters, the four latest quarters, the P/Es.
+          const growth = growthSeries(financialsDoc?.quarters);
+          const latestFour = [...(financialsDoc?.quarters ?? [])]
+            .filter((q) => q.endDate)
+            .sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)))
+            .slice(0, 4);
+          const chartInput: ChartInput = {
+            ticker: stock.t,
+            facts: siFacts,
+            forwardPe: fpeVal,
+            revenue: growth.find((g) => g.key === "rev")?.rows ?? [],
+            eps: growth.find((g) => g.key === "eps")?.rows ?? [],
+            quarters: latestFour,
+          };
+          // The analysts' average target on the Technicals ruler: the top analysts' when known, else the mean target.
+          const topAnalysts = topTargets(siFacts.analystTargets);
+          const rulerTarget = topAnalysts
+            ? { avg: topAnalysts.avg, median: topAnalysts.median, n: topAnalysts.n }
+            : siFacts.targetMean != null
+              ? { avg: siFacts.targetMean, median: null, n: null }
+              : null;
+          // Why it moved: yesterday and the last five sessions, from the daily bars and the stock's headlines.
+          const todayNy = etTodayIso();
+          const news = (Array.isArray(tickerNews) ? tickerNews : []) as unknown as MoveNews[];
+          const yMove = yesterdayMove(moveBars);
+          const toneCol = (t?: MoveTone) => (t === "up" ? "#4ade80" : t === "down" ? "#f05656" : "var(--si-text-mid, #93a1af)");
+          const asRows = (rows: MoveRow[]): PanelRow[] => rows.map((r) => ({ title: r.title, detail: r.detail, tag: r.tag, col: toneCol(r.tone), isNew: r.isNew }));
+          const weekReasons = weekRows(moveBars, news);
+          const weekFallback: PanelRow[] = (movedWeek ? movedWeek.ev : stockDetail.movedEv)
+            .slice(0, 3)
+            .map((ev) => ({ title: "Recent activity", detail: typeof ev === "string" ? highlightNumbers(ev) : ev }));
+          // Why it could move: what could push it up and what could pull it down.
+          const ctxQuote = (t: string) => moveQuotes.get(t)?.pctChange;
+          const reasons = couldMove(siFacts, {
+            sector: scoringPeers.flatMap((t) => (typeof ctxQuote(t) === "number" ? [{ t, pct: ctxQuote(t) as number }] : [])),
+            market: ([["QQQ", "Nasdaq 100"], ["SPY", "S&P 500"]] as const).flatMap(([t, label]) => (typeof ctxQuote(t) === "number" ? [{ label, pct: ctxQuote(t) as number }] : [])),
+            news,
+            bigMoves10: bigMovesIn10(moveBars),
+            todayIso: todayNy,
+          });
+          const couldTone: Tone = reasons.up.length > reasons.down.length ? "up" : reasons.down.length > reasons.up.length ? "down" : "flat";
+          const nav: NavItem[] = [
+            { id: "read", label: "MarketCatalyst read", ...verdictStatus(overall) },
+            { id: "fund", label: "Fundamentals", ...verdictStatus(fund.verdict) },
+            { id: "tech", label: "Technicals", ...verdictStatus(tech.verdict) },
+            { id: "moved", label: "Why it moved", status: statusForTone(weekTone), tone: weekTone },
+            { id: "could", label: "Why it could move", status: statusForTone(couldTone), tone: couldTone },
+          ];
+          return (
+            <>
+              <SiOverview
+                key={stock.t}
+                data={{
+                  growth,
+                  scores,
+                  conf: mcConfidence,
+                  onScores: () => setConfOpen(true),
+                  nav,
+                  read: {
+                    headline: read ? read.headline : sentenceCase(overall.label),
+                    body: read ? read.body : `${fund.action} ${tech.action}`,
+                    now: price ?? null,
+                    nowText: usd(price),
+                    low: read?.levels.find((l) => l.tone === "down") ?? null,
+                    high: read?.levels.find((l) => l.tone === "up") ?? null,
+                    onInfo: () => setVerdictOpen(true),
+                  },
+                  panels: {
+                    fund: (
+                      <PanelCard>
+                        {fund.reads.length ? (
+                          <>
+                            <LeadLine text={fund.action} />
+                            <ReadTiles
+                              reads={fund.reads}
+                              glow
+                              chartFor={(r) => {
+                                const spec = chartSpec(r.k, chartInput);
+                                return spec ? <ReadChart spec={spec} /> : undefined;
+                              }}
+                            />
+                          </>
+                        ) : (
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>{fund.action}</span>
+                        )}
+                      </PanelCard>
+                    ),
+                    tech: (
+                      <PanelCard>
+                        {tech.reads.length ? (
+                          <>
+                            <LeadLine text={tech.action} />
+                            {price != null && (
+                              <LevelsRuler
+                                price={price}
+                                low52={lo52 ?? null}
+                                high52={hi52 ?? null}
+                                support={tech.nextSupport}
+                                resistance={tech.nextResistance}
+                                target={rulerTarget}
+                                money={usd}
+                              />
+                            )}
+                            <ReadTiles reads={tech.reads} />
+                          </>
+                        ) : (
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>{tech.action}</span>
+                        )}
+                      </PanelCard>
+                    ),
+                    moved: (
+                      <MovedPanel
+                        yesterday={{
+                          label: yMove ? `YESTERDAY \u00B7 ${fmtMarketDate(yMove.t, { weekday: "short", month: "short", day: "numeric" })}` : "YESTERDAY",
+                          pct: yMove?.pct ?? null,
+                          heading: "Yesterday",
+                          rows: yMove ? asRows(yesterdayRows(yMove, news)) : [],
+                          empty: "Not enough price history to explain this move yet.",
                         }}
-                      >
-                        {usd(t.val)}
-                      </div>
-                    ))}
-                    {/* Current Price Marker Badge on Y-Axis */}
-                    {pEnd > 0 && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          right: 0,
-                          top: Math.max(14, Math.min(306, svgH - ((pEnd - minP) / rangeDiff) * (svgH - 28) - 14)),
-                          transform: "translateY(-50%)",
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "#ffffff",
-                          background: chartCol,
-                          padding: "2px 7px",
-                          borderRadius: 2,
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
-                          zIndex: 8,
-                          lineHeight: 1.2,
+                        week={{
+                          label: "LAST 5 SESSIONS",
+                          pct: movedWeek?.pct ?? null,
+                          heading: "Last 5 Sessions",
+                          rows: weekReasons.length ? asRows(weekReasons) : weekFallback,
+                          empty: "Not enough price history to explain this week yet.",
                         }}
-                      >
-                        {usd(pEnd)}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Vertical Crosshair Line, Horizontal Line, Glowing Dot, and Floating Tooltip */}
-                {hoverInfo && (
-                  <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: PH_GUTTER, pointerEvents: "none" }}>
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        bottom: 0,
-                        left: `${hoverInfo.leftPct}%`,
-                        width: 1,
-                        background: "rgba(127,168,208,0.45)",
-                        pointerEvents: "none",
-                      }}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        top: `${hoverInfo.topPct}%`,
-                        height: 1,
-                        background: "rgba(127,168,208,0.35)",
-                        pointerEvents: "none",
-                      }}
-                    />
-                    {/* Hover Price Pill on Y-Axis */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        right: 8 - PH_GUTTER,
-                        top: `${hoverInfo.topPct}%`,
-                        transform: "translateY(-50%)",
-                        background: "#3b82f6",
-                        color: "#ffffff",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        padding: "2px 7px",
-                        borderRadius: 2,
-                        pointerEvents: "none",
-                        zIndex: 25,
-                        boxShadow: "0 2px 10px rgba(0,0,0,0.4)",
-                      }}
-                    >
-                      {usd(hoverInfo.priceVal)}
-                    </div>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: `${hoverInfo.leftPct}%`,
-                        top: `${hoverInfo.topPct}%`,
-                        width: 10,
-                        height: 10,
-                        margin: "-5px 0 0 -5px",
-                        borderRadius: 99,
-                        background: "#e8eef4",
-                        boxShadow: "0 0 0 4px rgba(127,168,208,0.35)",
-                        pointerEvents: "none",
-                      }}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: `${hoverInfo.leftPct}%`,
-                        top: 8,
-                        transform: hoverInfo.leftPct > 70 ? "translateX(calc(-100% - 12px))" : "translateX(12px)",
-                        background: "var(--si-card-solid, #0c1118)",
-                        border: "1px solid #5980a6",
-                        padding: "8px 12px",
-                        pointerEvents: "none",
-                        whiteSpace: "nowrap",
-                        zIndex: 20,
-                        boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
-                      }}
-                    >
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-mid, #93a1af)" }}>
-                        {hoverInfo.label}
-                      </div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 2 }}>
-                        {usd(hoverInfo.priceVal)}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Dynamic Bottom Date/Time Axis (Issue 7 Fix) */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: `0 ${16 + PH_GUTTER}px 14px 16px`,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 12,
-                  color: "var(--si-text-sub, #5d6b79)",
+                      />
+                    ),
+                    could: (
+                      <CouldPanel
+                        next={nextEvent}
+                        nextLabel={nextEvent ? titleWords(`NEXT EVENT \u00B7 ${nextEvent.date} \u00B7 ${nextEvent.days}`) : ""}
+                        upTitle={titleWords("What could push it up")}
+                        downTitle={titleWords("What could pull it down")}
+                        up={reasons.up.map(({ title, detail, tag, isNew }) => ({ title, detail, tag, isNew }))}
+                        down={reasons.down.map(({ title, detail, tag, isNew }) => ({ title, detail, tag, isNew }))}
+                      />
+                    ),
+                  },
                 }}
-              >
-                {axisLabels.map((lbl, idx) => (
-                  <span key={idx}>{lbl}</span>
-                ))}
-              </div>
-            </div>
-
-              {/* Signal scores */}
-              <div
-                id="si-signals"
-                style={{
-                  scrollMarginTop: 90,
-                  border: "1px solid var(--si-border, #1c2733)",
-                  background: "var(--si-card, rgba(12, 17, 24, 0.9))",
-                  padding: "18px 20px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    SIGNAL SCORES
-                  </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                      Click a score for evidence
-                    </span>
-                    <button
-                      onClick={() => setShowSigHow(!showSigHow)}
-                      style={{
-                        height: 24,
-                        padding: "0 9px",
-                        border: "1px solid var(--si-border-sec, #2a3a4a)",
-                        background: "transparent",
-                        color: "var(--si-accent-light, #a9c6e3)",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10,
-                        letterSpacing: "0.12em",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {showSigHow ? "HIDE HOW" : "HOW IT WORKS"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* How It Works Explanatory Modal */}
-                {showSigHow && (
-                  <div style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card-sec, #0b1016)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                      HOW EACH SCORE IS CALCULATED
-                    </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, margin: "4px 0" }}>
-                      Every signal score runs 0–100, where 50 is neutral. Scores of 75 or more (green) indicate strong alignment with the forward trade and count toward Confluence; 60–74 (blue) is moderate, 45–59 (amber) is middling, and under 45 (red) is weak. The overall MC Confidence uses the same scale: 75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak.
-                    </div>
-                    {[
-                      ["Business", "Revenue growth in key segments, gross and operating margin trend, and forward guidance."],
-                      ["Earnings", "EPS and revenue estimate revisions over 30 and 90 days, beat rate, and surprise magnitude."],
-                      ["Technicals", "Trend vs. 50- and 200-day moving averages, relative strength vs. S&P 500, and volume confirmation."],
-                      ["Catalysts", "Upcoming dated events (earnings, product launches, conferences) weighted by historical volatility impact."],
-                      ["Valuation", "Forward P/E and EV/EBITDA vs. 5-year history and peers, adjusted for growth (PEG ratio)."],
-                      ["Flows", "Call/put skew, short interest, days to cover, plus institutional ownership change from latest 13F filings."],
-                      ["Macro", "Market trend, VIX level, interest rate volatility, and sector sensitivity to broader liquidity."],
-                    ].map(([sName, sDesc], idx) => (
-                      <div key={idx} style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</span>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #c9d4de)" }}>{sDesc}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* 7 interactive score buttons, then the Confluence box and the Evidence toggle, all on one row (they stack 3 to a row on phones) */}
-                <style>{`.si-sig{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) minmax(210px,2.6fr);gap:6px}.si-sig-cb{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.si-sig-card{padding:10px 8px !important}.si-sig-card>span:first-child{font-size:11px !important}.si-sig-cb>button{padding:0 10px !important;font-size:11px !important;white-space:nowrap}@media (max-width:760px){.si-sig-card{padding:12px !important}.si-sig-card>span:first-child{font-size:12px !important}.si-sig-cb>button{font-size:12px !important}.si-sig{grid-template-columns:repeat(3,minmax(0,1fr))}.si-sig-cb{grid-column:span 2;grid-template-columns:1fr}.si-sig-cb>button{grid-column:1/-1;height:32px}}`}</style>
-                <div className="si-sig">
-                  {signalScores.map((scItem: SignalScoreItem) => {
-                    const isSelected = selectedSignal === scItem.name;
-                    return (
-                      <button
-                        key={scItem.name}
-                        className="si-sig-card"
-                        onClick={() => setSelectedSignal(isSelected ? null : scItem.name)}
-                        style={{
-                          textAlign: "left",
-                          border: `1px solid ${isSelected ? "var(--si-accent, #5980a6)" : "var(--si-border, #1c2733)"}`,
-                          background: isSelected ? "var(--si-accent-bg, rgba(89,128,166,0.18))" : "var(--si-card-sec, transparent)",
-                          padding: 12,
-                          cursor: "pointer",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                          transition: "border 150ms, background 150ms",
-                        }}
-                      >
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>
-                          {scItem.name}
-                        </span>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: scItem.color, lineHeight: 1 }}>
-                          {scItem.val}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  <div className="si-sig-cb">
-                    <div style={{ border: "1px solid var(--si-accent, #5980a6)", background: "var(--si-accent-bg, rgba(89,128,166,0.12))", padding: 12, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 6, minWidth: 0 }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", color: "var(--si-text-mid, #93a1af)" }}>CONFLUENCE</span>
-                      <span style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6, lineHeight: 1 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 40, fontWeight: 700, color: confluenceColor }}>{confluenceCount}</span>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>/ 7</span>
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setShowAssessEv(!showAssessEv)}
-                      style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card-sec, transparent)", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "0 14px" }}
-                    >
-                      {showAssessEv ? "Hide evidence" : "Evidence ▸"}
-                    </button>
-                  </div>
-                </div>
-
-                {showAssessEv && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
-                    {(stockDetail.assessEv || []).map((ev, i) => (
-                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8 }}>
-                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                        <span>{ev}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Expanded Signal Evidence Card */}
-                {selectedSignal && (
-                  <div
-                    className="si-evidence-card"
-                    style={{
-                      border: "1px solid var(--si-border-sec, #2a3a4a)",
-                      background: "var(--si-evidence-bg, rgba(89,128,166,0.08))",
-                      padding: "16px 18px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                      borderRadius: 6,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span
-                        className="si-evidence-title"
-                        style={{
-                          fontFamily: "'Barlow Condensed', sans-serif",
-                          fontSize: 15,
-                          fontWeight: 700,
-                          letterSpacing: "0.14em",
-                          color: "var(--si-evidence-title, var(--si-text-hi, #07080a))",
-                        }}
-                      >
-                        EVIDENCE · {selectedSignal.toUpperCase()}
-                      </span>
-                      <button
-                        onClick={() => setSelectedSignal(null)}
-                        aria-label="Close evidence"
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: "var(--si-text-hi, #07080a)",
-                          cursor: "pointer",
-                          fontSize: 16,
-                          fontWeight: 700,
-                          padding: "2px 6px",
-                          lineHeight: 1,
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    {((stockDetail.ev && selectedSignal ? (stockDetail.ev[selectedSignal] || stockDetail.ev[selectedSignal.toUpperCase()]) : null) || [
-                      "No live data for this signal yet.",
-                    ]).map((evItem, i) => (
-                      <div
-                        key={i}
-                        className="si-evidence-text"
-                        style={{
-                          fontFamily: "'Manrope', sans-serif",
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: "var(--si-text-body, #0f172a)",
-                          display: "flex",
-                          gap: 9,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                        <span style={{ color: "var(--si-text-body, #0f172a)" }}>{evItem}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              </div>
-              {/* Right column: the take, then the two reads */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-                <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, #0c1118)", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "var(--si-shadow, none)" }}>
-                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                    MARKETCATALYST TAKE
-                  </div>
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
-                    {stockDetail.assessSegs
-                      ? stockDetail.assessSegs.map((seg, i) =>
-                          seg.tone ? (
-                            <span key={i} style={{ color: seg.tone === "up" ? "var(--up, #16a34a)" : "var(--down, #dc2626)", fontWeight: 700 }}>{seg.t}</span>
-                          ) : (
-                            seg.t
-                          ),
-                        )
-                      : stockDetail.assess}
-                  </div>
-                </div>
-                <ReadCard title="FUNDAMENTAL READ" text={fundamentalReadText(stock.t, siFacts, stock.fpe)} onOpen={() => setActiveTab("fund")} />
-                <ReadCard title="TECHNICAL READ" text={technicalReadText(siFacts)} info={TECHNICAL_READ_INFO} onOpen={() => setActiveTab("tech")} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ====================================================
-            TAB 2: WHY IT MOVED
-            ==================================================== */}
-        {activeTab === "moved" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Chart beside the MarketCatalyst read (last week when the daily bars are there, else today) */}
-            <style>{`.si-ov-m{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:stretch}@media (max-width:1050px){.si-ov-m{grid-template-columns:minmax(0,1fr)}}`}</style>
-            <div className="si-ov-m">
-              <SixMonthAreaChart ticker={stock.t} stock={stock} bars={sixMonthBars} events={majorEvents} />
-              <div
-                style={{
-                  position: "relative",
-                  border: "1px solid var(--si-border-sec, #5980a6)",
-                  background: "var(--si-card, rgba(12,17,24,0.92))",
-                  padding: "24px 26px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 16,
-                  minWidth: 0,
-                  boxSizing: "border-box",
-                }}
-              >
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                  MARKETCATALYST READ
-                </span>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
-                  {highlightSignedPercents(movedWeek ? movedWeek.text : stockDetail.movedTxt)}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {(movedWeek ? [...movedWeek.ev, stockDetail.movedEv[0]] : stockDetail.movedEv).map((me: React.ReactNode, i: number) => (
-                    <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 10, lineHeight: 1.5 }}>
-                      <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                      <span>{typeof me === "string" ? highlightNumbers(me) : me}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Estimated factor attribution: stacked bar plus one tile per factor */}
-            <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)" }}>
-                  ESTIMATED FACTOR ATTRIBUTION
-                  <InfoTip lines={FACTOR_INFO} />
-                </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
-                  of <b style={{ color: movedWeek ? (movedWeek.pct >= 0 ? "var(--up, #4ade80)" : "var(--down, #f87171)") : color }}>{movedWeek ? pct(movedWeek.pct) : pct(stock.c)}</b> {movedWeek ? "last week" : "today"}
-                </span>
-                <button
-                  onClick={() => setShowAttHow(!showAttHow)}
-                  style={{ marginLeft: "auto", height: 26, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", cursor: "pointer" }}
-                >
-                  HOW IT WORKS
-                </button>
-              </div>
-              {showAttHow && (
-                <div style={{ padding: "10px 12px", background: "var(--si-evidence-bg, rgba(89,128,166,0.08))", border: "1px solid var(--si-border-sec, #2a3a4a)", borderRadius: 4, fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.5 }}>
-                  Estimated Factor Attribution: Percentages are modeled estimates derived from sector beta and market regime heuristics, not empirically measured or causal contributions.
-                </div>
-              )}
-              {(() => {
-                const factors = [
-                  { k: "Sector Momentum", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
-                  { k: "Company News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
-                  { k: "Market Regime", p: stockDetail.att[2], c: "#8b5cf6" },
-                  { k: "Technical Factors", p: stockDetail.att[3], c: "#f59e0b" },
-                ];
-                return (
-                  <>
-                    <div style={{ display: "flex", height: 16, width: "100%", borderRadius: 2, overflow: "hidden" }}>
-                      {factors.map((at, idx) => (
-                        <span key={idx} style={{ height: 16, width: `${at.p}%`, background: at.c, borderRight: "2px solid var(--si-card-solid, #080b10)" }} />
-                      ))}
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-                      {factors.map((at, idx) => (
-                        <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", borderLeft: `3px solid ${at.c}`, background: "var(--si-card-sec, rgba(12,17,24,0.6))", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{at.k}</span>
-                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{at.p}%</span>
-                          <div style={{ height: 6, background: "var(--si-card-tert, #1c2733)" }}>
-                            <div style={{ height: 6, width: `${at.p}%`, background: at.c }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
-
-        {/* ====================================================
-            TAB 3: WHY IT COULD MOVE (Complete Implementation)
-            ==================================================== */}
-        {activeTab === "could" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <BullBearChecks bullish={stockDetail.valid} bearish={stockDetail.invalid} broken={stockDetail.broken} />
-
-            {/* Catalysts timeline */}
-            <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px" }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 22 }}>
-                CATALYSTS · RECENT &amp; UPCOMING
-              </div>
-              <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
-                {upcomingCatalysts.map((up, i) => (
-                  <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, opacity: up.past ? 0.6 : 1 }}>
-                    {/* The timeline line is drawn per event, from this marker across the gap to the next one,
-                        so every row of the grid (not just the first) is joined up. */}
-                    {i < upcomingCatalysts.length - 1 && (
-                      <span aria-hidden style={{ position: "absolute", left: 13, right: -18, top: 12, height: 2, background: "rgba(89,128,166,0.55)", zIndex: 0 }} />
-                    )}
-                    {/* Events that have passed are a filled grey dot and fade back; events still ahead keep the open ring. */}
-                    <span
-                      style={{
-                        position: "relative",
-                        zIndex: 1,
-                        width: 26,
-                        height: 26,
-                        borderRadius: 99,
-                        background: up.past ? "#2a3a4a" : "var(--si-bg, #080b10)",
-                        border: `2px solid ${up.past ? "#5d6b79" : "#7fa8d0"}`,
-                        boxShadow: up.past ? "0 0 0 6px rgba(93,107,121,0.12)" : "0 0 0 6px rgba(127,168,208,0.12)",
-                      }}
-                    />
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4 }}>
-                      {up.date} · {up.days}
-                    </span>
-                    {up.cat && (
-                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #ffffff)" }}>
-                        {up.cat.toUpperCase()}
-                      </span>
-                    )}
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", lineHeight: 1 }}>
-                      {up.n}
-                    </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.5 }}>
-                      {up.txt}
-                    </span>
-                    <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "3px 9px", marginTop: 4 }}>
-                      {up.imp} IMPACT
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+              />
+              {confOpen && <ConfidenceDialog cats={overviewRun.cats} conf={mcConfidence} peerTickers={siFacts.peerTickers} onClose={() => setConfOpen(false)} />}
+              {verdictOpen && <VerdictDialog breakdown={verdictBreakdown(tech.verdict, fund.verdict, mcConfidence)} techReads={tech.reads} fundReads={fund.reads} onClose={() => setVerdictOpen(false)} />}
+            </>
+          );
+        })()}
 
         {/* ====================================================
             TAB 4: FUNDAMENTALS (Complete Implementation)
@@ -3431,12 +2213,12 @@ export function StockIntelligenceScreen() {
             return a >= 1 ? `${sign}$${a.toFixed(1)}B` : `${sign}$${(a * 1000).toFixed(0)}M`;
           };
           const FM: [string, (v: number) => string][] = [
-            ["REVENUE", usdB],
+            ["Revenue", usdB],
             ["EPS (GAAP)", (v) => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2)],
-            ["GROSS MARGIN", (v) => v.toFixed(1) + "%"],
-            ["FREE CASH FLOW", usdB],
-            [hasFmp ? "OPERATING INCOME" : "ROIC", (v) => (hasFmp ? usdB(v) : v.toFixed(0) + "%")],
-            ["TOTAL DEBT", usdB],
+            ["Gross Margin", (v) => v.toFixed(1) + "%"],
+            ["Free Cash Flow", usdB],
+            [hasFmp ? "Operating Income" : "ROIC", (v) => (hasFmp ? usdB(v) : v.toFixed(0) + "%")],
+            ["Total Debt", usdB],
           ];
           // What a click on one bar shows: that quarter's label, value, change
           // vs the prior quarter and the same quarter a year earlier, plus one
@@ -3542,10 +2324,12 @@ export function StockIntelligenceScreen() {
             : null;
 
           // ── Financial health (latest quarter) and earnings quality (trailing 12 months) ──
-          // From the quarterly statements already synced; a figure whose inputs are
-          // missing is left out, never filled with zero. Banks are skipped: debt,
-          // current ratio and free cash flow do not mean the same for them.
-          type HealthRow = { k: string; v: string; note: string; tone: "good" | "warn" | "bad" | "neutral" };
+          // Graded as in the design, from the quarterly statements already synced. A figure whose inputs are
+          // missing shows a dash, never a zero. Kept from the earlier Fundamentals fixes: banks are skipped (debt,
+          // current ratio and free cash flow do not mean the same for them), debt that is long-term only is
+          // labelled "LT debt", and a negative equity or a loss-making year reads "n/m" instead of a misleading ratio.
+          type HealthRow = { k: string; v: string; note: string; col: string };
+          const GOOD = "#2fb86a", MID = "#f0a23b", BAD = "#e5534b", SKY = "#4fb3ff";
           const ttm4 = !isBank && fmpQ && fmpQ.length >= 4 ? fmpQ.slice(-4) : null;
           const sum4 = (pick: (q: QuarterFinancials) => number | null | undefined): number | null => {
             if (!ttm4) return null;
@@ -3557,61 +2341,75 @@ export function StockIntelligenceScreen() {
             }
             return s;
           };
-          const healthRows: HealthRow[] = [];
-          if (!isBank && latestQ) {
-            const equity = latestQ.equity;
-            if (latestCash != null) healthRows.push({ k: "Cash", v: usdRaw(latestCash), note: "Cash and equivalents", tone: "neutral" });
-            if (latestDebt != null) healthRows.push({ k: hasTotalDebt ? "Total debt" : "LT debt", v: usdRaw(latestDebt), note: hasTotalDebt ? "Short and long term, incl. leases" : "Long-term debt only", tone: "neutral" });
-            if (latestCash != null && latestDebt != null) {
-              const net = latestCash - latestDebt;
-              const heavy = net < 0 && ttmEbitda != null && ttmEbitda > 0 && -net / ttmEbitda > 3;
-              healthRows.push({
-                k: net >= 0 ? "Net cash" : "Net debt",
-                v: usdRaw(Math.abs(net)),
-                note: net >= 0 ? "Cash is more than all its debt" : heavy ? "More than 3 years of EBITDA" : "Debt is more than its cash",
-                tone: net >= 0 ? "good" : heavy ? "bad" : "warn",
-              });
-            }
-            const cr = latestQ.currentRatio ?? (latestQ.currentAssets != null && latestQ.currentLiabilities ? latestQ.currentAssets / latestQ.currentLiabilities : null);
-            if (cr != null && Number.isFinite(cr)) {
-              healthRows.push({ k: "Current ratio", v: `${cr.toFixed(2)}×`, note: cr >= 1.5 ? "Covers short-term bills comfortably" : cr >= 1 ? "Covers short-term bills" : "Short-term bills exceed liquid assets", tone: cr >= 1.5 ? "good" : cr >= 1 ? "neutral" : "warn" });
-            }
-            if (latestDebt != null && equity != null) {
-              healthRows.push(equity > 0
-                ? { k: "Debt / equity", v: `${(latestDebt / equity).toFixed(2)}×`, note: latestDebt / equity < 0.5 ? "Lightly borrowed" : latestDebt / equity < 1.5 ? "Moderately borrowed" : "Heavily borrowed", tone: latestDebt / equity < 0.5 ? "good" : latestDebt / equity < 1.5 ? "neutral" : "warn" }
-                : { k: "Debt / equity", v: "n/m", note: "Shareholder equity is negative", tone: "warn" });
-            }
-            if (latestDebt != null && ttmEbitda != null && ttmEbitda > 0) {
-              const x = latestDebt / ttmEbitda;
-              healthRows.push({ k: "Debt / EBITDA", v: `${x.toFixed(1)}×`, note: x < 1 ? "Repaid in under a year of earnings" : x < 3 ? "Manageable" : "Slow to repay", tone: x < 1 ? "good" : x < 3 ? "neutral" : "bad" });
-            }
-          }
+          const dollars = (v: number | null) => (v == null ? "—" : usdRaw(v));
+          const fundNow = !isBank ? latestQ : null;
+          const netDebt = fundNow && latestDebt != null && latestCash != null ? latestDebt - latestCash : null;
+          const curRatio = fundNow
+            ? fundNow.currentRatio ?? (fundNow.currentAssets != null && fundNow.currentLiabilities ? fundNow.currentAssets / fundNow.currentLiabilities : null)
+            : null;
+          const curRatioOk = curRatio != null && Number.isFinite(curRatio) ? curRatio : null;
+          const equityNow = fundNow?.equity ?? null;
+          const debtEquity = fundNow && latestDebt != null && equityNow != null && equityNow > 0 ? latestDebt / equityNow : null;
+          const debtEbitda = fundNow && latestDebt != null && ttmEbitda != null && ttmEbitda > 0 ? latestDebt / ttmEbitda : null;
+          const healthRows: HealthRow[] = fundNow
+            ? [
+                { k: "Cash", v: dollars(latestCash), note: "Cash and equivalents", col: STEEL },
+                hasTotalDebt || latestDebt == null
+                  ? { k: "Total debt", v: dollars(latestDebt), note: "Short and long term, incl. leases", col: STEEL }
+                  : { k: "LT debt", v: dollars(latestDebt), note: "Long-term debt only", col: STEEL },
+                {
+                  k: netDebt != null && netDebt <= 0 ? "Net cash" : "Net debt",
+                  v: netDebt == null ? "—" : dollars(Math.abs(netDebt)),
+                  note: netDebt == null ? "" : netDebt <= 0 ? "More cash than debt" : "Debt is more than its cash",
+                  col: netDebt == null ? STEEL : netDebt <= 0 ? GOOD : MID,
+                },
+                {
+                  k: "Current ratio",
+                  v: curRatioOk != null ? `${curRatioOk.toFixed(2)}×` : "—",
+                  note: curRatioOk == null ? "" : curRatioOk >= 1.5 ? "Covers short-term bills comfortably" : curRatioOk >= 1 ? "Covers short-term bills, thinly" : "Short-term bills exceed liquid assets",
+                  col: curRatioOk == null ? STEEL : curRatioOk >= 1.5 ? GOOD : curRatioOk >= 1 ? MID : BAD,
+                },
+                equityNow != null && equityNow <= 0 && latestDebt != null
+                  ? { k: "Debt / equity", v: "n/m", note: "Shareholder equity is negative", col: MID }
+                  : {
+                      k: "Debt / equity",
+                      v: debtEquity != null ? `${debtEquity.toFixed(2)}×` : "—",
+                      note: debtEquity == null ? "" : debtEquity < 0.5 ? "Lightly borrowed" : debtEquity < 1.5 ? "Moderately borrowed" : "Heavily borrowed",
+                      col: debtEquity == null ? STEEL : debtEquity < 0.5 ? GOOD : debtEquity < 1.5 ? MID : BAD,
+                    },
+                {
+                  k: "Debt / EBITDA",
+                  v: debtEbitda != null ? `${debtEbitda.toFixed(1)}×` : "—",
+                  note: debtEbitda == null ? "" : debtEbitda < 1 ? "Repaid in under a year of earnings" : debtEbitda < 3 ? `Repaid in about ${Math.round(debtEbitda)} years of earnings` : "Many years of earnings to repay",
+                  col: debtEbitda == null ? STEEL : debtEbitda < 1 ? GOOD : debtEbitda < 3 ? MID : BAD,
+                },
+              ]
+            : [];
 
-          const qualityRows: HealthRow[] = [];
           const ttmRev = sum4((q) => q.revenue);
           const ttmNi = sum4((q) => q.netIncome);
           const ttmFcf4 = sum4((q) => computeQuarterFcf(q));
           const ttmCapex = sum4((q) => (q.capitalExpenditures != null ? Math.abs(q.capitalExpenditures) : null));
-          if (ttmRev != null && ttmRev > 0) {
-            if (ttmFcf4 != null) {
-              const m = (ttmFcf4 / ttmRev) * 100;
-              qualityRows.push({ k: "FCF margin", v: `${m.toFixed(1)}%`, note: "Free cash flow per $ of sales", tone: m >= 15 ? "good" : m >= 0 ? "neutral" : "bad" });
-            }
-            if (ttmNi != null) {
-              const m = (ttmNi / ttmRev) * 100;
-              qualityRows.push({ k: "Net margin", v: `${m.toFixed(1)}%`, note: "Profit per $ of sales", tone: m >= 15 ? "good" : m >= 0 ? "neutral" : "bad" });
-            }
-            if (ttmCapex != null) {
-              qualityRows.push({ k: "Capex / sales", v: `${((ttmCapex / ttmRev) * 100).toFixed(1)}%`, note: "Spent on equipment and buildings", tone: "neutral" });
-            }
-          }
-          if (ttmFcf4 != null && ttmNi != null) {
-            qualityRows.push(ttmNi > 0
-              ? { k: "Cash conversion", v: `${(ttmFcf4 / ttmNi).toFixed(2)}×`, note: `$${(ttmFcf4 / ttmNi).toFixed(2)} of free cash per $1 of profit`, tone: ttmFcf4 / ttmNi >= 1 ? "good" : ttmFcf4 / ttmNi >= 0.7 ? "neutral" : "warn" }
-              : { k: "Cash conversion", v: "n/m", note: "No profit over the last 12 months", tone: "warn" });
-          }
-          const healthSub = latestQ ? `${latestQ.fiscalPeriod || "Latest quarter"} '${(latestQ.fiscalYear || "").slice(-2)}` : "";
-          const toneCol = (t: HealthRow["tone"]) => (t === "good" ? UP : t === "bad" ? DN : t === "warn" ? "#f5b031" : "#93a1af");
+          const ofSales = (v: number | null) => (v != null && ttmRev != null && ttmRev > 0 ? (v / ttmRev) * 100 : null);
+          const fcfMargin = ofSales(ttmFcf4), netMargin = ofSales(ttmNi), capexSales = ofSales(ttmCapex);
+          const cashConv = ttmFcf4 != null && ttmNi != null && ttmNi > 0 ? ttmFcf4 / ttmNi : null;
+          const marginCol = (m: number | null) => (m == null ? STEEL : m >= 10 ? GOOD : m >= 0 ? MID : BAD);
+          const pctOrDash = (m: number | null) => (m == null ? "—" : `${m.toFixed(1)}%`);
+          const qualityRows: HealthRow[] = fundNow
+            ? [
+                { k: "FCF margin", v: pctOrDash(fcfMargin), note: "Free cash flow per $ of sales", col: marginCol(fcfMargin) },
+                { k: "Net margin", v: pctOrDash(netMargin), note: "Profit per $ of sales", col: marginCol(netMargin) },
+                { k: "Capex / sales", v: pctOrDash(capexSales), note: "Spent on equipment and buildings", col: STEEL },
+                ttmNi != null && ttmNi <= 0 && ttmFcf4 != null
+                  ? { k: "Cash conversion", v: "n/m", note: "No profit over the last 12 months", col: MID }
+                  : {
+                      k: "Cash conversion",
+                      v: cashConv != null ? `${cashConv.toFixed(2)}×` : "—",
+                      note: cashConv != null ? `$${cashConv.toFixed(2)} of free cash per $1 of profit` : "",
+                      col: cashConv == null ? STEEL : cashConv >= 0.9 ? GOOD : cashConv >= 0.5 ? MID : BAD,
+                    },
+              ]
+            : [];
 
           // PEG = trailing P/E ÷ expected EPS growth (next fiscal year's estimate
           // vs the year in progress) — not one quarter's volatile y/y change.
@@ -3654,60 +2452,87 @@ export function StockIntelligenceScreen() {
             stated != null && Number.isFinite(stated) ? stated : part != null && rev ? (part / rev) * 100 : null;
           const noGrossLine = isBank || (fmpQ ?? []).every((q) => q.grossProfit != null && q.operatingIncome != null && q.grossProfit === q.operatingIncome);
           const marginLines = isBank || !fmpQ || fmpQ.length < 3 ? [] : ([
-            { k: "Gross", col: STEEL, on: !noGrossLine, vals: fmpQ.map((q) => marginPct(q.grossMarginPct, q.grossProfit, q.revenue)) },
-            { k: "Operating", col: UP, on: true, vals: fmpQ.map((q) => marginPct(q.operatingMarginPct, q.operatingIncome, q.revenue)) },
-            { k: "Net", col: "#f5b031", on: true, vals: fmpQ.map((q) => marginPct(q.netMarginPct, q.netIncome, q.revenue)) },
+            { k: "Gross", col: "#c9d6e3", on: !noGrossLine, vals: fmpQ.map((q) => marginPct(q.grossMarginPct, q.grossProfit, q.revenue)) },
+            { k: "Operating", col: GOOD, on: true, vals: fmpQ.map((q) => marginPct(q.operatingMarginPct, q.operatingIncome, q.revenue)) },
+            { k: "Net", col: MID, on: true, vals: fmpQ.map((q) => marginPct(q.netMarginPct, q.netIncome, q.revenue)) },
           ] as Array<{ k: string; col: string; on: boolean; vals: Array<number | null> }>).filter((l) => l.on && l.vals.filter((v) => v != null).length >= 3);
           const marginAll = marginLines.flatMap((l) => l.vals.filter((v): v is number => v != null));
-          const mMax = Math.max(0, ...marginAll), mMin = Math.min(0, ...marginAll);
-          const mSpan = mMax - mMin || 1;
-          const MW = 440, MH = 150, MPAD = 10;
-          const mx = (i: number) => MPAD + (i / Math.max(1, (fmpQ?.length ?? 1) - 1)) * (MW - 2 * MPAD);
-          const my = (v: number) => MPAD + ((mMax - v) / mSpan) * (MH - 2 * MPAD);
+          const mLo = marginAll.length ? Math.min(...marginAll) : 0, mHi = marginAll.length ? Math.max(...marginAll) : 1;
+          const mPad = (mHi - mLo || 1) * 0.12;
+          const MW = 300, MH = 120, mCount = fmpQ?.length ?? 0;
+          const mx = (i: number) => (mCount > 1 ? (i / (mCount - 1)) * (MW - 8) + 4 : MW / 2);
+          const my = (v: number) => MH - 6 - ((v - (mLo - mPad)) / (mHi + mPad - (mLo - mPad) || 1)) * (MH - 12);
 
-          // ── Scorecard: four plain grades, each from one visible number ──
-          type Grade = { k: string; grade: string; tone: HealthRow["tone"]; note: string };
-          const growthV = siFacts.revGrowthYoY;
-          const opM = siFacts.opMargin, opM0 = siFacts.opMarginYearAgo;
-          const pe = livePe != null && livePe > 0 ? livePe : null;
-          const fpe = stock.fpe != null && stock.fpe > 0 ? stock.fpe : null;
-          const vRatios = [pe != null ? pe / basePe : null, fpe != null ? fpe / baseFpe : null].filter((v): v is number => v != null);
-          const vRatio = vRatios.length ? vRatios.reduce((a, b) => a + b, 0) / vRatios.length : null;
-          const hasBad = healthRows.some((r) => r.tone === "bad"), hasWarn = healthRows.some((r) => r.tone === "warn");
-          const netRow = healthRows.find((r) => r.k === "Net cash" || r.k === "Net debt");
-          const scoreCards: Grade[] = [
-            growthV != null && Number.isFinite(growthV)
-              ? { k: "GROWTH", grade: growthV >= 20 ? "Strong" : growthV >= 8 ? "Solid" : growthV >= 0 ? "Slow" : "Shrinking", tone: growthV >= 20 ? "good" : growthV >= 8 ? "neutral" : growthV >= 0 ? "warn" : "bad", note: `Revenue ${pct1(growthV)} y/y` }
-              : { k: "GROWTH", grade: "—", tone: "neutral", note: "No revenue history yet" },
-            !isBank && opM != null && Number.isFinite(opM)
-              ? { k: "PROFITABILITY", grade: opM >= 25 ? "Strong" : opM >= 12 ? "Solid" : opM >= 0 ? "Thin" : "Losing money", tone: opM >= 25 ? "good" : opM >= 12 ? "neutral" : opM >= 0 ? "warn" : "bad", note: `Operating margin ${opM.toFixed(1)}%${opM0 != null ? ` (${opM - opM0 >= 0 ? "+" : "−"}${Math.abs(opM - opM0).toFixed(1)} pts y/y)` : ""}` }
-              : { k: "PROFITABILITY", grade: "—", tone: "neutral", note: isBank ? "Not graded for banks" : "No margin data yet" },
-            healthRows.length
-              ? { k: "FINANCIAL HEALTH", grade: hasBad ? "Stretched" : hasWarn ? "Mixed" : healthRows.filter((r) => r.tone === "good").length >= 2 ? "Strong" : "Solid", tone: hasBad ? "bad" : hasWarn ? "warn" : healthRows.filter((r) => r.tone === "good").length >= 2 ? "good" : "neutral", note: netRow ? `${netRow.k} ${netRow.v}` : healthRows[0].note }
-              : { k: "FINANCIAL HEALTH", grade: "—", tone: "neutral", note: isBank ? "Not graded for banks" : "No balance-sheet data yet" },
-            vRatio != null
-              ? { k: "VALUATION", grade: vRatio < 0.8 ? "Attractive" : vRatio < 1.2 ? "Fair" : vRatio < 1.8 ? "Rich" : "Expensive", tone: vRatio < 0.8 ? "good" : vRatio < 1.2 ? "neutral" : vRatio < 1.8 ? "warn" : "bad", note: `${pe != null ? `P/E ${pe.toFixed(1)}×` : `Fwd P/E ${fpe!.toFixed(1)}×`} vs ${pe != null ? basePe : baseFpe}× sector reference` }
-              : { k: "VALUATION", grade: "—", tone: "neutral", note: "No earnings multiple (no profit)" },
+          // ── Scorecard: four plain grades, each from one visible number (the design's rules) ──
+          const quarters = fmpQ ?? [];
+          const qNow = quarters.length ? quarters[quarters.length - 1] : null;
+          const qYearAgo = quarters.length >= 5 ? quarters[quarters.length - 5] : null;
+          const opMarginOf = (q: QuarterFinancials | null) => (q ? marginPct(q.operatingMarginPct, q.operatingIncome, q.revenue) : null);
+          const growthYoY = qNow && qYearAgo && qYearAgo.revenue ? ((qNow.revenue ?? 0) / qYearAgo.revenue - 1) * 100 : null;
+          const opNow = isBank ? null : opMarginOf(qNow), opThen = isBank ? null : opMarginOf(qYearAgo);
+          const peNow = livePe != null && livePe > 0 ? livePe : null;
+          const peRel = peNow != null ? peNow / basePe : null;
+          type Verdict = { word: string; col: string };
+          const NO_DATA: Verdict = { word: "No data", col: STEEL };
+          const growthGrade: Verdict = growthYoY == null ? NO_DATA : growthYoY >= 15 ? { word: "Strong", col: GOOD } : growthYoY >= 3 ? { word: "Steady", col: STEEL } : growthYoY >= -3 ? { word: "Flat", col: MID } : { word: "Weak", col: BAD };
+          const profitGrade: Verdict = opNow == null ? NO_DATA : opNow >= 20 ? { word: "Strong", col: GOOD } : opNow >= 10 ? { word: "Solid", col: STEEL } : opNow >= 0 ? { word: "Thin", col: MID } : { word: "Losing money", col: BAD };
+          const healthGrade: Verdict = netDebt == null ? NO_DATA : netDebt <= 0 ? { word: "Strong", col: GOOD } : (curRatioOk != null && curRatioOk < 1) || (debtEquity != null && debtEquity > 2) ? { word: "Weak", col: BAD } : { word: "Mixed", col: MID };
+          const valGrade: Verdict = peRel == null ? NO_DATA : peRel <= 0.95 ? { word: "Attractive", col: GOOD } : peRel <= 1.3 ? { word: "Fair", col: STEEL } : { word: "Stretched", col: BAD };
+          const figure = (text: string, color: string) => <span style={{ color, fontWeight: 700 }}>{text}</span>;
+          const upDown = (v: number) => (v >= 0 ? GOOD : BAD);
+          const scoreCards: Array<{ k: string; label: string; g: Verdict; sub: React.ReactNode }> = [
+            { k: "GROWTH", label: "Growth", g: growthGrade, sub: growthYoY != null ? <>Revenue {figure(pct1(growthYoY), upDown(growthYoY))} y/y</> : "Revenue growth unavailable" },
+            {
+              k: "PROFITABILITY",
+              label: "Profitability",
+              g: profitGrade,
+              sub: isBank
+                ? "Not graded for banks"
+                : opNow != null
+                  ? <>Operating margin {figure(`${opNow.toFixed(1)}%`, opNow >= 10 ? GOOD : opNow >= 0 ? MID : BAD)}{opThen != null ? <> ({figure(`${opNow - opThen >= 0 ? "+" : "−"}${Math.abs(opNow - opThen).toFixed(1)} pts`, upDown(opNow - opThen))} y/y)</> : null}</>
+                  : "Operating margin unavailable",
+            },
+            {
+              k: "FINANCIAL HEALTH",
+              label: "Financial Health",
+              g: healthGrade,
+              sub: isBank ? "Not graded for banks" : netDebt != null ? (netDebt <= 0 ? <>Net cash {figure(dollars(-netDebt), GOOD)}</> : <>Net debt {figure(dollars(netDebt), BAD)}</>) : "Balance sheet unavailable",
+            },
+            {
+              k: "VALUATION",
+              label: "Valuation",
+              g: valGrade,
+              sub: peNow != null ? <>P/E {figure(`${peNow.toFixed(1)}×`, peNow <= basePe * 0.95 ? GOOD : peNow <= basePe * 1.3 ? SKY : BAD)} vs {figure(`${basePe}×`, SKY)} sector reference</> : "P/E unavailable",
+            },
           ];
+          // The card shell and heading shared by the balance-sheet, cash-quality and margin cards.
+          const fundCard: React.CSSProperties = { border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10, minWidth: 0 };
+          const fundCardHead = (title: string, sub: string) => (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>{title}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-white, #ffffff)", opacity: 0.6 }}>{sub}</span>
+            </div>
+          );
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Scorecard: one grade per question, each from the number shown under it */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-                {scoreCards.map((s) => {
-                  const gradeCol = s.grade === "—" ? "var(--si-text-sub, #5d6b79)" : toneCol(s.tone);
-                  return (
-                    <div key={s.k} style={{ border: `1px solid ${s.grade === "—" ? "var(--si-border, #1c2733)" : gradeCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
-                      <span style={{ display: "flex", alignItems: "center" }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 }}>{s.k}</span>
-                        <InfoTip lines={SCORECARD_INFO[s.k] ?? []} />
+              {qNow && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+                  {scoreCards.map((c) => (
+                    <div key={c.k} style={{ border: `1px solid ${c.g.col}`, background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <span style={{ display: "flex", alignItems: "center" }}>
+                          <span data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-white, #ffffff)", opacity: 0.7 }}>{c.label}</span>
+                          <InfoTip lines={SCORECARD_INFO[c.k] ?? []} />
+                        </span>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: c.g.col, textAlign: "right" }}>{c.g.word}</span>
                       </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: gradeCol }}>{s.grade}</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.5 }}>{highlightScoreNote(s.note, gradeCol)}</span>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-white, #ffffff)", lineHeight: 1.5 }}>{c.sub}</span>
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
 
               {/* 6 Financial Metric Cards with 8-Quarter Mini-Bars */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14 }}>
@@ -3720,7 +2545,7 @@ export function StockIntelligenceScreen() {
                   return (
                   <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 18px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", columnGap: 8 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
+                      <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
                         {fm.k}
                       </span>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: fm.col, whiteSpace: "nowrap" }}>
@@ -3797,61 +2622,48 @@ export function StockIntelligenceScreen() {
                 })}
               </div>
 
-              {/* Financial health (balance sheet) and earnings quality (cash vs profit) */}
-              {(healthRows.length > 0 || qualityRows.length > 0 || marginLines.length > 0) && (
+              {/* Financial health (balance sheet), earnings quality (cash vs profit) and margin trend */}
+              {(healthRows.length > 0 || marginLines.length > 0) && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 18, alignItems: "stretch" }}>
-                  {([
-                    { title: "FINANCIAL HEALTH", sub: healthSub ? `${healthSub} balance sheet` : "Latest balance sheet", rows: healthRows },
-                    { title: "EARNINGS QUALITY", sub: "Last 12 months", rows: qualityRows },
-                  ]).filter((p) => p.rows.length > 0).map((p) => (
-                    <div key={p.title} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                          {p.title}
-                        </span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{p.sub}</span>
-                      </div>
+                  {[
+                    { title: "Financial Health", sub: `${QL[1]} balance sheet`, rows: healthRows },
+                    { title: "Earnings Quality", sub: "Last 12 months", rows: qualityRows },
+                  ].filter((p) => p.rows.length > 0).map((p) => (
+                    <div key={p.title} style={fundCard}>
+                      {fundCardHead(p.title, p.sub)}
                       {p.rows.map((r) => (
-                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px 128px 92px 1fr", alignItems: "center", columnGap: 12, minHeight: 50, borderTop: "1px solid var(--si-border, #1c2733)" }}>
-                          <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: toneCol(r.tone) }} />
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 400, color: "var(--si-text-hi, #e8eef4)" }}>{r.k}</span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, textAlign: "right", color: r.tone === "neutral" ? "var(--si-text-hi, #e8eef4)" : toneCol(r.tone) }}>{r.v}</span>
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>{r.note}</span>
+                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px minmax(100px,128px) minmax(64px,86px) minmax(110px,1fr)", alignItems: "center", columnGap: 12, padding: "8px 0" }}>
+                          <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: r.col }} />
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-white, #ffffff)", opacity: 0.9 }}>{r.k}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color: r.col === STEEL ? SKY : r.col, textAlign: "right" }}>{r.v}</span>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.75, lineHeight: 1.4 }}>{r.note}</span>
                         </div>
                       ))}
                     </div>
                   ))}
                   {marginLines.length > 0 && fmpQ && (
-                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARGIN TREND</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{QL[0]} to {QL[1]}</span>
-                      </div>
-                      <svg viewBox={`0 0 ${MW} ${MH}`} width="100%" role="img" aria-label={`${stock.t} gross, operating and net margin by quarter`} style={{ display: "block" }}>
-                        <line x1={MPAD} x2={MW - MPAD} y1={my(0)} y2={my(0)} stroke="#2a3a4a" strokeWidth={1} strokeDasharray="3 3" />
+                    <div style={fundCard}>
+                      {fundCardHead("Margin Trend", `${QL[0]} to ${QL[1]}`)}
+                      <svg viewBox={`0 0 ${MW} ${MH}`} width="100%" height={130} preserveAspectRatio="none" role="img" aria-label="Gross, operating and net margin by quarter">
+                        {[0.25, 0.5, 0.75].map((f) => (
+                          <line key={f} x1={0} x2={MW} y1={MH * f} y2={MH * f} stroke="rgba(147,161,175,0.12)" strokeWidth={1} />
+                        ))}
                         {marginLines.map((l) => {
-                          const pts = l.vals.map((v, i) => (v == null ? null : [mx(i), my(v)] as const));
-                          const last = [...pts].reverse().find((p) => p != null);
-                          return (
-                            <g key={l.k}>
-                              <polyline fill="none" stroke={l.col} strokeWidth={2} strokeLinejoin="round" points={pts.filter((p) => p != null).map((p) => `${p![0]},${p![1]}`).join(" ")} />
-                              {last && <circle cx={last[0]} cy={last[1]} r={3.5} fill={l.col} />}
-                            </g>
-                          );
+                          const pts = l.vals.map((v, i) => (v == null ? null : `${mx(i).toFixed(1)},${my(v).toFixed(1)}`)).filter(Boolean).join(" ");
+                          return pts ? <polyline key={l.k} points={pts} fill="none" stroke={l.col} strokeWidth={2} vectorEffect="non-scaling-stroke" /> : null;
                         })}
                       </svg>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", fontFamily: "'JetBrains Mono', monospace", fontSize: 14 }}>
                         {marginLines.map((l) => {
-                          const lastIdx = l.vals.length - 1;
-                          const now = l.vals[lastIdx];
-                          const then = l.vals[lastIdx - 4] ?? null;
+                          const now = l.vals[l.vals.length - 1] ?? null;
+                          const then = l.vals.length >= 5 ? l.vals[l.vals.length - 5] ?? null : null;
+                          const diff = now != null && then != null ? now - then : null;
                           return (
-                            <span key={l.k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "var(--si-text-hi, #e8eef4)" }}>
-                              <i style={{ display: "inline-block", width: 10, height: 3, background: l.col, marginRight: 6, verticalAlign: "middle" }} />
-                              {l.k} {now != null ? `${now.toFixed(1)}%` : "—"}
-                              {now != null && then != null && (
-                                <span style={{ color: now - then >= 0 ? UP : DN }}> {now - then >= 0 ? "+" : "−"}{Math.abs(now - then).toFixed(1)} pts y/y</span>
-                              )}
+                            <span key={l.k} style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--si-text-mid, #93a1af)" }}>
+                              <span style={{ width: 12, height: 2, background: l.col }} />
+                              {l.k}{" "}
+                              <b style={{ color: "var(--si-text-hi, #e8eef4)" }}>{now != null ? `${now.toFixed(1)}%` : "—"}</b>
+                              <span style={{ color: diff != null && diff < 0 ? DN : UP }}>{diff != null ? `${diff >= 0 ? "+" : ""}${diff.toFixed(1)} pts y/y` : ""}</span>
                             </span>
                           );
                         })}
@@ -3864,31 +2676,31 @@ export function StockIntelligenceScreen() {
               {/* Valuation & Peer Comparison Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: 18, alignItems: "start" }}>
                 {/* Valuation Multiples vs Reference Benchmark */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                      VALUATION MULTIPLES
+                    <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                      Valuation Multiples
                     </span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.8 }}>
                       ▮ {stock.t} &nbsp; ┃ Reference Benchmark
                     </span>
                   </div>
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.4 }}>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.75, lineHeight: 1.5 }}>
                     Reference benchmarks (indicated by ┃ and right column) are static sector reference values, not live peer-company medians.
                   </div>
                   {valRows.map((vl, idx) => (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 42 }}>
-                      <span style={{ width: 110, fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 34 }}>
+                      <span style={{ width: 120, fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: "var(--si-text-white, #ffffff)" }}>
                         {vl.k}
                       </span>
-                      <div style={{ position: "relative", flex: 1, height: 10, background: "#1c2733" }}>
+                      <div style={{ position: "relative", flex: 1, height: 10, background: "#232830" }}>
                         <div style={{ height: 10, width: vl.w, background: "#5980a6" }} />
                         <div style={{ position: "absolute", top: -4, left: vl.m, width: 2, height: 18, background: "#e8eef4", boxShadow: "0 0 6px rgba(255,255,255,0.4)" }} />
                       </div>
-                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                      <span style={{ width: 76, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color: SKY }}>
                         {vl.v}
                       </span>
-                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: "var(--si-text-mid, #93a1af)" }}>
+                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: "var(--si-text-white, #ffffff)", opacity: 0.7 }}>
                         {vl.med}
                       </span>
                     </div>
@@ -3896,23 +2708,23 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 {/* Peer Comparison Table */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
+                <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                      PEER COMPARISON
+                    <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                      Peer Comparison
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-white, #ffffff)", opacity: 0.75 }}>
                       Click any peer to open in SI
                     </span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span>COMPANY</span>
-                    <span style={{ textAlign: "right" }}>PRICE</span>
-                    <span style={{ textAlign: "right" }}>CHANGE</span>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #232830)" }}>
+                    <span>Company</span>
+                    <span style={{ textAlign: "right" }}>Price</span>
+                    <span style={{ textAlign: "right" }}>Change</span>
                     <span style={{ textAlign: "right" }} title="Year to date: price vs the last close of the prior year. A * means it was listed this year, so it is measured from its first close.">YTD</span>
-                    <span style={{ textAlign: "right" }}>MKT CAP</span>
+                    <span style={{ textAlign: "right" }}>Mkt cap</span>
                     <span style={{ textAlign: "right" }}>P/E</span>
-                    <span style={{ textAlign: "right" }}>RS RANK</span>
+                    <span style={{ textAlign: "right" }}>RS rank</span>
                   </div>
                   {peersPending ? (
                     <div aria-busy="true" style={{ padding: "8px 0" }}>
@@ -3962,8 +2774,8 @@ export function StockIntelligenceScreen() {
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 15,
                             color: "var(--si-text-hi, #e8eef4)",
-                            padding: "11px 8px",
-                            borderBottom: "1px solid var(--si-border, #1c2733)",
+                            padding: "10px 8px",
+                            borderBottom: "1px solid var(--si-border, #232830)",
                             cursor: "pointer",
                             borderRadius: 4,
                             transition: "background 150ms ease",
@@ -4002,23 +2814,12 @@ export function StockIntelligenceScreen() {
             TAB 5: TECHNICALS (Issue 2: Full Live Technical Chart)
             ==================================================== */}
         {activeTab === "tech" && (
-          <div className="si-ov" style={{ alignItems: "stretch" }}>
-            <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
-            {/* Live technical chart with the full MC stock-function toolbar */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <TechnicalTiles reads={stockDetail.read} facts={siFacts} high52={hi52} />
+            <div className="si-ov" style={{ alignItems: "stretch" }}>
+              <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
+              {/* Live technical chart with the full MC stock-function toolbar */}
             <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--si-border, #1c2733)", flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <StockLogo sym={stock.t} size={34} />
-                  <div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{stock.t}</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-hi, #ffffff)", opacity: 0.7, marginTop: 3 }}>{stock.name || liveCompany?.name}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, whiteSpace: "nowrap" }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{usd(stock.p)}</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: stock.c >= 0 ? UP : DN }}>{pct(stock.c)}</span>
-                </div>
-              </div>
               <div className="si-tech-chart" style={{ minHeight: 540, width: "100%" }}>
                 <style>{`.si-tech-chart .cc-tvbtn.icon{display:none}.si-tech-chart .cc-tvbtn{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:12.96px;font-weight:500;line-height:1.2;padding:6px 8px;background:none;border:0;color:var(--si-text-hi,#e8eef4);cursor:pointer;white-space:nowrap}.si-tech-chart .cc-tvbtn svg{opacity:.75}.si-tech-chart .cc-tvbtn b{font-weight:600}.si-tech-chart .cc-tvbtn b{font-size:inherit}${isLight ? "" : ".si-tech-chart .rng.indbtn{padding:4px 9px;border-radius:6px;font-weight:600;color:#6c747c;background:transparent}.si-tech-chart .rng.indbtn.on{background:#14181b;color:#f4f6f5}.si-tech-chart .cc-ma.on .cc-ma-all,.si-tech-chart .cc-ma.on .cc-ma-all *{color:#f4f6f5}.si-tech-chart .cc-ma:not(.on) .cc-ma-all,.si-tech-chart .cc-ma:not(.on) .cc-ma-all *{color:#6c747c}"}`}</style>
                 <StockChart
@@ -4039,20 +2840,13 @@ export function StockIntelligenceScreen() {
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-              {technicalReadCard}
-
-              {/* Key levels */}
-              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
-                  KEY SUPPORT & RESISTANCE LEVELS
-                </span>
-                {stockDetail.levels.map((lv, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)" }}>{lv.k}</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: lv.col === "#e8eef4" ? "var(--si-text-hi, #e8eef4)" : lv.col }}>{lv.v}</span>
-                  </div>
-                ))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+                <div style={{ border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+                  <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
+                    {"Where Price Sits · Support & Resistance"}
+                  </span>
+                  <PriceLadder price={siFacts.price} {...supportResistance(siFacts)} max={4} />
+                </div>
               </div>
             </div>
           </div>
@@ -4066,33 +2860,34 @@ export function StockIntelligenceScreen() {
             <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", display: "flex", flexDirection: "column", minHeight: 560 }}>
               <div style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                 <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                  ✦ ASK ME ANYTHING
+                  <span data-caps>✦ AI research copilot</span>
                 </span>
               </div>
               <div style={{ flex: 1, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
                 {aiAnalysisDoc?.analysis && (
-                  <div style={{ border: "1px solid rgba(127,168,208,0.25)", background: "var(--si-card-tint, rgba(12, 17, 24, 0.6))", padding: "14px 16px", marginBottom: 8 }}>
+                  <div style={{ border: "1px solid rgba(127,168,208,0.25)", background: "var(--si-card-tint, rgba(20, 23, 28, 0.6))", padding: "14px 16px", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                       {aiAnalysisDoc.analysis.headline && (
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                           {aiAnalysisDoc.analysis.headline}
                         </span>
                       )}
                     </div>
-                    {aiAnalysisDoc.analysis.newsSummary && (
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, marginBottom: 6 }}>
-                        {aiAnalysisDoc.analysis.newsSummary}
-                      </div>
-                    )}
-                    {aiAnalysisDoc.analysis.technicalSummary && (
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-accent-soft, #7fa8d0)", lineHeight: 1.4 }}>
-                        {aiAnalysisDoc.analysis.technicalSummary}
-                      </div>
-                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+                      {[aiAnalysisDoc.analysis.newsSummary, aiAnalysisDoc.analysis.technicalSummary]
+                        .filter((t): t is string => !!t)
+                        .flatMap((t) => t.split(/(?<=\.) (?=[A-Z])/))
+                        .map((sentence, n) => (
+                          <div key={n} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 10, lineHeight: 1.5 }}>
+                            <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>{"▸"}</span>
+                            <span>{highlightNumbers(sentence)}</span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 )}
                 {aiChat.length === 0 && !aiAnalysisDoc?.analysis && (
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.6 }}>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.6 }}>
                     Ask anything about {stock.t}. The assistant already has full knowledge of current signals, catalysts, valuation metrics, and intraday factor attribution.
                   </div>
                 )}
@@ -4109,7 +2904,7 @@ export function StockIntelligenceScreen() {
                       background: m.role === "user" ? "rgba(89,128,166,0.18)" : "var(--si-card, rgba(12,17,24,0.95))",
                       padding: "12px 16px",
                       fontFamily: "'Manrope', sans-serif",
-                      fontSize: 14.5,
+                      fontSize: 17,
                       color: "var(--si-text-hi, #e8eef4)",
                       lineHeight: 1.55,
                       whiteSpace: m.role === "user" ? "pre-wrap" : "normal",
@@ -4117,14 +2912,14 @@ export function StockIntelligenceScreen() {
                   >
                     {m.role === "user" ? m.text : formatAiChatReply(m.text)}
                     {m.note && (
-                      <div style={{ marginTop: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-sub, #5d6b79)", lineHeight: 1.4 }}>
+                      <div style={{ marginTop: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-sub, #5d6b79)", lineHeight: 1.4 }}>
                         {m.note}
                       </div>
                     )}
                   </div>
                 ))}
                 {aiBusy && (
-                  <div style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-accent-soft, #7fa8d0)" }}>
+                  <div style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: "var(--si-accent-soft, #7fa8d0)" }}>
                     Synthesizing research on {stock.t}…
                   </div>
                 )}
@@ -4139,10 +2934,10 @@ export function StockIntelligenceScreen() {
                     flex: 1,
                     height: 42,
                     background: "var(--si-bg, #080b10)",
-                    border: "1px solid var(--si-border-sec, #2a3a4a)",
+                    border: "1px solid var(--si-border-sec, #2e343d)",
                     color: "var(--si-text-hi, #e8eef4)",
                     fontFamily: "'Manrope', sans-serif",
-                    fontSize: 14,
+                    fontSize: 16,
                     padding: "0 14px",
                     outline: "none",
                   }}
@@ -4156,7 +2951,7 @@ export function StockIntelligenceScreen() {
                     background: "#5980a6",
                     color: "#ffffff",
                     fontFamily: "'Manrope', sans-serif",
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: 700,
                     cursor: "pointer",
                   }}
@@ -4168,8 +2963,8 @@ export function StockIntelligenceScreen() {
 
             {/* Suggested Prompts */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                SUGGESTED RESEARCH QUESTIONS
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+                <span data-tc>Suggested Research Questions</span>
               </div>
               {[
                 `What is the institutional bull case for ${stock.t}?`,
@@ -4187,7 +2982,7 @@ export function StockIntelligenceScreen() {
                     padding: 14,
                     color: "var(--si-text-hi, #e8eef4)",
                     fontFamily: "'Manrope', sans-serif",
-                    fontSize: 13.5,
+                    fontSize: 16,
                     lineHeight: 1.4,
                     cursor: "pointer",
                   }}
@@ -4205,17 +3000,17 @@ export function StockIntelligenceScreen() {
         {activeTab === "lab" && (() => {
           if (!labStarted) {
             const ready = pickDir != null && pickHz != null && pickMode != null;
-            const stepLabel: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 8 };
+            const stepLabel: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 8 };
             const choice = (active: boolean, accent: string, disabled: boolean): React.CSSProperties => ({
               height: 44,
               minWidth: 120,
               padding: "0 18px",
-              border: `1px solid ${active ? accent : "#1c2733"}`,
+              border: `1px solid ${active ? accent : "#232830"}`,
               background: active ? "rgba(89,128,166,0.2)" : "transparent",
-              color: "var(--si-text-hi, #ffffff)",
+              color: "var(--si-text-white, #ffffff)",
               opacity: disabled ? 0.35 : 1,
               fontFamily: "'Manrope', sans-serif",
-              fontSize: 15,
+              fontSize: 17,
               fontWeight: 700,
               cursor: disabled ? "not-allowed" : "pointer",
               transition: "background 160ms, border-color 160ms",
@@ -4223,7 +3018,7 @@ export function StockIntelligenceScreen() {
             return (
               <>
                 {labSavedNote && (
-                  <div style={{ maxWidth: 780, width: "100%", margin: "14px auto -6px", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.07)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ maxWidth: 920, width: "100%", margin: "14px auto -6px", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.07)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <span style={{ color: "var(--up, #4ade80)", fontSize: 16 }}>✓</span>
                     <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-hi, #ffffff)" }}>{labSavedNote}</span>
                     <button
@@ -4242,14 +3037,14 @@ export function StockIntelligenceScreen() {
                 )}
                 <div
                   id="si-trade-builder-top"
-                  style={{ scrollMarginTop: 110, maxWidth: 780, width: "100%", margin: "14px auto 20px", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 30px", display: "flex", flexDirection: "column", gap: 20 }}
+                  style={{ scrollMarginTop: 110, maxWidth: 920, width: "100%", margin: "14px auto 20px", border: "1px solid var(--si-border, #232830)", background: "var(--si-card, rgba(20, 23, 28, 0.9))", padding: "22px 30px", display: "flex", flexDirection: "column", gap: 20 }}
                 >
                   <div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>TRADE BUILDER</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>BUILD YOUR TRADE STRATEGY FOR {stock.t}</div>
+                    <div data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>Trade Builder</div>
+                    <div data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "var(--si-text-white, #ffffff)", marginTop: 4, lineHeight: 1.05 }}>Build your trade strategy for {stock.t}</div>
                   </div>
                   <div>
-                    <div style={stepLabel}>STEP 1 · DIRECTION</div>
+                    <div data-tc style={stepLabel}>Step 1 · Direction</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {(["Bull", "Bear"] as const).map((d) => (
                         <button key={d} onClick={() => setPickDir(d)} style={choice(pickDir === d, d === "Bull" ? UP : DN, false)}>
@@ -4259,7 +3054,7 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
                   <div>
-                    <div style={stepLabel}>STEP 2 · HORIZON</div>
+                    <div data-tc style={stepLabel}>Step 2 · Horizon</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {["1M", "3M", "6M", "9M"].map((hz) => (
                         <button key={hz} disabled={pickDir == null} onClick={() => setPickHz(hz)} style={{ ...choice(pickHz === hz, STEEL, pickDir == null), minWidth: 80, fontFamily: "'JetBrains Mono', monospace" }}>
@@ -4269,7 +3064,7 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
                   <div>
-                    <div style={stepLabel}>STEP 3 · MODE</div>
+                    <div data-tc style={stepLabel}>Step 3 · Mode</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {([
                         ["NORMAL", "Normal", "Engine weights, fixed"],
@@ -4282,7 +3077,7 @@ export function StockIntelligenceScreen() {
                           style={{ ...choice(pickMode === m, STEEL, pickHz == null), height: 62, minWidth: 230, textAlign: "left", display: "flex", flexDirection: "column", justifyContent: "center", gap: 3 }}
                         >
                           <span>{title}</span>
-                          <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>{sub}</span>
+                          <span style={{ fontSize: 15, fontWeight: 500, opacity: 0.8 }}>{sub}</span>
                         </button>
                       ))}
                     </div>
@@ -4303,9 +3098,9 @@ export function StockIntelligenceScreen() {
                         setLabSavedNote(null);
                         setLabStarted(true);
                       }}
-                      style={{ height: 50, padding: "0 30px", border: "none", background: ready ? "#5980a6" : "#1c2733", color: "#ffffff", opacity: ready ? 1 : 0.5, fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", cursor: ready ? "pointer" : "not-allowed" }}
+                      style={{ height: 54, padding: "0 30px", border: "none", background: ready ? "#5980a6" : "#232830", color: "#ffffff", opacity: ready ? 1 : 0.5, fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", cursor: ready ? "pointer" : "not-allowed" }}
                     >
-                      RUN STRATEGY →
+                      <span data-tc>Run Strategy →</span>
                     </button>
                   </div>
                 </div>

@@ -41,7 +41,7 @@ export function highlightSignedPercents(text: string | null | undefined): ReactN
   );
 }
 
-/** Small "i" button that shows how a card is calculated on hover, focus or tap. */
+/** Small info button (the design's "i" icon) that shows how a card is calculated on hover, focus or tap. */
 export function InfoTip({ lines, align = "left" }: { lines: [string, string][]; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
   return (
@@ -61,22 +61,25 @@ export function InfoTip({ lines, align = "left" }: { lines: [string, string][]; 
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         style={{
-          width: 18,
-          height: 18,
+          width: 16,
+          height: 16,
           borderRadius: "50%",
           border: "1px solid var(--si-accent-light, #a9c6e3)",
           background: "transparent",
           color: "var(--si-accent-light, #a9c6e3)",
-          fontFamily: "'Manrope', sans-serif",
-          fontSize: 11,
-          fontWeight: 700,
-          fontStyle: "italic",
+          fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Arial, sans-serif",
+          fontSize: 15,
+          fontWeight: 600,
+          fontStyle: "normal",
           lineHeight: 1,
           cursor: "pointer",
           padding: 0,
         }}
       >
-        i
+        <svg width={10} height={10} viewBox="0 0 12 12" aria-hidden="true" style={{ display: "block" }}>
+          <circle cx="7" cy="2.3" r="1.15" fill="currentColor" />
+          <path d="M6.5 4.9 L5.3 9.1 Q5.1 10.1 6 10.1 Q6.9 10.1 7.6 9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       {open && (
         <span
@@ -89,8 +92,8 @@ export function InfoTip({ lines, align = "left" }: { lines: [string, string][]; 
             width: 300,
             whiteSpace: "normal",
             padding: "12px 14px",
-            border: "1px solid var(--si-border-sec, #2a3a4a)",
-            background: "var(--si-card, #0c1118)",
+            border: "1px solid var(--si-border-sec, #2e343d)",
+            background: "var(--si-card, #14171c)",
             boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
             display: "flex",
             flexDirection: "column",
