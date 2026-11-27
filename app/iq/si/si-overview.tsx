@@ -276,7 +276,7 @@ export function SiOverview({ data }: { data: OverviewData }) {
             <div className="ovx-gh">
               <div>
                 <span className="ovx-eb" data-caps>
-                  {mode === "qoq" ? "GROWTH · QUARTER OVER QUARTER" : "GROWTH · YEAR OVER YEAR"}
+                  GROWTH
                 </span>
                 {headline && <h2 className="ovx-gt">{headline}</h2>}
               </div>
