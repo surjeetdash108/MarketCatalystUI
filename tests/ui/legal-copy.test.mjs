@@ -1,6 +1,5 @@
-// The app's Terms and Privacy carry no draft markers (W-22, 24 Nov 2026 audit):
-// §12 is the neutral pre-launch paragraph until counsel approves the full text,
-// which is kept in docs/legal only. Run: node --test tests/ui/
+// The app's Terms and Privacy carry no draft markers (W-22, 24 Nov 2026 audit);
+// §12 prints the shared subscription terms (W-26, 26 Nov 2026 audit). Run: node --test tests/ui/
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -17,9 +16,17 @@ describe("app legal pages", () => {
       assert.doesNotMatch(src, /Draft — legal review required/);
     }
   });
-  it("§12 is the neutral pre-launch paragraph", () => {
-    assert.ok(terms.includes("Paid plans are launching soon. Subscription terms will be published here before any charge."));
-    assert.ok(!terms.includes("7-day free trial"));
+  it("§12 prints the shared subscription terms that Home and checkout state (W-26)", () => {
+    assert.match(terms, /SUBSCRIPTION_TERMS\.termsParagraphs\.map/);
+    assert.ok(!terms.includes("launching soon"));
+    const gen = read("app/iq/billing/refund-policy.generated.ts");
+    assert.match(gen, /7-day free trial, counted from sign-up/);
+    assert.match(gen, /Plans renew automatically until you cancel\. No refunds\./);
+    assert.match(read("app/iq/billing/checkout/summary-card.tsx"), /REFUND_POLICY\.checkoutLine/);
+  });
+  it("one spelling of advisor, no options figures while there is no options chain (W-14, W-27)", () => {
+    for (const src of [terms, privacy]) assert.doesNotMatch(src, /\badvisers?\b/);
+    assert.doesNotMatch(terms, /options figures/);
   });
   it("entity and Last Updated come from legal-entity.ts, one format", () => {
     assert.match(entity, /LEGAL_ENTITY = "MarketCatalyst Analytics LLC"/);

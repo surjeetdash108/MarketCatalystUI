@@ -1,4 +1,5 @@
 import { LEGAL_ENTITY, LEGAL_UPDATED } from "./legal-entity";
+import { SUBSCRIPTION_TERMS } from "../../iq/billing/refund-policy.generated";
 export function TermsContent() {
   return (
     <div className="legal-content-root">
@@ -91,7 +92,7 @@ export function TermsContent() {
         <p>By creating an account, purchasing a subscription, or otherwise accessing or using the Service, you agree to these Terms and to our Privacy Policy, which is incorporated into these Terms by reference. If you do not agree to these Terms, do not access or use the Service.</p>
         <h2 id="description">2. Description of the Service</h2>
         <p>MarketCatalyst provides market data, market recaps, earnings and analyst-action summaries, SEC filing data, screeners, data visualizations, watchlist and portfolio-tracking tools, AI-generated summaries, and related financial commentary, strictly for informational and educational purposes.</p>
-        <p>We are not a registered investment adviser, broker-dealer, or financial planner. We do not manage client assets, execute trades, route orders, or hold customer funds or securities, and we do not provide personalized investment advice or recommendations to buy, sell, or hold any security. Some features let you set your own automated data alerts or show algorithmic ratings; these are impersonal data tools, as described in Section 6, and are not trade recommendations or stock picks.</p>
+        <p>We are not a registered investment advisor, broker-dealer, or financial planner. We do not manage client assets, execute trades, route orders, or hold customer funds or securities, and we do not provide personalized investment advice or recommendations to buy, sell, or hold any security. Some features let you set your own automated data alerts or show algorithmic ratings; these are impersonal data tools, as described in Section 6, and are not trade recommendations or stock picks.</p>
         <p>Trading stocks, options, and other financial instruments carries inherent risk, including the possible loss of principal. Please consider your own financial goals, time horizon, and risk tolerance, and consult a qualified financial professional before making any investment decision.</p>
         <h2 id="no-advice">3. No Investment Advice; No Fiduciary Relationship</h2>
         <p>Nothing on the Service constitutes, or should be relied upon as, investment, legal, tax, accounting, or financial advice, or a recommendation, offer, or solicitation to buy or sell any security, instrument, or asset. All content is general and impersonal and is not tailored to your financial situation or objectives. You are solely responsible for evaluating the merits and risks of any investment decision, and you should consult a qualified, licensed financial advisor before making one.</p>
@@ -106,7 +107,7 @@ export function TermsContent() {
             <li>
               <strong>Delayed and real-time data.</strong> Depending on your plan, data may be real-time, delayed, or end-of-day. Each panel indicates whether its figures are live or end-of-day where we can do so, but you should not assume any figure is real-time.</li>
               <li>
-                <strong>Estimated, illustrative, and simulated data.</strong> Certain data, including some options figures, may be estimated, illustrative, or simulated for educational or demonstration purposes. Always confirm prices and quotes with your broker before trading.</li>
+                <strong>Estimated, illustrative, and simulated data.</strong> Certain data may be estimated, illustrative, or simulated for educational or demonstration purposes. Always confirm prices and quotes with your broker before trading.</li>
                 <li>
                   <strong>Provider terms.</strong> Third-Party Data remains subject to the rights and restrictions of its providers. Our data providers may require you to agree to additional terms or confirm your subscriber status (for example, whether you are a &quot;professional&quot; or &quot;non-professional&quot; user) before you receive certain data. Unless we agree otherwise in writing, data is provided for your personal, non-commercial use only.</li>
                 </ul>
@@ -172,7 +173,7 @@ export function TermsContent() {
                                     <strong>Feedback.</strong> If you send us suggestions, ideas, or other feedback about the Service, we may use it for any purpose without restriction or obligation to you.</li>
                                   </ul>
                                   <h2 id="subscriptions">12. Subscriptions, Billing, Auto-Renewal, and Cancellation</h2>
-                                  <p data-testid="terms-subscriptions">Paid plans are launching soon. Subscription terms will be published here before any charge.</p>
+                                  <div data-testid="terms-subscriptions">{SUBSCRIPTION_TERMS.termsParagraphs.map((p) => <p key={p.slice(0, 24)}>{p}</p>)}</div>
                                                       <h2 id="dmca">13. Copyright Complaints (DMCA)</h2>
                                                       <p>We respect intellectual property rights. If you believe material on the Service infringes your copyright, send a notice to our designated copyright agent that includes: (a) your physical or electronic signature; (b) identification of the copyrighted work; (c) identification of the allegedly infringing material and where it is located on the Service; (d) your contact information; (e) a statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law; and (f) a statement, under penalty of perjury, that the information in your notice is accurate and that you are the copyright owner or authorized to act on the owner&apos;s behalf.</p>
                                                       <p>
@@ -194,7 +195,7 @@ export function TermsContent() {
                                                           <li>
                                                             <strong>By us.</strong> We may suspend or terminate your access to the Service, in whole or in part, at any time, with or without notice, if we reasonably believe you have violated these Terms, if required by law or by our data providers, to protect the Service or other users, or if we discontinue the Service. If we terminate your paid subscription without cause, we will refund any prepaid fees for the unused portion of your current billing period. If we terminate because you violated these Terms, you will not receive a refund.</li>
                                                             <li>
-                                                              <strong>By you.</strong> You may stop using the Service, or close your account, at any time. Closing your account does not automatically cancel a paid subscription if it is billed through a third party; cancel any paid subscription as described in Section 12.</li>
+                                                              <strong>By you.</strong> You may stop using the Service, or close your account, at any time. Closing your account does not automatically cancel a paid subscription if it is billed through a third party; cancel any paid subscription in Manage Plan, as described in Section 12.</li>
                                                               <li>
                                                                 <strong>Effect.</strong> Upon termination, your right to access the Service ends immediately, and we may delete your account data in accordance with our Privacy Policy. Any fees owed before termination remain due.</li>
                                                               </ul>
