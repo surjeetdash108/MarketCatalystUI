@@ -1405,6 +1405,17 @@
   max-width: 100% !important;
 }
 
+/* The modal's header already has the one button that leaves the expanded view. A chart inside it
+   used to add its own full-screen button next to it, two icons for the same thing; that one is
+   hidden here (and the room the toolbar kept for it is given back). */
+.chart-modal-body .cc-tools>.cc-fullbtn {
+  display: none;
+}
+
+.chart-modal-body .cc-tools {
+  padding-right: 0;
+}
+
 /* market pulse */
 .pulse {
   display: grid;
