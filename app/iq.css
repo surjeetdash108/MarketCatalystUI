@@ -1845,6 +1845,17 @@
   gap: 4px;
 }
 
+/* Fear & Greed card, laid out like CNN's: gauge on the left, past readings on the right. */
+.iq-root .fg-cnn { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 16px; width: 100%; }
+.iq-root .fg-cnn-gauge { flex: 1 1 210px; min-width: 0; }
+.iq-root .fg-cnn-gauge svg { display: block; width: 100%; height: auto; }
+.iq-root .fg-past { flex: 1 1 150px; min-width: 150px; display: flex; flex-direction: column; }
+.iq-root .fg-past-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dotted var(--border-strong); }
+.iq-root .fg-past-row:last-child { border-bottom: 0; }
+.iq-root .fg-past-k { font-size: .64rem; color: var(--text-dim-solid); }
+.iq-root .fg-past-v { font-size: .8rem; font-weight: 700; color: var(--text-hi); }
+.iq-root .fg-badge { flex: none; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px; border: 1.5px solid currentColor; display: inline-flex; align-items: center; justify-content: center; font: 700 .74rem var(--f-mono); }
+
 .gauge-label {
   font-size: 0.6562rem;
   color: var(--text-dim-solid);
@@ -13598,7 +13609,6 @@ h6.sd-sec {
   letter-spacing: -.01em;
   line-height: 1.25;
 }
-.iq-root .wmnc-sub { font-size: .8rem; font-weight: 600; color: var(--text-dim-solid); margin-left: 4px; }
 .iq-root .wmnc-wrap { padding: 6px 18px 14px; }
 .iq-root .wmnc-viewport { overflow: hidden; min-height: 190px; }
 .iq-root .wmnc-track {
@@ -14498,9 +14508,8 @@ h6.sd-sec {
 /* ============================================================
    Heatmap (redesign): title, grouped controls, legend, flat dark map
    ============================================================ */
-.iq-root .hm2-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px; margin: 2px 0 14px; }
-.iq-root .hm2-h1 { margin: 0; font-family: var(--f-display); font-size: 1.7rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; color: var(--text-hi); }
-.iq-root .hm2-sub { margin: 4px 0 0; font-size: .86rem; color: var(--text-dim-solid); }
+.iq-root .hm2-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px; margin: 2px 0 14px; }
+.iq-root .hm2-sub { margin: 0; font-size: .86rem; color: var(--text-dim-solid); }
 .iq-root .hm2-search { display: flex; align-items: center; gap: 10px; width: 260px; max-width: 100%; height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); color: var(--text-dim-solid); }
 .iq-root .hm2-search:focus-within { border-color: var(--brand); }
 .iq-root .hm2-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text-hi); font: inherit; font-size: .9rem; }
