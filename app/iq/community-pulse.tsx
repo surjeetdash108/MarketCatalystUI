@@ -213,7 +213,10 @@ export function CommunityPulse() {
   const [introPhase, setIntroPhase] = useState(true);
   useEffect(() => {
     if (!introIds) return;
-    const t = setTimeout(() => setIntroPhase(false), 1800);
+    // Long enough for the whole 4 s flash (iq.css `.cpulse-tw.lfb-intro`) to play
+    // out on the third post, which starts 2 staggers late. Dropping the class
+    // earlier cut the flash short.
+    const t = setTimeout(() => setIntroPhase(false), 4000 + 2 * ARRIVAL_STAGGER_MS + 80);
     return () => clearTimeout(t);
   }, [introIds]);
   // Highlights follow the box as it is typed; the posts below catch up after the pause.

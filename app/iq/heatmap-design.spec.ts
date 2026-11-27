@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { asOfLabel, framePct, windowPctToLive, lastSessionPct, dayMovePct, floorWeights, sectorHeaderPlan, heatGradient, heatTile, NO_DATA_TILE, squarify, packStocks, MORE_KEY, tileFontRem } from "./heatmap-design";
+import { asOfLabel, framePct, ytdPct, windowPctToLive, lastSessionPct, dayMovePct, floorWeights, sectorHeaderPlan, heatGradient, heatTile, NO_DATA_TILE, squarify, packStocks, MORE_KEY, tileFontRem } from "./heatmap-design";
 
 describe("heatTile", () => {
   it("is the same slate at 0%, saturates at ±3% and does not go past it", () => {
@@ -46,10 +46,56 @@ describe("framePct", () => {
     assert.equal(framePct("1W", 0.8, co), 2.5);
     assert.equal(framePct("1M", 0.8, co), -4.1);
   });
-  it("a field that is not synced is null, never the day move; YTD is always null", () => {
+  it("a field that is not synced is null, never the day move; YTD with no stored base is null too", () => {
     assert.equal(framePct("1W", 0.8, {}), null);
     assert.equal(framePct("1M", 0.8, undefined), null);
     assert.equal(framePct("YTD", 0.8, co), null);
+    assert.equal(framePct("YTD", 0.8, undefined), null);
+  });
+});
+
+describe("ytdPct", () => {
+  const co = { ytdBaseClose: 100, ytdYear: 2026 };
+  it("is the price against the stored prior-year-end close", () => {
+    assert.equal(ytdPct(co, 125, "2026-11-27")?.toFixed(2), "25.00");
+    assert.equal(ytdPct(co, 80, "2026-11-27")?.toFixed(2), "-20.00");
+  });
+  it("is null with no base, no price, or a bad one", () => {
+    assert.equal(ytdPct(null, 125, "2026-11-27"), null);
+    assert.equal(ytdPct({}, 125, "2026-11-27"), null);
+    assert.equal(ytdPct({ ytdBaseClose: null, ytdYear: 2026 }, 125, "2026-11-27"), null);
+    assert.equal(ytdPct({ ytdBaseClose: 0, ytdYear: 2026 }, 125, "2026-11-27"), null);
+    assert.equal(ytdPct(co, null, "2026-11-27"), null);
+    assert.equal(ytdPct(co, 0, "2026-11-27"), null);
+  });
+  it("is null when the base is another year's: around New Year the job has not rolled yet", () => {
+    assert.equal(ytdPct({ ytdBaseClose: 100, ytdYear: 2025 }, 125, "2026-01-02"), null);
+    assert.equal(ytdPct({ ytdBaseClose: 100 }, 125, "2026-01-02"), null);
+    assert.equal(ytdPct(co, 125, null), null);
+  });
+});
+
+describe("framePct for YTD", () => {
+  const co = { ytdBaseClose: 200, ytdYear: 2026, price: 220 };
+  it("measures to the live price when there is one", () => {
+    assert.equal(framePct("YTD", 0.8, co, { price: 250, dateIso: "2026-11-27" })?.toFixed(2), "25.00");
+  });
+  it("falls back to the doc's own price with no live price", () => {
+    assert.equal(framePct("YTD", 0.8, co, { price: null, dateIso: "2026-11-27" })?.toFixed(2), "10.00");
+  });
+  it("needs the session date to check the base's year", () => {
+    assert.equal(framePct("YTD", 0.8, co, null), null);
+  });
+  it("ignores the 1W/1M stored moves and the day move", () => {
+    const withMoves = { ...co, week5ChangePct: 9, monthChangePct: 9 };
+    assert.equal(framePct("YTD", 99, withMoves, { price: 250, dateIso: "2026-11-27" })?.toFixed(2), "25.00");
+  });
+  it("is null across an unadjusted split in the stored closes, like 1W and 1M", () => {
+    const split = { ...co, week5Closes: [
+      { date: "2026-11-19", close: 100 }, { date: "2026-11-20", close: 100 }, { date: "2026-11-23", close: 10 },
+      { date: "2026-11-24", close: 10 }, { date: "2026-11-25", close: 10 }, { date: "2026-11-26", close: 10 },
+    ] };
+    assert.equal(framePct("YTD", 0.8, split, { price: 250, dateIso: "2026-11-27" }), null);
   });
 });
 
@@ -94,7 +140,7 @@ describe("framePct with the live price", () => {
     assert.equal(framePct("1M", 0.8, co, live)?.toFixed(2), ((99 / 101 - 1) * 100).toFixed(2));
     assert.equal(framePct("1M", 0.8, { ...co, month21Closes: null }, live), 21);
   });
-  it("without a live price or closes the stored move stands; 1D and YTD are unchanged", () => {
+  it("without a live price or closes the stored move stands; 1D is unchanged and YTD with no base is null", () => {
     assert.equal(framePct("1W", 0.8, co, null), 5.71);
     assert.equal(framePct("1W", 0.8, { week5ChangePct: 5.71 }, live), 5.71);
     assert.equal(framePct("1D", 0.8, co, live), 0.8);

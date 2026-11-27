@@ -109,6 +109,17 @@ export interface CompanyDoc {
    *  price's session and [1] once a later session is. null/absent until the
    *  nightly technicals job has run with it. */
   month21Closes?: Week5Close[] | null;
+  /** The price YTD is measured FROM: the last close of the prior year, from the
+   *  vendor's split-adjusted bars (technical-indicators.job; the same base the SI
+   *  peers YTD column uses). The reader measures it to the live price it shows.
+   *  null/absent until the nightly technicals job has run with it. */
+  ytdBaseClose?: number | null;
+  /** The ET calendar year `ytdBaseClose` belongs to, so a base left over from last
+   *  year is never read as this year's. */
+  ytdYear?: number | null;
+  /** Set only for a stock listed this year: the ET date of its first close, which
+   *  is then the YTD base ("since it began trading"). */
+  ytdSince?: string | null;
   stochK?: number | null;
   adx14?: number | null;
   /** Annualized 30-day realized volatility (%) — the Macro "30d Vol" column. */

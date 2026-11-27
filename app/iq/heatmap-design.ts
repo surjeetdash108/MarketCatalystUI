@@ -4,7 +4,7 @@
  * Kept out of the component so they can be tested without rendering it.
  */
 
-/** Time frames offered above the map. YTD has no synced field yet, so it is shown but off. */
+/** Time frames offered above the map. YTD reads the prior-year-end base the technicals job stores (see ytdPct). */
 export type HmFrame = "1D" | "1W" | "1M" | "YTD";
 
 /** [move %, r, g, b] — colour at that move; between stops it blends linearly. */
@@ -67,8 +67,9 @@ export interface FrameLive {
  * open to the next night's run: on 24 Nov NVDA's 1W read +5.71% while the five
  * sessions up to the live price were -1.33%). When `live` and the job's dated
  * closes are there, the window is re-measured to the live price instead
- * (windowPctToLive); otherwise the stored move stands. Null when neither exists
- * (and always for YTD).
+ * (windowPctToLive); otherwise the stored move stands. Null when neither exists.
+ * YTD is the live price against the stored prior-year-end close (ytdPct); with no
+ * live price it uses the doc's own price, and it has no stored move to fall back on.
  */
 export function framePct(
   frame: HmFrame,
@@ -79,6 +80,9 @@ export function framePct(
         monthChangePct?: number | null;
         week5Closes?: DatedClose[] | null;
         month21Closes?: DatedClose[] | null;
+        price?: number | null;
+        ytdBaseClose?: number | null;
+        ytdYear?: number | null;
       }
     | null
     | undefined,
@@ -90,7 +94,25 @@ export function framePct(
   if (c?.week5Closes && splitTainted({ week5Closes: c.week5Closes })) return null;
   if (frame === "1W") return (live ? windowPctToLive(c?.week5Closes, live.price, live.dateIso) : null) ?? c?.week5ChangePct ?? null;
   if (frame === "1M") return (live ? windowPctToLive(c?.month21Closes, live.price, live.dateIso) : null) ?? c?.monthChangePct ?? null;
-  return null;
+  return ytdPct(c, live?.price ?? c?.price ?? null, live?.dateIso ?? null);
+}
+
+/**
+ * Year to date: `price` against the last close of the prior year the technicals job
+ * stored (the stock's first close for one listed this year). Null with no base or no
+ * price, and null when the base belongs to a different year than the session being
+ * shown: around New Year the job has not rolled yet, and last year's base would
+ * make every tile read this year's move as the whole of last year's.
+ */
+export function ytdPct(
+  c: { ytdBaseClose?: number | null; ytdYear?: number | null } | null | undefined,
+  price: number | null | undefined,
+  sessionIso: string | null | undefined,
+): number | null {
+  const base = c?.ytdBaseClose;
+  if (base == null || !(base > 0) || price == null || !(price > 0)) return null;
+  if (!sessionIso || c?.ytdYear !== Number(sessionIso.slice(0, 4))) return null;
+  return (price / base - 1) * 100;
 }
 
 /** A day-on-day jump of 2.5x+ either way that holds: an unadjusted split. Same rule as alpha-signals-model.splitTainted. */
