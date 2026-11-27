@@ -13,6 +13,7 @@ import type { Stock13FResponse } from "../stock-13f-view";
 import { etTodayIso, fmtMarketDate } from "../calendar-range";
 import { periodLabel, quarterCoverage } from "../thirteen-f-period";
 import { DEFAULT_LENS, combineLenses, toggleLens, type LensMode } from "../insider-lens";
+import { hasCompanyName } from "../company-name";
 
 // ---- Constants & Theme Colors (matches 13F & Insider standalone HTML) ----
 const UP = "var(--up, #3fd68a)";
@@ -1336,6 +1337,8 @@ export function InsiderScreen() {
                         {tag}
                       </span>
                     </div>
+                    {/* Second line: the company name. Left out when none is synced (it would just repeat the ticker). */}
+                    {(rowAlign || hasCompanyName(comp.name, s.t)) && (
                     <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
                       {rowAlign && (
                         <span
@@ -1347,6 +1350,7 @@ export function InsiderScreen() {
                           ◆
                         </span>
                       )}
+                      {hasCompanyName(comp.name, s.t) && (
                       <span
                         style={{
                           minWidth: 0,
@@ -1360,7 +1364,9 @@ export function InsiderScreen() {
                       >
                         {comp.name}
                       </span>
+                      )}
                     </div>
+                    )}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
                     <span
@@ -1461,7 +1467,9 @@ export function InsiderScreen() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flexShrink: 0 }}>
                 <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1, color: "var(--text-pure)" }}>{deepDive.t}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-pure-dim)", whiteSpace: "nowrap" }}>{deepDive.name}</span>
+                {hasCompanyName(deepDive.name, deepDive.t) && (
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-pure-dim)", whiteSpace: "nowrap" }}>{deepDive.name}</span>
+                )}
               </div>
               <div
                 style={{
