@@ -174,8 +174,23 @@ export function VerdictDialog({ breakdown: b, techReads, fundReads, onClose }: {
         </div>
 
         <span style={{ fontFamily: MANROPE, fontSize: 13, color: "var(--si-text-sub, #5d6b79)" }}>
-          Bands: +50 or more bullish {"·"} +20 to +50 lean bullish {"·"} {"−"}20 to +20 neutral {"·"} {"−"}50 to {"−"}20 lean bearish {"·"} below {"−"}50 bearish. A read of the data on this page, not investment advice.
+          Bands: +50 or more bullish {"·"} +20 to +50 lean bullish {"·"} {"−"}20 to +20 neutral {"·"} {"−"}50 to {"−"}20 lean bearish {"·"} below {"−"}50 bearish.
         </span>
+
+        {/* The disclaimer gets its own box so it is not read as part of the bands line. */}
+        <div
+          style={{
+            border: "1px solid var(--si-border-sec, #2a3a4a)",
+            background: "var(--si-accent-bg, rgba(89, 128, 166, 0.14))",
+            padding: "10px 14px",
+            fontFamily: MANROPE,
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--si-text-hi, #e8eef4)",
+          }}
+        >
+          A read of the data on this page, not investment advice.
+        </div>
       </div>
     </div>
   );

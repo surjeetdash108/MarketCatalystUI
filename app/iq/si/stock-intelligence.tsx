@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSI } from "./si-context";
 import { barsForHorizon } from "./horizon-bars";
-import { TrackedTradesList, type TrackedTrade } from "./tracked-trades-list";
+import { TrackedTradesList, sortTrades, type TrackedTrade } from "./tracked-trades-list";
 import { addTrade, formatSavedAt, listAllTrades, readTrades, removeTrade, writeTrades, type SavedTrade } from "./saved-trades";
 import { StockItem, DetailStock, UpcomingEvent } from "./types";
 import {
@@ -1031,6 +1031,16 @@ export function StockIntelligenceScreen() {
     if (trade.ticker !== currentTicker) handleSelectStock(trade.ticker);
   };
 
+  // Trade Tracker with trades saved but none for the open stock: open the first one in
+  // the list (newest) instead of the empty "no trade tracked" card. Waits until the list
+  // holds no trade for this stock, so a stock's own trades still loading is not overridden.
+  useEffect(() => {
+    if (activeTab !== "mon" || !currentTicker || trackedTrades.length === 0) return;
+    if (trackedTrades.some((t) => t.ticker === currentTicker)) return;
+    selectTrackedTrade(sortTrades(trackedTrades, "newest", () => null)[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentTicker, trackedTrades]);
+
   /** Delete one saved trade (any stock's, from the list or the open trade's Remove button). */
   const removeSavedTrade = (trade: { id: string; ticker: string }) => {
     try {
@@ -1970,6 +1980,10 @@ export function StockIntelligenceScreen() {
               ? { label: headline.extLabel, price: usd(headline.ahPrice), pct: pct(headline.ahPct), up: headline.ahPct >= 0 }
               : null
           }
+          sector={(() => {
+            const s = (liveCompany?.sector || stock.sector || "").trim();
+            return s && s !== "\u2014" ? s : null;
+          })()}
           marketCap={realMcap || "\u2014"}
           pe={peVal != null ? `${peVal.toFixed(1)}\u00D7` : "\u2014"}
           fpe={fpeVal != null ? `${fpeVal.toFixed(1)}\u00D7` : "\u2014"}
@@ -3535,7 +3549,8 @@ export function StockIntelligenceScreen() {
                         {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} TRADE
                       </span>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
+                    {/* Seven cells: 100px minimum so all seven fit one row from ~700px wide; narrower wraps. */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
                       {[
                         ["PRESENT PRICE", usd(stock.p), "#ffffff"],
                         ["TARGET", usd(tgtV), thBull ? UP : DN],
@@ -3545,9 +3560,9 @@ export function StockIntelligenceScreen() {
                         ["REWARD / RISK", thRR.toFixed(1) + "×", thRR >= 2 ? UP : thRR >= 1.2 ? "#f5b031" : DN],
                         ["TRADE CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
                       ].map(([k, v, c], idx) => (
-                        <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-text-hi, #ffffff)" }}>{k}</div>
-                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, color: c as string, marginTop: 4 }}>{v}</div>
+                        <div key={idx} style={{ padding: "12px 10px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #ffffff)" }}>{k}</div>
+                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: c as string, marginTop: 4, whiteSpace: "nowrap" }}>{v}</div>
                         </div>
                       ))}
                     </div>
@@ -3900,13 +3915,8 @@ export function StockIntelligenceScreen() {
                       <span style={{ color: savedThesis.dir === "Bull" ? UP : DN }}>{savedThesis.dir === "Bull" ? "LONG" : "SHORT"}</span> {stock.t} · TARGET{" "}
                       <span style={{ color: UP }}>{usd(savedThesis.target).replace(/\.00$/, "")}</span> IN <span style={{ color: "#4fb3ff" }}>{savedThesis.hz}</span> TIMEFRAME
                     </div>
-                    <div style={{ marginTop: 6 }}>
-                      <span title="This trade is stored in your current browser. It is not broker-connected and may not sync across devices." style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", background: "rgba(89, 128, 166, 0.2)", padding: "2px 6px", borderRadius: 3, color: "var(--si-accent-light, #a9c6e3)" }}>
-                        SAVED IN THIS BROWSER · NOT BROKER-CONNECTED
-                      </span>
-                    </div>
                     {formatSavedAt(savedThesis.savedAt) && (
-                      <div data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
+                      <div data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--si-text-mid, #93a1af)", marginTop: 8 }}>
                         Saved on {formatSavedAt(savedThesis.savedAt)}
                       </div>
                     )}
@@ -3985,8 +3995,11 @@ export function StockIntelligenceScreen() {
                   {L5.map((k) => {
                     const isCurrent = k === monStatus;
                     return (
+                      // data-tc keeps the case as written: the screen lowercases this letter-spaced text,
+                      // and a flex box cannot take the capital first letter back, so write "On track" here.
                       <div
                         key={k}
+                        data-tc
                         style={{
                           height: 30,
                           border: `1px solid ${isCurrent ? monCol : "#1c2733"}`,
@@ -4002,7 +4015,7 @@ export function StockIntelligenceScreen() {
                           transition: "all 250ms",
                         }}
                       >
-                        {k}
+                        {k.charAt(0) + k.slice(1).toLowerCase()}
                       </div>
                     );
                   })}
@@ -4186,7 +4199,9 @@ export function StockIntelligenceScreen() {
                       ALERT LOG
                     </div>
                     {[
-                      ["Now", `Status → ${monStatus}. ${monCause}`],
+                      // The status word takes the same colour as the summary box above: red for
+                      // INVALIDATED, orange AT RISK, amber WEAKENING, green ON TRACK / STRENGTHENING.
+                      ["Now", <>Status → <b style={{ color: monCol, fontWeight: 800 }}>{monStatus}</b>. {monCause}</>],
                       [formatSavedAt(savedThesis.savedAt).split(" · ")[0] || savedThesis.savedDate, `Trade saved${monEntry != null ? ` at ${usd(monEntry)}` : ""} · confidence ${savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
                     ].map(([tt, m], i) => (
                       <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>

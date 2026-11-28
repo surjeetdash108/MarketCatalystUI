@@ -68,6 +68,7 @@ import { tapeItemsToIndexDocs } from "../live-market-indices";
 import { useLiveQuotes } from "../live-quotes-context";
 import { ModuleThemeToggle } from "../theme/theme-toggle";
 import { StockLogo } from "../utils";
+import { everyMinute } from "../minute-clock";
 
 const prefetchBars = createBarsPrefetcher((path, opts) => apiGet(path, opts));
 
@@ -127,8 +128,7 @@ export function MoneyFlowScreen() {
       });
     };
     tick();
-    const id = setInterval(tick, 30_000);
-    return () => clearInterval(id);
+    return everyMinute(tick);
   }, []);
 
   // Selected sector filter (click to isolate)

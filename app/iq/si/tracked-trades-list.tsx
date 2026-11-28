@@ -109,20 +109,24 @@ export function TrackedTradesList({
       </div>
 
       {trades.length > 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-          <label htmlFor="si-trk-sort" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "var(--si-text-mid, #93a1af)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+          <label htmlFor="si-trk-sort" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.14em", color: "var(--si-text-mid, #93a1af)" }}>
             SORT
           </label>
+          {/* The option list is drawn by the browser on its own white background and
+              inherits the select's pale text, so it was blank. Each option gets the
+              theme's solid card colour and text colour so the list reads in both themes. */}
           <select
             id="si-trk-sort"
             value={sort}
             onChange={(e) => setSort(e.target.value as TradeSort)}
-            style={{ flex: 1, minWidth: 0, padding: "5px 8px", background: "transparent", color: "var(--si-text-hi, #e8eef4)", border: "1px solid var(--si-border-sec, #2a3a4a)", fontFamily: "'Manrope', sans-serif", fontSize: 12 }}
+            style={{ flex: 1, minWidth: 0, padding: "8px 10px", background: "var(--si-card-solid, #0c1118)", color: "var(--si-text-hi, #e8eef4)", border: "1px solid var(--si-border-sec, #2a3a4a)", fontFamily: "'Manrope', sans-serif", fontSize: 15, cursor: "pointer" }}
           >
-            <option value="newest">Date · newest first</option>
-            <option value="oldest">Date · oldest first</option>
-            <option value="most">Most profitable</option>
-            <option value="least">Least profitable</option>
+            {([["newest", "Date · newest first"], ["oldest", "Date · oldest first"], ["most", "Most profitable"], ["least", "Least profitable"]] as const).map(([v, label]) => (
+              <option key={v} value={v} style={{ background: "var(--si-card-solid, #0c1118)", color: "var(--si-text-hi, #e8eef4)", fontSize: 15 }}>
+                {label}
+              </option>
+            ))}
           </select>
         </div>
       )}
@@ -178,7 +182,7 @@ export function TrackedTradesList({
               </span>
 
               <span data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.06em", color: "var(--si-text-mid, #93a1af)" }}>
-                <b style={{ color: "#4fb3ff", fontWeight: 700 }}>{t.hz}</b> · Target <b style={{ color: UP, fontWeight: 700 }}>{usd(t.target)}</b>
+                <b style={{ color: "#4fb3ff", fontWeight: 700 }}>{t.hz.toUpperCase()}</b> · Target <b style={{ color: UP, fontWeight: 700 }}>{usd(t.target)}</b>
               </span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, textAlign: "right", color: q?.pctChange == null ? "var(--si-text-mid, #93a1af)" : q.pctChange >= 0 ? UP : DN }}>
                 {q?.pctChange != null ? pct(q.pctChange) : ""}
@@ -188,7 +192,8 @@ export function TrackedTradesList({
                 INVALIDATION <b style={{ color: DN, fontWeight: 700 }}>{usd(t.stop)}</b>
               </span>
 
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.04em", color: "var(--si-text-mid, #93a1af)" }}>
+              {/* One line: the date never wraps (it is cut with … only on a very narrow list). */}
+              <span style={{ alignSelf: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.02em", color: "var(--si-text-mid, #93a1af)" }}>
                 {savedAt ? `Saved on ${savedAt}` : "Saved earlier"}
               </span>
               <span style={{ textAlign: "right" }}>
@@ -208,14 +213,15 @@ export function TrackedTradesList({
                   onBlur={() => setConfirmId((id) => (id === t.id ? null : id))}
                   style={{
                     cursor: "pointer",
-                    padding: "4px 10px",
+                    padding: "2px 7px",
                     border: `1px solid ${DN}`,
                     background: confirming ? DN : "transparent",
                     color: confirming ? "#ffffff" : DN,
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
+                    fontSize: 9,
                     fontWeight: 700,
-                    letterSpacing: "0.06em",
+                    letterSpacing: "0.04em",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {confirming ? "Sure?" : "× Delete"}

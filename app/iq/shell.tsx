@@ -71,6 +71,7 @@ import { ChoosePlanScreen } from "./billing/choose-plan-screen";
 import { WelcomeFeedbackModals } from "./welcome-feedback-modals";
 import { bannerKind } from "./contextual-banner";
 import { trialCountdown } from "./trial-countdown";
+import { everyMinute } from "./minute-clock";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -1324,8 +1325,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
       });
     };
     tick(); // correct any build-time (static-export) value right after hydration
-    const id = setInterval(tick, 60_000);
-    return () => clearInterval(id);
+    // On the minute boundary, so this clock changes together with the real time.
+    return everyMinute(tick);
   }, []);
 
   // Hidden for now (see the CopilotPanel note above).

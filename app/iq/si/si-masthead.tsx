@@ -22,6 +22,8 @@ export type MastheadProps = {
   change: string;
   up: boolean;
   ext: { label: string; price: string; pct: string; up: boolean } | null;
+  /** The sector the company belongs to (e.g. "Technology"); the Sector block is left out without one. */
+  sector?: string | null;
   marketCap: ReactNode;
   pe: ReactNode;
   fpe: ReactNode;
@@ -59,6 +61,12 @@ export function SiMasthead(p: MastheadProps) {
           {p.note}
         </div>
       </div>
+      {p.sector && (
+        <div className="ovx-stat">
+          <span>Sector</span>
+          <span className="ovx-sector">{p.sector}</span>
+        </div>
+      )}
       <div className="ovx-stat">
         <span>Market cap</span>
         <span>{p.marketCap}</span>

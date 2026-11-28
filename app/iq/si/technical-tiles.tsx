@@ -97,7 +97,7 @@ export function PriceLadder({ price, supports, resistances, max = 3 }: { price: 
     return (
       <div
         key={level.label}
-        style={{ flex: 1, display: "grid", gridTemplateColumns: "92px 104px minmax(40px, 1fr) 70px", alignItems: "center", gap: 14, padding: "12px 0", minHeight: 44, opacity: nearest ? 1 : 0.85 }}
+        style={{ display: "grid", gridTemplateColumns: "92px 104px minmax(40px, 1fr) 70px", alignItems: "center", gap: 14, padding: "8px 0", minHeight: 40, opacity: nearest ? 1 : 0.85 }}
       >
         <span style={{ fontSize: 15, fontWeight: 700, color, letterSpacing: "0.03em" }}>{level.label}</span>
         <span style={{ fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{usd(level.value)}</span>
@@ -112,12 +112,12 @@ export function PriceLadder({ price, supports, resistances, max = 3 }: { price: 
     );
   };
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+    <div style={{ display: "flex", flexDirection: "column" }}>
       {above.map((l, i) => row(l, i === above.length - 1))}
       <div
         style={{ display: "flex", alignItems: "center", gap: 12, margin: "6px 0", padding: "14px 16px", border: "1px solid var(--si-accent, #5980a6)", background: "var(--si-accent-bg, rgba(89,128,166,0.14))" }}
       >
-        <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-accent-light, #a9c6e3)" }}>PRICE</span>
+        <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-accent-light, #a9c6e3)" }}>CURRENT PRICE</span>
         <span style={{ fontSize: 20, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{usd(price)}</span>
       </div>
       {below.map((l, i) => row(l, i === 0))}
