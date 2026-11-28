@@ -87,7 +87,7 @@ export function VerdictDialog({ breakdown: b, techReads, fundReads, onClose }: {
         style={{ width: "min(960px, 100%)", border: "1px solid var(--si-border-sec, #2e343d)", background: "var(--si-card-solid, #14171c)", boxShadow: "0 22px 56px rgba(0,0,0,0.65)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18 }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <span style={{ fontFamily: BARLOW, fontSize: 24, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #e8eef4)" }}>
+          <span data-tc style={{ fontFamily: BARLOW, fontSize: 24, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #e8eef4)" }}>
             Why <span data-caps style={{ color: dirColor(b.dir) }}>{sentenceCase(b.label)}</span>
           </span>
           <button type="button" aria-label="Close" onClick={onClose} style={{ width: 28, height: 28, border: "1px solid var(--si-border-sec, #2e343d)", background: "transparent", color: "var(--si-text-hi, #e8eef4)", fontSize: 17, lineHeight: 1, cursor: "pointer" }}>

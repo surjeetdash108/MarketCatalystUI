@@ -61,6 +61,12 @@ export function ReadTiles({ reads, glow, chartFor }: { reads: Read[]; glow?: boo
   );
 }
 
+/** Where the row of labels under the ruler bar starts, and how wide (px, with a little air) each label is. */
+const LABEL_ROW = 82;
+const END_W = 84;
+const SUPPORT_W = 120;
+const RESISTANCE_W = 128;
+
 export type RulerLevel = { value: number; pct: number };
 export type RulerProps = {
   price: number;
@@ -107,7 +113,7 @@ export function LevelsRuler({ price, low52, high52, support, resistance, target,
   return (
     <div className="si-ruler" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <style>{".si-ruler .si-rl-flow{display:none !important}@media (max-width:640px){.si-ruler .si-rl-abs{display:none !important}.si-ruler .si-rl-leg{display:grid !important}.si-ruler .si-rl-track{height:84px !important}.si-ruler .si-rl-flow{display:flex !important;width:100%}}"}</style>
-      <div className="si-rl-track" style={{ position: "relative", height: 160, margin: "0 6px" }}>
+      <div className="si-rl-track" style={{ position: "relative", height: LABEL_ROW + 38, margin: "0 6px" }}>
         <div style={{ position: "absolute", left: 0, right: 0, top: 62, height: 6, borderRadius: 3, background: "var(--si-border, #243140)" }} />
         {support && resistance && (
           <div style={{ position: "absolute", left: `${at(support.value)}%`, width: `${Math.max(1.5, at(resistance.value) - at(support.value))}%`, top: 52, height: 26, borderRadius: 5, background: "rgba(96,165,250,0.14)", border: "1px dashed #60a5fa" }} />
@@ -124,23 +130,26 @@ export function LevelsRuler({ price, low52, high52, support, resistance, target,
         <div style={{ position: "absolute", left: `${at(price)}%`, top: 24, width: 2, height: 38, background: "#e6edf3", transform: "translateX(-50%)" }} />
         <div style={{ position: "absolute", left: `${at(price)}%`, top: 59, width: 12, height: 12, borderRadius: "50%", background: "#e6edf3", border: "3px solid var(--si-card-sec, #0b0f14)", boxSizing: "border-box", transform: "translateX(-50%)" }} />
         {targetBox("si-rl-abs", { position: "absolute", top: 0, width: 310, left: `clamp(155px, ${targetAt}, calc(100% - 155px))`, transform: "translateX(-50%)" })}
+        {/* The four labels under the bar (52W low, support, resistance, 52W high) share one row. Support and
+            resistance follow their levels, but not into the room the two end labels need, so a level close to the
+            52-week low or high never prints over them. */}
         {support && (
-          <div className="si-rl-abs" style={{ position: "absolute", left: `${at(support.value)}%`, top: 82, transform: "translateX(-100%)", paddingRight: 5, textAlign: "right", display: "flex", flexDirection: "column", gap: 1 }}>
+          <div className="si-rl-abs" style={{ position: "absolute", left: `max(${at(support.value)}%, ${END_W + SUPPORT_W}px)`, top: LABEL_ROW, transform: "translateX(-100%)", paddingRight: 5, textAlign: "right", display: "flex", flexDirection: "column", gap: 1 }}>
             <span style={label("#fb923c")}>{money(support.value)}</span>
             <span style={sub}>Support {"·"} {support.pct.toFixed(1)}%</span>
           </div>
         )}
         {resistance && (
-          <div className="si-rl-abs" style={{ position: "absolute", left: `${at(resistance.value)}%`, top: 82, paddingLeft: 5, display: "flex", flexDirection: "column", gap: 1 }}>
+          <div className="si-rl-abs" style={{ position: "absolute", left: `min(${at(resistance.value)}%, calc(100% - ${END_W + RESISTANCE_W}px))`, top: LABEL_ROW, paddingLeft: 5, display: "flex", flexDirection: "column", gap: 1 }}>
             <span style={label(UP)}>{money(resistance.value)}</span>
             <span style={sub}>Resistance {"·"} +{resistance.pct.toFixed(1)}%</span>
           </div>
         )}
-        <div className="si-rl-abs" style={{ position: "absolute", left: 0, top: 124, display: "flex", flexDirection: "column", gap: 1 }}>
+        <div className="si-rl-abs" style={{ position: "absolute", left: 0, top: LABEL_ROW, display: "flex", flexDirection: "column", gap: 1 }}>
           <span style={{ ...label(HI), fontWeight: 600 }}>{money(low52)}</span>
           <span style={sub}>52W low</span>
         </div>
-        <div className="si-rl-abs" style={{ position: "absolute", right: 0, top: 124, textAlign: "right", display: "flex", flexDirection: "column", gap: 1 }}>
+        <div className="si-rl-abs" style={{ position: "absolute", right: 0, top: LABEL_ROW, textAlign: "right", display: "flex", flexDirection: "column", gap: 1 }}>
           <span style={{ ...label(HI), fontWeight: 600 }}>{money(high52)}</span>
           <span style={sub}>52W high</span>
         </div>

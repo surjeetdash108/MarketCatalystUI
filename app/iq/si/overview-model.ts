@@ -15,11 +15,15 @@ function change(cur: number | null | undefined, prev: number | null | undefined)
   return cur != null && prev != null && Math.abs(prev) > 0.05 ? ((cur - prev) / Math.abs(prev)) * 100 : null;
 }
 
+/** "Q3'26": the fiscal period and the last two digits of the fiscal year. */
+const labelOf = (q: GrowthQuarter) => `${q.fiscalPeriod ?? ""}'${String(q.fiscalYear ?? "").slice(-2)}`;
+
 /**
  * Revenue and EPS growth for the latest four reported quarters, oldest first, as the Overview chart draws them.
  * Year over year compares each quarter with the same fiscal period a year earlier (not "four slots down", which a
- * missing quarter would shift); quarter over quarter compares it with the quarter before. EPS is the GAAP diluted
- * figure, the one the Fundamentals tab shows. A series with no quarters is left out.
+ * missing quarter would shift); quarter over quarter compares it with the quarter before. Each row also names the
+ * quarter it was compared with (`yoyVs`, `qoqVs`). EPS is the GAAP diluted figure, the one the Fundamentals tab
+ * shows. A series with no quarters is left out.
  */
 export function growthSeries(quarters: ReadonlyArray<GrowthQuarter> | null | undefined): GrowthSeries[] {
   const sorted = [...(quarters ?? [])].filter((q) => q.endDate).sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
@@ -31,9 +35,12 @@ export function growthSeries(quarters: ReadonlyArray<GrowthQuarter> | null | und
         const before = sorted[i + 1];
         const now = value(q);
         return {
-          label: `${q.fiscalPeriod ?? ""}'${String(q.fiscalYear ?? "").slice(-2)}`,
+          label: labelOf(q),
           yoy: yearAgo ? change(now, value(yearAgo)) : null,
           qoq: before ? change(now, value(before)) : null,
+          // The quarters those two figures are measured against, so the axis can say what each bar is compared with.
+          yoyVs: yearAgo ? labelOf(yearAgo) : null,
+          qoqVs: before ? labelOf(before) : null,
         };
       })
       .reverse();

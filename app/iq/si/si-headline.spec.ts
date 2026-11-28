@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EMPTY_FACTS } from "./data";
-import { headlineRead, moveSummary } from "./si-headline";
+import { headlineRead, moveSummary, splitFigures } from "./si-headline";
 import { fundamentalRead, overallVerdict, technicalRead, type ReadFacts } from "./si-reads";
 
 const day = (d: number) => Date.UTC(2026, 10, d); // November 2026: the 20th is a Friday, the 23rd a Monday
@@ -70,13 +70,55 @@ test("fewer than three bars say nothing about a move", () => {
   assert.equal(moveSummary("X", undefined, null), null);
 });
 
-test("a strong, cheap business with an unconfirmed chart after a reversal", () => {
+test("a strong, cheap business with unconfirmed technicals after a reversal", () => {
   const { read } = build(FACTS);
-  assert.equal(read!.headline, "The sell-off reversed. The business is strong and cheap, but the chart hasn't confirmed the rebound.");
+  assert.equal(read!.headline, "The sell-off reversed. The business is strong and cheap, but the technicals haven't confirmed the rebound.");
   assert.equal(
     read!.body,
     "NVDA hit a 52-week low on Friday, then jumped 31.5% on Monday. Revenue is up 103.2% y/y, and the stock trades at half the peer P/E. Price is still below its 50 DMA and 200 DMA, and two prices decide what happens next.",
   );
+});
+
+test("the body is also given as three rows with one short sentence per line", () => {
+  const { read, tech, fund } = build(FACTS);
+  const rows = read!.sections;
+  assert.deepEqual(
+    rows.map((s) => [s.key, s.label]),
+    [
+      ["move", "RECENT MOVE"],
+      ["business", "THE BUSINESS"],
+      ["technicals", "THE TECHNICALS"],
+    ],
+  );
+  assert.deepEqual(rows[0].lines, ["NVDA hit a 52-week low on Friday, then jumped 31.5% on Monday."]);
+  assert.deepEqual(rows[1].lines, ["Revenue is up 103.2% y/y.", "The stock trades at half the peer P/E."]);
+  assert.deepEqual(rows[2].lines, ["Price is still below its 50 DMA and 200 DMA.", "Two prices decide what happens next."]);
+  assert.deepEqual(
+    rows.map((s) => s.tone),
+    ["up", fund.verdict.dir, tech.verdict.dir],
+    "each row leans the way its own read does",
+  );
+});
+
+test("the rows keep the peer comparison on the revenue line, and drop what has no figure", () => {
+  const { read } = build({ ...FACTS, peerRevGrowth4q: 57, peerPe: null, peerPeCount: null } as ReadFacts);
+  assert.deepEqual(read!.sections[1].lines, ["Revenue is up 103.2% y/y, about 1.8× the peer average."]);
+  // No revenue growth and no peer P/E: the business row has nothing to say, so it is not there (the bars still give a move).
+  const bare = build({ ...EMPTY_FACTS, price: 90, sma50: 100, sma200: 110 } as ReadFacts);
+  assert.deepEqual(
+    bare.read!.sections.map((s) => s.key),
+    ["move", "technicals"],
+  );
+});
+
+test("figures in a line are picked out; a number inside 52-week is not", () => {
+  const figs = (s: string) => splitFigures(s).filter((p) => p.fig).map((p) => p.t);
+  assert.deepEqual(figs("NVDA hit a 52-week low on Friday, then jumped 31.5% on Monday."), ["31.5%"]);
+  assert.deepEqual(figs("Revenue is up 103.2% y/y, about 1.8× the peer average."), ["103.2%", "1.8×"]);
+  assert.deepEqual(figs("Price is still below its 50 DMA and 200 DMA."), ["50 DMA", "200 DMA"]);
+  assert.deepEqual(figs("Next support $1,143.52 is 4.6% below."), ["$1,143.52", "4.6%"]);
+  assert.equal(splitFigures("Two prices decide what happens next.").length, 1);
+  assert.equal(splitFigures("Revenue is up 103.2% y/y.").map((p) => p.t).join(""), "Revenue is up 103.2% y/y.");
 });
 
 test("the body says DMA, never 50-day average", () => {
@@ -97,18 +139,34 @@ test("levels to watch: a close above confirms and a close below voids, with the 
 
 test("without peer P/E there is no cheap or pricey, and no peer sentence", () => {
   const { read } = build({ ...FACTS, peerPe: null, peerPeCount: null });
-  assert.equal(read!.headline, "The sell-off reversed. The business is strong, but the chart hasn't confirmed the rebound.");
+  assert.equal(read!.headline, "The sell-off reversed. The business is strong, but the technicals haven't confirmed the rebound.");
   assert.doesNotMatch(read!.body, /peer/);
 });
 
-test("a chart that agrees says so", () => {
+test("technicals that agree say so", () => {
   const strongChart: ReadFacts = { ...FACTS, price: 120, sma50: 100, sma200: 90, sma21: 110, rsi14: 60, rsRating: 90, pctFromHigh52: -1, pivotS1: 112, pivotR1: 130 };
   const { read, overall, tech } = build(strongChart);
   assert.equal(overall.dir, "up");
   assert.equal(tech.verdict.dir, "up");
-  assert.match(read!.headline, /and the chart agrees\.$/);
+  assert.match(read!.headline, /and the technicals agree\.$/);
   assert.equal(read!.chart!.label, "Chart agrees");
   assert.match(read!.body, /Price holds above its 50 DMA and 200 DMA\.$/);
+});
+
+test("a down call with technicals that have not turned says they haven't broken down yet", () => {
+  const f: ReadFacts = { ...EMPTY_FACTS, price: 120, sma50: 100, sma200: 90, sma21: 110, rsi14: 60, rsRating: 90, pctFromHigh52: -1, pivotS1: 112, pivotR1: 130, revGrowthYoY: -12, opMargin: -3, opMarginYearAgo: 2 };
+  const { read, overall, tech } = build(f, 0);
+  assert.equal(overall.dir, "down");
+  assert.equal(tech.verdict.dir, "up");
+  assert.match(read!.headline, /, though the technicals haven't broken down yet\.$/);
+});
+
+test("with no clear call the technicals' own lean is named", () => {
+  const f: ReadFacts = { ...EMPTY_FACTS, price: 120, sma50: 100, sma200: 90, sma21: 110, rsi14: 60, rsRating: 90, pctFromHigh52: -1, pivotS1: 112, pivotR1: 130, revGrowthYoY: 0, opMargin: 5, opMarginYearAgo: 5 };
+  const { read, overall, tech } = build(f, 30);
+  assert.equal(overall.dir, "flat");
+  assert.equal(tech.verdict.dir, "up");
+  assert.match(read!.headline, /and the technicals are leaning up\.$/);
 });
 
 test("a bearish read puts the levels the other way round", () => {

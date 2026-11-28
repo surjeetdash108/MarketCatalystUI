@@ -177,8 +177,8 @@ export function TrackedTradesList({
                 {q?.price != null ? usd(q.price) : "—"}
               </span>
 
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.06em", color: "var(--si-text-mid, #93a1af)" }}>
-                <b style={{ color: "#4fb3ff", fontWeight: 700 }}>{t.hz}</b> · TARGET <b style={{ color: UP, fontWeight: 700 }}>{usd(t.target)}</b>
+              <span data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.06em", color: "var(--si-text-mid, #93a1af)" }}>
+                <b style={{ color: "#4fb3ff", fontWeight: 700 }}>{t.hz}</b> · Target <b style={{ color: UP, fontWeight: 700 }}>{usd(t.target)}</b>
               </span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, textAlign: "right", color: q?.pctChange == null ? "var(--si-text-mid, #93a1af)" : q.pctChange >= 0 ? UP : DN }}>
                 {q?.pctChange != null ? pct(q.pctChange) : ""}
@@ -194,6 +194,7 @@ export function TrackedTradesList({
               <span style={{ textAlign: "right" }}>
                 <button
                   type="button"
+                  data-tc
                   aria-label={`Delete ${t.ticker} ${bull ? "long" : "short"} trade`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -217,7 +218,7 @@ export function TrackedTradesList({
                     letterSpacing: "0.06em",
                   }}
                 >
-                  {confirming ? "SURE?" : "× DELETE"}
+                  {confirming ? "Sure?" : "× Delete"}
                 </button>
               </span>
             </div>

@@ -50,8 +50,9 @@ import { TechnicalTiles, PriceLadder } from "./technical-tiles";
 import { SiOverview, type NavItem, type Tone } from "./si-overview";
 import { SiMasthead, SiTabRail } from "./si-masthead";
 import { PanelCard, MovedPanel, CouldPanel, type PanelRow } from "./overview-panels";
-import { chartSpec, type ChartInput } from "./overview-charts";
-import { ReadChart } from "./read-chart";
+import type { ChartInput } from "./overview-charts";
+import { fundamentalsPane } from "./fundamentals-model";
+import { FundamentalsPane } from "./fundamentals-pane";
 import { LeadLine, LevelsRuler, ReadTiles } from "./read-tiles";
 import { bigMovesIn10, couldMove, dropForming, titleWords, weekRows, yesterdayMove, yesterdayRows, type MoveNews, type MoveRow, type MoveTone } from "./si-moves";
 import { ConfidenceDialog } from "./confidence-dialog";
@@ -1390,6 +1391,7 @@ export function StockIntelligenceScreen() {
         </div>
         <div style={{ maxWidth: 640, width: "100%", textAlign: "center", marginTop: 70 }}>
           <div
+            data-tc
             style={{
               fontFamily: "'Barlow Condensed', sans-serif",
               fontSize: 57.6, // 48 × 1.2
@@ -1400,7 +1402,7 @@ export function StockIntelligenceScreen() {
               textTransform: "uppercase",
             }}
           >
-            STOCK INTELLIGENCE
+            Stock Intelligence
           </div>
           <div
             style={{
@@ -2014,6 +2016,8 @@ export function StockIntelligenceScreen() {
             eps: growth.find((g) => g.key === "eps")?.rows ?? [],
             quarters: latestFour,
           };
+          // The Fundamentals pane (pill, headline and the four tiles), or null when no quarter is synced yet.
+          const fundPane = fundamentalsPane({ ticker: stock.t, facts: siFacts, forwardPe: fpeVal, fund, revenue: chartInput.revenue, eps: chartInput.eps, quarters: chartInput.quarters });
           // The analysts' average target on the Technicals ruler: the top analysts' when known, else the mean target.
           const topAnalysts = topTargets(siFacts.analystTargets);
           const rulerTarget = topAnalysts
@@ -2061,6 +2065,7 @@ export function StockIntelligenceScreen() {
                   read: {
                     headline: read ? read.headline : sentenceCase(overall.label),
                     body: read ? read.body : `${fund.action} ${tech.action}`,
+                    sections: read?.sections,
                     now: price ?? null,
                     nowText: usd(price),
                     low: read?.levels.find((l) => l.tone === "down") ?? null,
@@ -2068,23 +2073,11 @@ export function StockIntelligenceScreen() {
                     onInfo: () => setVerdictOpen(true),
                   },
                   panels: {
-                    fund: (
+                    fund: fundPane ? (
+                      <FundamentalsPane model={fundPane} />
+                    ) : (
                       <PanelCard>
-                        {fund.reads.length ? (
-                          <>
-                            <LeadLine text={fund.action} />
-                            <ReadTiles
-                              reads={fund.reads}
-                              glow
-                              chartFor={(r) => {
-                                const spec = chartSpec(r.k, chartInput);
-                                return spec ? <ReadChart spec={spec} /> : undefined;
-                              }}
-                            />
-                          </>
-                        ) : (
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>{fund.action}</span>
-                        )}
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "var(--si-text-mid, #93a1af)" }}>{fund.action}</span>
                       </PanelCard>
                     ),
                     tech: (
@@ -3022,13 +3015,14 @@ export function StockIntelligenceScreen() {
                     <span style={{ color: "var(--up, #4ade80)", fontSize: 16 }}>✓</span>
                     <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-hi, #ffffff)" }}>{labSavedNote}</span>
                     <button
+                      data-tc
                       onClick={() => {
                         setLabSavedNote(null);
                         setActiveTab("mon");
                       }}
                       style={{ marginLeft: "auto", height: 30, padding: "0 12px", border: "1px solid var(--si-accent, #5980a6)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer" }}
                     >
-                      VIEW IN TRADE TRACKER ▸
+                      View in Trade Tracker ▸
                     </button>
                     <button onClick={() => setLabSavedNote(null)} aria-label="Dismiss" style={{ width: 26, height: 26, border: "none", background: "transparent", color: "var(--si-text-hi, #ffffff)", fontSize: 16, cursor: "pointer" }}>
                       ×
@@ -3190,13 +3184,14 @@ export function StockIntelligenceScreen() {
                 }}
               >
                 <div style={{ minWidth: 230 }}>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                    TRADE BUILDER · {stock.t}
+                  <div data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+                    Trade Builder · {stock.t}
                   </div>
                   <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
                     {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} STRATEGY
                   </div>
                   <button
+                    data-tc
                     onClick={() => {
                       setPickDir(labDir);
                       setPickHz(labHz);
@@ -3205,7 +3200,7 @@ export function StockIntelligenceScreen() {
                     }}
                     style={{ marginTop: 8, background: "none", border: "none", padding: 0, color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", cursor: "pointer" }}
                   >
-                    ← EDIT SETUP
+                    ← Edit setup
                   </button>
                 </div>
 
@@ -3323,8 +3318,8 @@ export function StockIntelligenceScreen() {
 
                 {/* Driver Weights Strip */}
                 <div style={{ marginLeft: "auto", minWidth: 300, flex: 1, maxWidth: 520, paddingTop: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
-                    <span>{thCustomW ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}</span>
+                  <div data-tc style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
+                    <span>{thCustomW ? "Custom weights" : "Engine weights"}</span>
                     <span style={{ color: "var(--si-text-mid, #93a1af)", letterSpacing: "0.04em" }}>
                       {labHz === "1M" ? "1M tactical" : labHz === "9M" || labHz === "12M" ? `${labHz} fundamental` : labHz === "3M" ? "3M momentum" : "6M balanced"} · {thBull ? "bullish" : "bearish"}
                     </span>
@@ -3363,8 +3358,8 @@ export function StockIntelligenceScreen() {
               {/* Engine weights: sliders are live in Advanced mode and greyed out (tap for an explanation) in Normal mode */}
               <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minHeight: 28 }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: thCustomW ? "#f5b031" : "var(--si-text-hi, #e8eef4)" }}>
-                    {thCustomW ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}
+                  <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: thCustomW ? "#f5b031" : "var(--si-text-hi, #e8eef4)" }}>
+                    {thCustomW ? "Custom weights" : "Engine weights"}
                   </span>
                   <button
                     type="button"
@@ -3492,7 +3487,7 @@ export function StockIntelligenceScreen() {
                   <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARKET HISTORY</span>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #ffffff)" }}>LAST {labHz === "12M" ? "9M" : labHz}</span>
+                      <span data-tc style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #ffffff)" }}>Last {labHz === "12M" ? "9M" : labHz}</span>
                     </div>
                     <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
                       Historical Underlying Asset Benchmark Performance — buy-and-hold returns, drawdown and volatility; not an active strategy backtest.
@@ -3579,8 +3574,8 @@ export function StockIntelligenceScreen() {
                     <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>PRICE TARGET</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: targetOverride != null ? "#f5b031" : STEEL, border: `1px solid ${targetOverride != null ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
-                          {targetOverride != null ? "OVERRIDDEN" : "SUGGESTED"}
+                        <span data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: targetOverride != null ? "#f5b031" : STEEL, border: `1px solid ${targetOverride != null ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
+                          {targetOverride != null ? "Overridden" : "Suggested"}
                         </span>
                         <button
                           onClick={() => setLabEditTargets(!labEditTargets)}
@@ -3911,7 +3906,7 @@ export function StockIntelligenceScreen() {
                       </span>
                     </div>
                     {formatSavedAt(savedThesis.savedAt) && (
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
+                      <div data-tc style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
                         Saved on {formatSavedAt(savedThesis.savedAt)}
                       </div>
                     )}
