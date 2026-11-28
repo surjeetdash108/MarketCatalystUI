@@ -1338,6 +1338,14 @@ export function InsiderScreen() {
                       </span>
                     </div>
                     {/* Second line: the company name. Left out when none is synced (it would just repeat the ticker). */}
+                    {/* No second line? Keep an empty one of the same height, so the ticker and tag stay on the first
+                        line, level with the figure on the right. Alone, the line was centred in the row, which put
+                        the tag on the same level as "5 buyers · 8d ago" and the two overlapped. */}
+                    {!(rowAlign || hasCompanyName(comp.name, s.t)) && (
+                      <div aria-hidden style={{ fontSize: 12.5, fontWeight: 500, visibility: "hidden" }}>
+                        {" "}
+                      </div>
+                    )}
                     {(rowAlign || hasCompanyName(comp.name, s.t)) && (
                     <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
                       {rowAlign && (

@@ -230,6 +230,7 @@ export const OVX_MAST_CSS = `
 .ovx-stat{display:flex;flex-direction:column;gap:4px}
 .ovx-stat>span:first-child{font-size:13px;color:var(--ov-sub)}
 .ovx-stat>span:last-child{font-size:24px;font-weight:700;white-space:nowrap}
+.ovx-stat>span.ovx-sector{font-size:20px;line-height:1.2}
 .ovx-stat em{font-style:normal;color:var(--ov-sub);font-weight:500}
 .ovx-range{display:flex;flex-direction:column;gap:8px;width:260px;max-width:100%}
 .ovx-range>span{font-size:13px;color:var(--ov-sub)}

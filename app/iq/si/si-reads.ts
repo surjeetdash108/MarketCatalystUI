@@ -113,8 +113,7 @@ function strengthRead(f: ReadFacts): Read | null {
   const rs = f.rsRating;
   const score = clamp((rs - 50) / 40);
   const headline = rs >= 80 ? "Market leader" : rs >= 60 ? "Outperforming" : rs >= 40 ? "In line" : rs >= 20 ? "Lagging" : "Laggard";
-  const sector = has(f.sectorRank) && has(f.sectorRankTotal) ? ` · sector #${f.sectorRank} of ${f.sectorRankTotal}` : "";
-  return { k: "Strength", dir: dirOf(score, 0.25), score, headline, detail: `RS rating ${Math.round(rs)}/99 vs the market${sector}` };
+  return { k: "Strength", dir: dirOf(score, 0.25), score, headline, detail: `RS rating ${Math.round(rs)}/99 vs the market` };
 }
 
 function volumeRead(f: ReadFacts): Read | null {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useBackendMarketStatus } from "./hooks/useBackendMarketStatus";
+import { everyMinute } from "./minute-clock";
 
 const etNow = () => {
   const d = new Date();
@@ -16,8 +17,8 @@ export function MarketClockBadge() {
   const mkt = useBackendMarketStatus();
   const [now, setNow] = useState(etNow);
   useEffect(() => {
-    const id = setInterval(() => setNow(etNow()), 30_000);
-    return () => clearInterval(id);
+    setNow(etNow());
+    return everyMinute(() => setNow(etNow()));
   }, []);
   return (
     <div data-testid="market-clock" style={{ display: "flex", alignItems: "center", gap: 10 }}>
